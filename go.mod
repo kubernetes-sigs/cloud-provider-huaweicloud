@@ -27,6 +27,7 @@ replace (
 )
 
 require (
+	k8s.io/cloud-provider v0.0.0
 	k8s.io/component-base v0.0.0
 	k8s.io/kubernetes v1.17.0-beta.1
 )
