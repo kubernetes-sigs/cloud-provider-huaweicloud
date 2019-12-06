@@ -26,6 +26,8 @@ import (
 
 	"k8s.io/component-base/logs"
 	"k8s.io/kubernetes/cmd/cloud-controller-manager/app"
+
+	_ "k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud"
 )
 
 func main() {
