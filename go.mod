@@ -3,6 +3,10 @@ module k8s.io/cloud-provider-huaweicloud
 go 1.13
 
 require (
+	github.com/hashicorp/golang-lru v0.5.1
+	k8s.io/api v0.0.0
+	k8s.io/apimachinery v0.0.0
+	k8s.io/client-go v0.0.0
 	k8s.io/cloud-provider v0.0.0
 	k8s.io/component-base v0.0.0
 	k8s.io/klog v1.0.0
