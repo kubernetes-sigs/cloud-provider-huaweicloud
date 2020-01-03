@@ -17,24 +17,61 @@ limitations under the License.
 package huaweicloud
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
+	"io/ioutil"
 
 	"k8s.io/cloud-provider"
+	"k8s.io/klog"
 )
 
 const (
 	providerName = "huaweicloud"
 )
 
-func init() {
-	cloudprovider.RegisterCloudProvider(providerName, newHuaweiCloud)
+// CloudConfig is used to read and store information from the cloud configuration file
+type CloudConfig struct {
+	// TODO(RainbowMango): Auth options shall be split from LoadBalancer.
+	LoadBalancer LoadBalancerOpts
 }
 
-func newHuaweiCloud(config io.Reader) (cloudprovider.Interface, error) {
-	// TODO(RainbowMango): Read configuration here
+func init() {
+	cloudprovider.RegisterCloudProvider(providerName, newCloud)
+}
 
+func readConfig(config io.Reader) (*CloudConfig, error) {
+	if config == nil {
+		return nil, fmt.Errorf("no cloud provider config given")
+	}
+
+	configBytes, err := ioutil.ReadAll(config)
+	if err != nil {
+		return nil, fmt.Errorf("can not read cloud provider config: %v", err)
+	}
+
+	var cloudConfig CloudConfig
+	err = json.Unmarshal(configBytes, &cloudConfig)
+	if err != nil {
+		return nil, fmt.Errorf("cloud config format is not expected: %v", err)
+	}
+
+	return &cloudConfig, nil
+}
+
+func newCloud(config io.Reader) (cloudprovider.Interface, error) {
+	cloudConfig, err := readConfig(config)
+	if err != nil {
+		klog.Errorf("Create cloud provider failed: %v.", err)
+		return nil, err
+	}
+
+	return NewHuaweiCloud(cloudConfig)
+}
+
+func NewHuaweiCloud(config *CloudConfig) (*HuaweiCloud, error) {
 	// TODO(RainbowMango): Create Huawei Cloud Instance here
-	return &HuaweiCloud{}, nil
+	return nil, nil
 }
 
 // HuaweiCloud is an implementation of cloud provider Interface for Huawei Cloud.
