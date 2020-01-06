@@ -24,7 +24,7 @@ import (
 	"reflect"
 	"time"
 
-	lru "github.com/hashicorp/golang-lru"
+	"github.com/hashicorp/golang-lru"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -147,19 +147,21 @@ func NewHuaweiCloud(config *CloudConfig) (*HuaweiCloud, error) {
 	}
 
 	hws := &HuaweiCloud{
-		providers: map[LoadBalanceVersion]cloudprovider.LoadBalancer{},
+		lrucache:      lrucache,
+		config:        config,
+		kubeClient:    kubeClient,
+		eventRecorder: recorder,
 	}
-
-	hws.providers[VersionELB] = &ELBCloud{lrucache: lrucache, config: &config.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder}
-	hws.providers[VersionALB] = &ALBCloud{lrucache: lrucache, config: &config.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder}
-	hws.providers[VersionNAT] = &NATCloud{lrucache: lrucache, config: &config.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder}
 
 	return hws, nil
 }
 
 // HuaweiCloud is an implementation of cloud provider Interface for Huawei Cloud.
 type HuaweiCloud struct {
-	providers map[LoadBalanceVersion]cloudprovider.LoadBalancer
+	lrucache      *lru.Cache
+	config        *CloudConfig
+	kubeClient    corev1.CoreV1Interface
+	eventRecorder record.EventRecorder
 }
 
 var _ cloudprovider.Interface = &HuaweiCloud{}
@@ -173,8 +175,7 @@ func (h *HuaweiCloud) Initialize(clientBuilder cloudprovider.ControllerClientBui
 
 // LoadBalancer returns a balancer interface. Also returns true if the interface is supported, false otherwise.
 func (h *HuaweiCloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
-	// TODO(RainbowMango): waiting a solution about how to share openstack implementation and do minimum changes here.
-	return nil, false
+	return NewLoadBalancer(h.lrucache, &h.config.LoadBalancer, h.kubeClient, h.eventRecorder), true
 }
 
 // Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.
