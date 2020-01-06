@@ -17,9 +17,17 @@ limitations under the License.
 package huaweicloud
 
 import (
+	"context"
+	"fmt"
 	"strings"
 
+	lru "github.com/hashicorp/golang-lru"
+
 	v1 "k8s.io/api/core/v1"
+	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/tools/record"
+	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/klog"
 )
 
 const (
@@ -70,6 +78,109 @@ const (
 	VersionNAT
 )
 
+// NewLoadBalancer creates a load balancer handler.
+func NewLoadBalancer(lrucache *lru.Cache, loadBalancerConf *LoadBalancerOpts, kubeClient corev1.CoreV1Interface, eventRecorder record.EventRecorder) *LoadBalancer {
+	lb := LoadBalancer{}
+	lb.providers = make(map[LoadBalanceVersion]cloudprovider.LoadBalancer, 3)
+
+	lb.providers[VersionELB] = &ELBCloud{lrucache: lrucache, config: loadBalancerConf, kubeClient: kubeClient, eventRecorder: eventRecorder}
+	lb.providers[VersionALB] = &ALBCloud{lrucache: lrucache, config: loadBalancerConf, kubeClient: kubeClient, eventRecorder: eventRecorder}
+	lb.providers[VersionNAT] = &NATCloud{lrucache: lrucache, config: loadBalancerConf, kubeClient: kubeClient, eventRecorder: eventRecorder}
+
+	return &lb
+}
+
+// LoadBalancer represents all kinds of load balancer.
+type LoadBalancer struct {
+	providers map[LoadBalanceVersion]cloudprovider.LoadBalancer
+}
+
+// Check if our BaseStableCollector implements necessary interface
+var _ cloudprovider.LoadBalancer = &LoadBalancer{}
+
+// GetLoadBalancer returns whether the specified load balancer exists, and
+// if so, what its status is.
+// Implementations must treat the *v1.Service parameter as read-only and not modify it.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
+func (lb *LoadBalancer) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
+	LBVersion, err := getLoadBalancerVersion(service)
+	if err != nil {
+		return nil, false, err
+	}
+
+	provider, exist := lb.providers[LBVersion]
+	if !exist {
+		return nil, false, nil
+	}
+
+	return provider.GetLoadBalancer(ctx, clusterName, service)
+}
+
+// GetLoadBalancerName returns the name of the load balancer. Implementations must treat the
+// *v1.Service parameter as read-only and not modify it.
+func (lb *LoadBalancer) GetLoadBalancerName(ctx context.Context, clusterName string, service *v1.Service) string {
+	// TODO(RainbowMango): implement later
+	return ""
+}
+
+// EnsureLoadBalancer creates a new load balancer 'name', or updates the existing one. Returns the status of the balancer
+// Implementations must treat the *v1.Service and *v1.Node
+// parameters as read-only and not modify them.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
+func (lb *LoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
+	LBVersion, err := getLoadBalancerVersion(service)
+	if err != nil {
+		return nil, err
+	}
+
+	provider, exist := lb.providers[LBVersion]
+	if !exist {
+		return nil, nil
+	}
+
+	return provider.EnsureLoadBalancer(ctx, clusterName, service, nodes)
+}
+
+// UpdateLoadBalancer updates hosts under the specified load balancer.
+// Implementations must treat the *v1.Service and *v1.Node
+// parameters as read-only and not modify them.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
+func (lb *LoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
+	LBVersion, err := getLoadBalancerVersion(service)
+	if err != nil {
+		return err
+	}
+
+	provider, exist := lb.providers[LBVersion]
+	if !exist {
+		return nil
+	}
+
+	return provider.UpdateLoadBalancer(ctx, clusterName, service, nodes)
+}
+
+// EnsureLoadBalancerDeleted deletes the specified load balancer if it
+// exists, returning nil if the load balancer specified either didn't exist or
+// was successfully deleted.
+// This construction is useful because many cloud providers' load balancers
+// have multiple underlying components, meaning a Get could say that the LB
+// doesn't exist even if some part of it is still laying around.
+// Implementations must treat the *v1.Service parameter as read-only and not modify it.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
+func (lb *LoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
+	LBVersion, err := getLoadBalancerVersion(service)
+	if err != nil {
+		return err
+	}
+
+	provider, exist := lb.providers[LBVersion]
+	if !exist {
+		return nil
+	}
+
+	return provider.EnsureLoadBalancerDeleted(ctx, clusterName, service)
+}
+
 func GetHealthCheckPort(service *v1.Service) *v1.ServicePort {
 	for _, port := range service.Spec.Ports {
 		if port.Name == HealthzCCE {
@@ -119,4 +230,30 @@ func CheckNodeHealth(node *v1.Node) (bool, error) {
 	}
 
 	return status, nil
+}
+
+func getLoadBalancerVersion(service *v1.Service) (LoadBalanceVersion, error) {
+	if service.Spec.Type != "LoadBalancer" {
+		return VersionNotNeedLB, nil
+	}
+
+	class, ok := service.Annotations[ELBClassAnnotation]
+	if !ok {
+		klog.Warningf("Invalid load balancer version specified for service: %s", service.Name)
+		return VersionNotNeedLB, fmt.Errorf("invalid load balancer version specified for service: %s", service.Name)
+	}
+
+	switch class {
+	case "elasticity", "":
+		klog.Infof("Load balancer Version I for service %v", service.Name)
+		return VersionELB, nil
+	case "union":
+		klog.Infof("Load balancer Version II for service %v", service.Name)
+		return VersionALB, nil
+	case "dnat":
+		klog.Infof("DNAT for service %v", service.Name)
+		return VersionNAT, nil
+	default:
+		return 0, fmt.Errorf("Load balancer version unknown")
+	}
 }
