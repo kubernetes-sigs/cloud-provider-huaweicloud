@@ -37,7 +37,7 @@ func NewInstances() *Instances {
 type Instances struct {
 }
 
-// Check if our Instances implements necessary interface
+// Check if our struct implements necessary interface
 var _ cloudprovider.Instances = &Instances{}
 
 // NodeAddresses returns the addresses of the specified instance.

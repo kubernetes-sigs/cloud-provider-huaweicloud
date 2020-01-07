@@ -185,8 +185,7 @@ func (h *HuaweiCloud) Instances() (cloudprovider.Instances, bool) {
 
 // Zones returns a zones interface. Also returns true if the interface is supported, false otherwise.
 func (h *HuaweiCloud) Zones() (cloudprovider.Zones, bool) {
-	// TODO(RainbowMango): waiting a solution about how to share openstack implementation and do minimum changes here.
-	return nil, false
+	return NewZone(), true
 }
 
 // Clusters returns a clusters interface.  Also returns true if the interface is supported, false otherwise.
