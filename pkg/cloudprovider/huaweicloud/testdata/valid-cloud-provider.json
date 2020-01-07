@@ -1,7 +1,7 @@
 {
     "LoadBalancer": {
         "apiserver": "127.0.0.1:8080",
-        "secretName": "paas.elb",
+        "secretName": "example.secret",
         "signerType": "ec2",
         "elbAlgorithm": "roundrobin",
         "tenantId": "058522fb5f80d3dd2f77c010da6b6d9d",
