@@ -195,7 +195,7 @@ func (h *HuaweiCloud) Clusters() (cloudprovider.Clusters, bool) {
 
 // Routes returns a routes interface along with whether the interface is supported.
 func (h *HuaweiCloud) Routes() (cloudprovider.Routes, bool) {
-	return nil, false
+	return NewRoutes(), true
 }
 
 // ProviderName returns the cloud provider ID.
