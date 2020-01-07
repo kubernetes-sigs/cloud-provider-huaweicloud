@@ -96,7 +96,7 @@ type LoadBalancer struct {
 	providers map[LoadBalanceVersion]cloudprovider.LoadBalancer
 }
 
-// Check if our BaseStableCollector implements necessary interface
+// Check if our LoadBalancer implements necessary interface
 var _ cloudprovider.LoadBalancer = &LoadBalancer{}
 
 // GetLoadBalancer returns whether the specified load balancer exists, and

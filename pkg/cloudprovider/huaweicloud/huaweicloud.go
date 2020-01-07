@@ -180,8 +180,7 @@ func (h *HuaweiCloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 
 // Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.
 func (h *HuaweiCloud) Instances() (cloudprovider.Instances, bool) {
-	// TODO(RainbowMango): waiting a solution about how to share openstack implementation and do minimum changes here.
-	return nil, false
+	return NewInstances(), true
 }
 
 // Zones returns a zones interface. Also returns true if the interface is supported, false otherwise.
