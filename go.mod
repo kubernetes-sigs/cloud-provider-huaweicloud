@@ -4,6 +4,7 @@ go 1.13
 
 require (
 	github.com/hashicorp/golang-lru v0.5.1
+	github.com/prometheus/common v0.4.1
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v0.0.0
