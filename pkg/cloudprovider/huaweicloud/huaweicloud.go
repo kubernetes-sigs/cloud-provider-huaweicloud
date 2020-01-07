@@ -202,7 +202,7 @@ func (h *HuaweiCloud) Routes() (cloudprovider.Routes, bool) {
 	return nil, false
 }
 
-// HuaweiCloudProviderName returns the cloud provider ID.
+// ProviderName returns the cloud provider ID.
 func (h *HuaweiCloud) ProviderName() string {
 	return providerName
 }

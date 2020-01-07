@@ -45,7 +45,8 @@ const (
 )
 
 type LoadBalancerOpts struct {
-	Apiserver    string       `json:"apiserver"`
+	Apiserver string `json:"apiserver"`
+	// SecretName is the name of 'Secret' object.
 	SecretName   string       `json:"secretName"`
 	SignerType   string       `json:"signerType"`
 	ELBAlgorithm ELBAlgorithm `json:"elbAlgorithm"`
