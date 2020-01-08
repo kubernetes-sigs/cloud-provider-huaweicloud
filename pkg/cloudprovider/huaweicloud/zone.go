@@ -19,9 +19,9 @@ package huaweicloud
 import (
 	"context"
 
-	"github.com/prometheus/common/log"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/klog"
 )
 
 // NewZone creates a zone handler.
@@ -41,7 +41,7 @@ var _ cloudprovider.Zones = &Zone{}
 // For the case of external cloud providers, use GetZoneByProviderID or GetZoneByNodeName since GetZone
 // can no longer be called from the kubelets.
 func (z *Zone) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
-	log.Warnf("GetZone is called but not implemented.")
+	klog.Warningf("GetZone is called but not implemented.")
 
 	return cloudprovider.Zone{}, nil
 }
@@ -50,7 +50,7 @@ func (z *Zone) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
 // This method is particularly used in the context of external cloud providers where node initialization must be done
 // outside the kubelets.
 func (z *Zone) GetZoneByProviderID(ctx context.Context, providerID string) (cloudprovider.Zone, error) {
-	log.Warnf("GetZoneByProviderID is called but not implemented.")
+	klog.Warningf("GetZoneByProviderID is called but not implemented.")
 
 	return cloudprovider.Zone{}, nil
 }
@@ -59,7 +59,7 @@ func (z *Zone) GetZoneByProviderID(ctx context.Context, providerID string) (clou
 // This method is particularly used in the context of external cloud providers where node initialization must be done
 // outside the kubelets.
 func (z *Zone) GetZoneByNodeName(ctx context.Context, nodeName types.NodeName) (cloudprovider.Zone, error) {
-	log.Warnf("GetZoneByNodeName is called but not implemented.")
+	klog.Warningf("GetZoneByNodeName is called but not implemented.")
 
 	return cloudprovider.Zone{}, nil
 }
