@@ -19,8 +19,8 @@ package huaweicloud
 import (
 	"context"
 
-	"github.com/prometheus/common/log"
 	cloudprovider "k8s.io/cloud-provider"
+	"k8s.io/klog"
 )
 
 // NewRoutes creates a new route handler.
@@ -37,7 +37,7 @@ var _ cloudprovider.Routes = &Routes{}
 
 // ListRoutes lists all managed routes that belong to the specified clusterName
 func (r *Routes) ListRoutes(ctx context.Context, clusterName string) ([]*cloudprovider.Route, error) {
-	log.Warnf("ListRoutes is called but not implemented. clusterName: %s", clusterName)
+	klog.Warningf("ListRoutes is called but not implemented. clusterName: %s", clusterName)
 
 	return nil, nil
 }
@@ -46,7 +46,7 @@ func (r *Routes) ListRoutes(ctx context.Context, clusterName string) ([]*cloudpr
 // route.Name will be ignored, although the cloud-provider may use nameHint
 // to create a more user-meaningful name.
 func (r *Routes) CreateRoute(ctx context.Context, clusterName string, nameHint string, route *cloudprovider.Route) error {
-	log.Warnf("CreateRoute is called but not implemented. clusterName: %s, nameHint: %s", clusterName, nameHint)
+	klog.Warningf("CreateRoute is called but not implemented. clusterName: %s, nameHint: %s", clusterName, nameHint)
 
 	return nil
 }
@@ -54,7 +54,7 @@ func (r *Routes) CreateRoute(ctx context.Context, clusterName string, nameHint s
 // DeleteRoute deletes the specified managed route
 // Route should be as returned by ListRoutes
 func (r *Routes) DeleteRoute(ctx context.Context, clusterName string, route *cloudprovider.Route) error {
-	log.Warnf("ListRoutes is called but not implemented. clusterName: %s", clusterName)
+	klog.Warningf("ListRoutes is called but not implemented. clusterName: %s", clusterName)
 
 	return nil
 }

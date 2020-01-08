@@ -39,7 +39,7 @@ var _ cloudprovider.Instances = &Instances{}
 
 // NodeAddresses returns the addresses of the specified instance.
 func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
-	klog.Warning("NodeAddresses is called, but this interface haven't been implemented. node: %s", name)
+	klog.Warningf("NodeAddresses is called, but this interface haven't been implemented. node: %s", name)
 	return nil, nil
 }
 
@@ -49,7 +49,7 @@ func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 // from the node whose nodeaddresses are being queried. i.e. local metadata
 // services cannot be used in this method to obtain nodeaddresses
 func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
-	klog.Warning("NodeAddressesByProviderID is called, but this interface haven't been implemented. providerID: %s", providerID)
+	klog.Warningf("NodeAddressesByProviderID is called, but this interface haven't been implemented. providerID: %s", providerID)
 	return []v1.NodeAddress{}, cloudprovider.NotImplemented
 }
 
@@ -57,33 +57,33 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 // Note that if the instance does not exist, we must return ("", cloudprovider.InstanceNotFound)
 // cloudprovider.InstanceNotFound should NOT be returned for instances that exist but are stopped/sleeping
 func (i *Instances) InstanceID(ctx context.Context, nodeName types.NodeName) (string, error) {
-	klog.Warning("InstanceID is called, but this interface haven't been implemented. node: %s", nodeName)
+	klog.Warningf("InstanceID is called, but this interface haven't been implemented. node: %s", nodeName)
 	return "", nil
 }
 
 // InstanceType returns the type of the specified instance.
 func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (string, error) {
-	klog.Warning("InstanceType is called, but this interface haven't been implemented. node: %s", name)
+	klog.Warningf("InstanceType is called, but this interface haven't been implemented. node: %s", name)
 	return "", nil
 }
 
 // InstanceTypeByProviderID returns the type of the specified instance.
 func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
-	klog.Warning("InstanceTypeByProviderID is called, but this interface haven't been implemented. providerID: %s", providerID)
+	klog.Warningf("InstanceTypeByProviderID is called, but this interface haven't been implemented. providerID: %s", providerID)
 	return "", cloudprovider.NotImplemented
 }
 
 // AddSSHKeyToAllInstances adds an SSH public key as a legal identity for all instances
 // expected format for the key is standard ssh-keygen format: <protocol> <blob>
 func (i *Instances) AddSSHKeyToAllInstances(ctx context.Context, user string, keyData []byte) error {
-	klog.Warning("AddSSHKeyToAllInstances is called, but this interface haven't been implemented. user: %s", user)
+	klog.Warningf("AddSSHKeyToAllInstances is called, but this interface haven't been implemented. user: %s", user)
 	return cloudprovider.NotImplemented
 }
 
 // CurrentNodeName returns the name of the node we are currently running on
 // On most clouds (e.g. GCE) this is the hostname, so we provide the hostname
 func (i *Instances) CurrentNodeName(ctx context.Context, hostname string) (types.NodeName, error) {
-	klog.Warning("CurrentNodeName is called, but this interface haven't been implemented. hostname: %s", hostname)
+	klog.Warningf("CurrentNodeName is called, but this interface haven't been implemented. hostname: %s", hostname)
 	return types.NodeName(hostname), nil
 }
 
@@ -91,12 +91,12 @@ func (i *Instances) CurrentNodeName(ctx context.Context, hostname string) (types
 // If false is returned with no error, the instance will be immediately deleted by the cloud controller manager.
 // This method should still return true for instances that exist but are stopped/sleeping.
 func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
-	klog.Warning("InstanceExistsByProviderID is called, but this interface haven't been implemented. providerID: %s", providerID)
+	klog.Warningf("InstanceExistsByProviderID is called, but this interface haven't been implemented. providerID: %s", providerID)
 	return false, cloudprovider.NotImplemented
 }
 
 // InstanceShutdownByProviderID returns true if the instance is shutdown in cloudprovider
 func (i *Instances) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
-	klog.Warning("InstanceShutdownByProviderID is called, but this interface haven't been implemented. providerID: %s", providerID)
+	klog.Warningf("InstanceShutdownByProviderID is called, but this interface haven't been implemented. providerID: %s", providerID)
 	return false, cloudprovider.NotImplemented
 }
