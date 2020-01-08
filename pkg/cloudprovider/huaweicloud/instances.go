@@ -18,15 +18,12 @@ package huaweicloud
 
 import (
 	"context"
-	"errors"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog"
 )
-
-var ErrNotImplemented = errors.New("feature not implemented")
 
 // NewInstances creates an instance handler.
 func NewInstances() *Instances {
@@ -53,7 +50,7 @@ func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 // services cannot be used in this method to obtain nodeaddresses
 func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
 	klog.Warning("NodeAddressesByProviderID is called, but this interface haven't been implemented. providerID: %s", providerID)
-	return []v1.NodeAddress{}, ErrNotImplemented
+	return []v1.NodeAddress{}, cloudprovider.NotImplemented
 }
 
 // InstanceID returns the cloud provider ID of the node with the specified NodeName.
@@ -73,14 +70,14 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 // InstanceTypeByProviderID returns the type of the specified instance.
 func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
 	klog.Warning("InstanceTypeByProviderID is called, but this interface haven't been implemented. providerID: %s", providerID)
-	return "", ErrNotImplemented
+	return "", cloudprovider.NotImplemented
 }
 
 // AddSSHKeyToAllInstances adds an SSH public key as a legal identity for all instances
 // expected format for the key is standard ssh-keygen format: <protocol> <blob>
 func (i *Instances) AddSSHKeyToAllInstances(ctx context.Context, user string, keyData []byte) error {
 	klog.Warning("AddSSHKeyToAllInstances is called, but this interface haven't been implemented. user: %s", user)
-	return ErrNotImplemented
+	return cloudprovider.NotImplemented
 }
 
 // CurrentNodeName returns the name of the node we are currently running on
@@ -95,11 +92,11 @@ func (i *Instances) CurrentNodeName(ctx context.Context, hostname string) (types
 // This method should still return true for instances that exist but are stopped/sleeping.
 func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Warning("InstanceExistsByProviderID is called, but this interface haven't been implemented. providerID: %s", providerID)
-	return false, ErrNotImplemented
+	return false, cloudprovider.NotImplemented
 }
 
 // InstanceShutdownByProviderID returns true if the instance is shutdown in cloudprovider
 func (i *Instances) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Warning("InstanceShutdownByProviderID is called, but this interface haven't been implemented. providerID: %s", providerID)
-	return false, ErrNotImplemented
+	return false, cloudprovider.NotImplemented
 }
