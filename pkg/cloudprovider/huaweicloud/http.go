@@ -28,21 +28,30 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/klog"
 )
 
 const (
-	HwsHeaderXHwsDate string = "X-Hws-Date"
-	Authorization     string = "Authorization"
-	HwsHost           string = "iam.hws.com"
-	TransportHttp     string = "http"
-	TransportHttps    string = "https"
+	HwsHeaderXHwsDate   string = "X-Hws-Date"
+	Authorization       string = "Authorization"
+	HwsHost             string = "iam.hws.com"
+	TransportHttp       string = "http"
+	TransportHttps      string = "https"
+	HeaderSecurityToken string = "X-Security-Token"
+
+	// longThrottleLatency defines threshold for logging requests. All requests being
+	// throttle for more than longThrottleLatency will be logged.
+	longThrottleLatency = 50 * time.Millisecond
 )
 
 type AccessInfo struct {
-	Region      string
-	AccessKey   string
-	SecretKey   string
-	ServiceType string
+	Region        string
+	AccessKey     string
+	SecretKey     string
+	SecurityToken string
+	ServiceType   string
 }
 
 // request is used to help build up a request
@@ -55,6 +64,8 @@ type request struct {
 }
 
 var httpClient *http.Client
+
+var throttler *Throttler
 
 func init() {
 	httpClient = &http.Client{
@@ -72,6 +83,12 @@ func init() {
 			MaxIdleConnsPerHost:   10,
 			ResponseHeaderTimeout: time.Second * 15,
 		},
+	}
+
+	var err error
+	throttler, err = InitialThrottler()
+	if err != nil {
+		panic(err)
 	}
 }
 
@@ -125,7 +142,7 @@ func encodeBody(obj interface{}) (io.Reader, error) {
 }
 
 // doRequest runs a request with our client
-func DoRequest(service *ServiceClient, r *request) (*http.Response, error) {
+func DoRequest(service *ServiceClient, throttle flowcontrol.RateLimiter, r *request) (*http.Response, error) {
 	//client := service.Client
 	var body io.Reader
 	// Check if we should encode the body
@@ -136,6 +153,8 @@ func DoRequest(service *ServiceClient, r *request) (*http.Response, error) {
 			body = b
 		}
 	}
+
+	tryThrottle(throttle, r)
 
 	url := service.Endpoint + r.url
 	// Create the HTTP request
@@ -154,6 +173,7 @@ func DoRequest(service *ServiceClient, r *request) (*http.Response, error) {
 			Service:   service.Access.ServiceType,
 		}
 		req.Header.Set(HeaderProject, service.TenantId)
+		req.Header.Set(HeaderSecurityToken, service.Access.SecurityToken)
 		if err := sign.Sign(req); err != nil {
 			return nil, fmt.Errorf("DoRequest failed to get sign key %v", err)
 		}
@@ -165,4 +185,14 @@ func DoRequest(service *ServiceClient, r *request) (*http.Response, error) {
 	}
 
 	return resp, nil
+}
+
+func tryThrottle(throttle flowcontrol.RateLimiter, r *request) {
+	now := time.Now()
+	if throttle != nil {
+		throttle.Accept()
+	}
+	if latency := time.Since(now); latency > longThrottleLatency {
+		klog.V(2).Infof("Throttling request took %v, request: %s:%s", latency, r.method, r.url)
+	}
 }
