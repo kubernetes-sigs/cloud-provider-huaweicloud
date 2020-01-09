@@ -4,11 +4,13 @@ metadata:
   annotations:
     kubernetes.io/elb.class: union
     kubernetes.io/session-affinity-mode: SOURCE_IP
-    kubernetes.io/elb.autocreate: '{"type":"public","bandwidth_name":"cce-bandwidth-1551163379627","bandwidth_chargemode":"bandwidth","bandwidth_size":5,"bandwidth_sharetype":"PER","eip_type":"5_bgp","name":"james"}'
+    kubernetes.io/elb.id: 5884760e-ccf8-44b2-95e2-b850f111258d
+    kubernetes.io/elb.subnet-id: 88d5ad7d-e20c-4ba8-9f00-10fd15201ccb
   labels:
     app: nginx
   name: nginx
 spec:
+  loadBalancerIP: 119.8.41.11
   externalTrafficPolicy: Local
   ports:
     - name: service0
