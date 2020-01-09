@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kubernetes.io/elb.class: union
+    kubernetes.io/session-affinity-mode: SOURCE_IP
+    kubernetes.io/elb.id: 5884760e-ccf8-44b2-95e2-b850f111258d
+    kubernetes.io/elb.subnet-id: 88d5ad7d-e20c-4ba8-9f00-10fd15201ccb
+  labels:
+    app: nginx
+  name: nginx
+spec:
+  loadBalancerIP: 119.8.41.11
+  externalTrafficPolicy: Local
+  ports:
+    - name: service0
+      port: 80
+      protocol: TCP
+      targetPort: 80
+  selector:
+    app: nginx
+  type: LoadBalancer

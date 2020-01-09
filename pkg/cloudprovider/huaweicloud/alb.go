@@ -45,21 +45,15 @@ type tempALBServicePort struct {
 	listener    ALBListener
 }
 
-/*
- *    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
- *    ALB implement of functions in cloud.go, including
- *               GetLoadBalancer()
- *               GetLoadBalancerName()
- *               EnsureLoadBalancer()
- *               UpdateLoadBalancer()
- *               EnsureLoadBalancerDeleted()
- *    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
- */
+// GetLoadBalancer returns whether the specified load balancer exists, and
+// if so, what its status is.
+// Implementations must treat the *v1.Service parameter as read-only and not modify it.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (alb *ALBCloud) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
 	status = &v1.LoadBalancerStatus{}
 	albProvider, err := alb.getALBClient(service.Namespace)
-
 	if err != nil {
+		klog.Warningf("GetLoadBalancer, get ALB client failed. service: %s/%s, err: %v", service.Namespace, service.Name, err)
 		if apierrors.IsNotFound(err) {
 			return nil, false, nil
 		}
@@ -69,18 +63,23 @@ func (alb *ALBCloud) GetLoadBalancer(ctx context.Context, clusterName string, se
 
 	_, loadBalancerId, err := alb.getAlbInstanceInfo(service, albProvider, true)
 	if err != nil {
+		klog.Warningf("GetLoadBalancer, get load balancer id failed. service: %s/%s, err: %v", service.Namespace, service.Name, err)
 		return nil, false, err
 	}
 
 	listeners, err := albProvider.findListenerOfService(loadBalancerId, service)
 	if err != nil {
+		klog.Warningf("GetLoadBalancer, get service listener failed. service: %s/%s, err: %v", service.Namespace, service.Name, err)
 		return nil, false, err
 	}
 	if len(listeners) == 0 {
+		klog.Infof("GetLoadBalancer, no service listener found. service: %s/%s, err: %v", service.Namespace, service.Name, err)
 		return nil, false, nil
 	}
 
+	klog.Infof("GetLoadBalancer, service: %s/%s, LoadBalancerStatus.IP: %s ", service.Namespace, service.Name, service.Spec.LoadBalancerIP)
 	status.Ingress = append(status.Ingress, v1.LoadBalancerIngress{IP: service.Spec.LoadBalancerIP})
+
 	return status, true, nil
 }
 
@@ -91,30 +90,33 @@ func (alb *ALBCloud) GetLoadBalancerName(ctx context.Context, clusterName string
 	return ""
 }
 
-/*
- *    clusterName: discarded
- *    service: each service has its corresponding load balancer
- *    nodes: all nodes under ServiceController, i.e. all nodes under the k8s cluster
- */
+// EnsureLoadBalancer creates a new load balancer 'name', or updates the existing one. Returns the status of the balancer
+// Implementations must treat the *v1.Service and *v1.Node
+// parameters as read-only and not modify them.
+// Parameter 'clusterName' is the name of the cluster as presented to kube-controller-manager
 func (alb *ALBCloud) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, hosts []*v1.Node) (*v1.LoadBalancerStatus, error) {
 	klog.Infof("Begin to ensure loadbalancer configuration of service(%s/%s)", service.Namespace, service.Name)
 	albProvider, err := alb.getALBClient(service.Namespace)
 	if err != nil {
+		klog.Warningf("EnsureLoadBalancer, get ALB client failed. service: %s/%s, err: %v", service.Namespace, service.Name, err)
 		return nil, err
 	}
 
 	_, loadBalancerId, err := alb.getAlbInstanceInfo(service, albProvider, true)
 	if err != nil {
+		klog.Warningf("EnsureLoadBalancer, get load balancer id failed. service: %s/%s, err: %v", service.Namespace, service.Name, err)
 		return nil, err
 	}
 
 	listeners, err := albProvider.findListenerOfService(loadBalancerId, service)
 	if err != nil {
+		klog.Warningf("EnsureLoadBalancer, get service listener failed. service: %s/%s, err: %v", service.Namespace, service.Name, err)
 		return nil, err
 	}
 
 	members, err := alb.generateMembers(service, albProvider)
 	if err != nil {
+		klog.Warningf("EnsureLoadBalancer, generate members failed. service: %s/%s, err: %v", service.Namespace, service.Name, err)
 		return nil, err
 	}
 
@@ -138,6 +140,7 @@ func (alb *ALBCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 		select {
 		case err := <-ch:
 			if err != nil {
+				klog.Warningf("EnsureLoadBalancer, create/update/delete load balancer failed. service: %s/%s, err: %v", service.Namespace, service.Name, err)
 				errs = append(errs, err)
 			}
 		}
@@ -147,6 +150,7 @@ func (alb *ALBCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 		return nil, utilerrors.NewAggregate(errs)
 	}
 
+	klog.Infof("EnsureLoadBalancer, service: %s/%s, LoadBalancerStatus.IP: %s ", service.Namespace, service.Name, service.Spec.LoadBalancerIP)
 	status := &v1.LoadBalancerStatus{}
 	status.Ingress = append(status.Ingress, v1.LoadBalancerIngress{IP: service.Spec.LoadBalancerIP})
 	return status, nil
@@ -345,6 +349,7 @@ func (alb *ALBCloud) deleteListener(albProvider *ALBClient, listenerID, poolID, 
 func (alb *ALBCloud) getALBClient(namespace string) (*ALBClient, error) {
 	secret, err := alb.getSecret(namespace, alb.config.SecretName)
 	if err != nil {
+		klog.Warningf("Get ALB client, get secret failed. target secret: %s, namespace: %s, err: %v", alb.config.SecretName, namespace, err)
 		return nil, err
 	}
 
