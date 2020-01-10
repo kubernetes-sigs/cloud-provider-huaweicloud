@@ -173,7 +173,14 @@ func DoRequest(service *ServiceClient, throttle flowcontrol.RateLimiter, r *requ
 			Service:   service.Access.ServiceType,
 		}
 		req.Header.Set(HeaderProject, service.TenantId)
-		req.Header.Set(HeaderSecurityToken, service.Access.SecurityToken)
+
+		// distinguish 'Permanent Security Credentials' and 'Temporary Security Credentials'
+		// HeaderSecurityToken only be set in case of 'Temporary Security Credentials'.
+		// TODO(RainbowMango): Remove this ugly code and refactor later.
+		if service.Access.SecurityToken != "" {
+			req.Header.Set(HeaderSecurityToken, service.Access.SecurityToken)
+		}
+
 		if err := sign.Sign(req); err != nil {
 			return nil, fmt.Errorf("DoRequest failed to get sign key %v", err)
 		}

@@ -67,7 +67,7 @@ func (elb *ELBCloud) getSecret(namespace, secretName string) (*Secret, error) {
 		kubeSecret = secret
 	}
 
-	bytes, err := json.Marshal(kubeSecret)
+	bytes, err := json.Marshal(kubeSecret.Data)
 	if err != nil {
 		return nil, err
 	}
@@ -89,7 +89,7 @@ func (elb *ELBCloud) ELBClient(namespace string) (*ELBClient, error) {
 	}
 
 	var sc SecurityCredential
-	err = json.Unmarshal([]byte(secret.Data.Credential), &sc)
+	err = json.Unmarshal([]byte(secret.Credential), &sc)
 	if err != nil {
 		return nil, fmt.Errorf("Unmarshal security credential failed, error: %v", err)
 	}

@@ -461,19 +461,30 @@ func (alb *ALBCloud) getALBClient(namespace string) (*ALBClient, error) {
 		return nil, err
 	}
 
-	var sc SecurityCredential
-	err = json.Unmarshal([]byte(secret.Data.Credential), &sc)
-	if err != nil {
-		return nil, fmt.Errorf("Unmarshal security credential failed, error: %v", err)
+	var accessKey, secretKey, securityToken string
+	if len(secret.Credential) > 0 { // 'Temporary Security Credentials'
+		klog.Infof("Using temporary security credentials.")
+		var sc SecurityCredential
+		err = json.Unmarshal([]byte(secret.Credential), &sc)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal security credential failed, error: %v", err)
+		}
+		accessKey = sc.AccessKey
+		secretKey = sc.SecretKey
+		securityToken = sc.SecurityToken
+	} else { // 'Permanent Security Credentials'
+		klog.Infof("Using permanent security credentials.")
+		accessKey = secret.AccessKey
+		secretKey = secret.SecretKey
 	}
 
 	return NewALBClient(
 		alb.config.ALBEndpoint,
 		alb.config.VPCEndpoint,
 		alb.config.TenantId,
-		sc.AccessKey,
-		sc.SecretKey,
-		sc.SecurityToken,
+		accessKey,
+		secretKey,
+		securityToken,
 		alb.config.Region,
 		alb.config.SignerType,
 		alb.config.EnterpriseEnable,
@@ -495,18 +506,18 @@ func (alb *ALBCloud) getSecret(namespace, secretName string) (*Secret, error) {
 		kubeSecret = secret
 	}
 
-	bytes, err := json.Marshal(kubeSecret)
+	bytes, err := json.Marshal(kubeSecret.Data)
 	if err != nil {
 		return nil, err
 	}
 
-	var secret *Secret
+	var secret Secret
 	err = json.Unmarshal(bytes, &secret)
 	if err != nil {
 		return nil, err
 	}
 
-	return secret, nil
+	return &secret, nil
 }
 
 func (alb *ALBCloud) getPods(name, namespace string) (*v1.PodList, error) {

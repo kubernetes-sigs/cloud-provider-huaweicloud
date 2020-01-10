@@ -304,12 +304,29 @@ type ELBListenerDescription struct {
 var ErrNotFound = errors.New("Object not found")
 var ErrNotImplemented = errors.New("Feature not implemented")
 
+/*
 type Secret struct {
 	Data struct {
 		Credential string `json:"security.credential"`
 	} `json:"data"`
 }
+*/
 
+// Secret is a temporary solution for both support 'Permanent Security Credentials' and 'Temporary Security Credentials'.
+// TODO(RainbowMango): Refactor later by a graceful way.
+type Secret struct {
+	Credential string `json:"security.credential,omitempty"`
+	AccessKey  string `json:"access,omitempty"`
+	SecretKey  string `json:"secret,omitempty"`
+}
+
+// PermanentSecurityCredentials represents 'Permanent Security Credentials'.
+type PermanentSecurityCredentials struct {
+	AccessKey string `json:"access"`
+	SecretKey string `json:"secret"`
+}
+
+// SecurityCredential represents 'Temporary Security Credentials'.
 type SecurityCredential struct {
 	AccessKey     string    `json:"access"`
 	SecretKey     string    `json:"secret"`
