@@ -96,6 +96,11 @@ type NATGatewayList struct {
 	NATGateways []NATGateway `json:"nat_gateways"`
 }
 
+type DNATRuleDescription struct {
+	ClusterID   string `json:"cluster_id,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 // DNA Rule
 type DNATRule struct {
 	Id                  string         `json:"id,omitempty"`
@@ -109,6 +114,7 @@ type DNATRule struct {
 	Protocol            NATProtocol    `json:"protocol,omitempty"`
 	Status              DNATRuleStatus `json:"status,omitempty"`
 	AdminStateUp        bool           `json:"admin_state_up,omitempty"`
+	Description         string         `json:"description,omitempty"`
 }
 
 type DNATRuleArr struct {
@@ -181,14 +187,16 @@ type NATClient struct {
 	// ServiceClient is a general service client defines a client used to connect an Endpoint defined in elb_connection.go
 	natClient *ServiceClient
 	vpcClient *ServiceClient
+	throttler *Throttler
 }
 
-func NewNATClient(natEndpoint, vpcEndpoint, id, accessKey, secretKey, region, serviceType string) *NATClient {
+func NewNATClient(natEndpoint, vpcEndpoint, id, accessKey, secretKey, securityToken, region, serviceType string) *NATClient {
 	access := &AccessInfo{
-		AccessKey:   accessKey,
-		SecretKey:   secretKey,
-		Region:      region,
-		ServiceType: serviceType,
+		AccessKey:     accessKey,
+		SecretKey:     secretKey,
+		SecurityToken: securityToken,
+		Region:        region,
+		ServiceType:   serviceType,
 	}
 	natClient := &ServiceClient{
 		Client:   httpClient,
@@ -206,6 +214,7 @@ func NewNATClient(natEndpoint, vpcEndpoint, id, accessKey, secretKey, region, se
 	return &NATClient{
 		natClient: natClient,
 		vpcClient: vpcClient,
+		throttler: throttler,
 	}
 }
 
@@ -218,7 +227,7 @@ func (nat *NATClient) GetNATGateway(natGatewayId string) (*NATGateway, error) {
 	url := "/v2.0/nat_gateways/" + natGatewayId
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
-	resp, err := DoRequest(nat.natClient, req)
+	resp, err := DoRequest(nat.natClient, nat.throttler.GetThrottleByKey(NAT_GATEWAY_GET), req)
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +261,7 @@ func (nat *NATClient) ListNATGateways(params map[string]string) (*NATGatewayList
 	url += query
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
-	resp, err := DoRequest(nat.natClient, req)
+	resp, err := DoRequest(nat.natClient, nat.throttler.GetThrottleByKey(NAT_GATEWAY_LIST), req)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +282,7 @@ func (nat *NATClient) CreateDNATRule(dnatRuleConf *DNATRule) (*DNATRule, error) 
 	url := "/v2.0/dnat_rules"
 	req := NewRequest(http.MethodPost, url, nil, &dnatRule)
 
-	resp, err := DoRequest(nat.natClient, req)
+	resp, err := DoRequest(nat.natClient, nat.throttler.GetThrottleByKey(NAT_RULE_CREATE), req)
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +299,7 @@ func (nat *NATClient) DeleteDNATRule(dnatRuleId string) error {
 	url := "/v2.0/dnat_rules/" + dnatRuleId
 	req := NewRequest(http.MethodDelete, url, nil, nil)
 
-	resp, err := DoRequest(nat.natClient, req)
+	resp, err := DoRequest(nat.natClient, nat.throttler.GetThrottleByKey(NAT_RULE_DELETE), req)
 	if err != nil {
 		return err
 	}
@@ -308,7 +317,7 @@ func (nat *NATClient) GetDNATRule(dnatRuleId string) (*DNATRule, error) {
 	url := "/v2.0/dnat_rules/" + dnatRuleId
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
-	resp, err := DoRequest(nat.natClient, req)
+	resp, err := DoRequest(nat.natClient, nat.throttler.GetThrottleByKey(NAT_RULE_GET), req)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +351,7 @@ func (nat *NATClient) ListDNATRules(params map[string]string) (*DNATRuleList, er
 	url += query
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
-	resp, err := DoRequest(nat.natClient, req)
+	resp, err := DoRequest(nat.natClient, nat.throttler.GetThrottleByKey(NAT_RULE_LIST), req)
 	if err != nil {
 		return nil, err
 	}
@@ -372,7 +381,7 @@ func (nat *NATClient) ListPorts(params map[string]string) (*PortList, error) {
 	url += query
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
-	resp, err := DoRequest(nat.vpcClient, req)
+	resp, err := DoRequest(nat.vpcClient, nil, req)
 	if err != nil {
 		return nil, err
 	}
@@ -390,7 +399,7 @@ func (nat *NATClient) GetPort(portId string) (*Port, error) {
 	url := "/v2.0/ports/" + portId
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
-	resp, err := DoRequest(nat.vpcClient, req)
+	resp, err := DoRequest(nat.vpcClient, nil, req)
 	if err != nil {
 		return nil, err
 	}
@@ -423,7 +432,7 @@ func (nat *NATClient) ListFloatings(params map[string]string) (*FloatingIpList, 
 	url += query
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
-	resp, err := DoRequest(nat.vpcClient, req)
+	resp, err := DoRequest(nat.vpcClient, nil, req)
 	if err != nil {
 		return nil, err
 	}

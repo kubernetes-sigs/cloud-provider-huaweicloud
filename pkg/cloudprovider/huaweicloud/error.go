@@ -19,9 +19,9 @@ package huaweicloud
 type LbErrorCode string
 
 const (
-	ElbError6091 LbErrorCode = "ELB.6091" // create listener failed: ELB already has 5 listeners
-	ElbError2012 LbErrorCode = "ELB.2012" // backend server does not exist
-	ElbError1101 LbErrorCode = "ELB.1101" // invalid parameter: vip_address already exists
-	ElbError6101 LbErrorCode = "ELB.6101" // create listener failed: duplicated port
-	ElbError7020 LbErrorCode = "ELB.7020" // healthcheck is not exist
+	ElbError6091 LbErrorCode = "ELB.6091" //create listener failed: ELB already has 5 listeners
+	ElbError2012 LbErrorCode = "ELB.2012" //backend server does not exist
+	ElbError1101 LbErrorCode = "ELB.1101" //invalid parameter: vip_address already exists
+	ElbError6101 LbErrorCode = "ELB.6101" //create listener failed: duplicated port
+	ElbError7020 LbErrorCode = "ELB.7020" //healthcheck is not exist
 )

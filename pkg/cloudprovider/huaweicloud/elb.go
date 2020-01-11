@@ -20,11 +20,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/hashicorp/golang-lru"
-
 	"k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -33,11 +32,8 @@ import (
 	"k8s.io/klog"
 )
 
-// ELBCloud is `Classic Load Balancer`
-// TODO(RainbowMango): Change type name to `ClassicLoadBalancer`
 type ELBCloud struct {
-	// TODO(RainbowMango): A specific load balancer shouldn't keep a whole cloud config.
-	config        *LoadBalancerOpts
+	config        *LBConfig
 	kubeClient    corev1.CoreV1Interface
 	lrucache      *lru.Cache
 	secret        *Secret
@@ -71,7 +67,7 @@ func (elb *ELBCloud) getSecret(namespace, secretName string) (*Secret, error) {
 		kubeSecret = secret
 	}
 
-	bytes, err := json.Marshal(kubeSecret)
+	bytes, err := json.Marshal(kubeSecret.Data)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +88,13 @@ func (elb *ELBCloud) ELBClient(namespace string) (*ELBClient, error) {
 		return nil, err
 	}
 
-	return NewELBClient(elb.config.ECSEndpoint, elb.config.ELBEndpoint, elb.config.TenantId, secret.Data.AccessKey, secret.Data.SecretKey, elb.config.Region, elb.config.SignerType), nil
+	var sc SecurityCredential
+	err = json.Unmarshal([]byte(secret.Credential), &sc)
+	if err != nil {
+		return nil, fmt.Errorf("Unmarshal security credential failed, error: %v", err)
+	}
+
+	return NewELBClient(elb.config.ECSEndpoint, elb.config.ELBEndpoint, elb.config.TenantId, sc.AccessKey, sc.SecretKey, sc.SecurityToken, elb.config.Region, elb.config.SignerType), nil
 }
 
 func (elb *ELBCloud) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
@@ -109,20 +111,34 @@ func (elb *ELBCloud) GetLoadBalancer(ctx context.Context, clusterName string, se
 	return status, true, nil
 }
 
-func (elb *ELBCloud) asyncWaitJobs(elbProvider *ELBClient, service *v1.Service, jobs []tempJobInfo) {
-	if len(jobs) == 0 {
+// asyncWaitJobs means we just wait add/delete members backends,
+// do not block the main process.
+// tryAgain means we need to update service to requeue,
+// bacause we need to make sure at least one member available in
+// the process of upgrading, the delete member may be trigger this
+// way
+func (elb *ELBCloud) asyncWaitJobs(
+	elbProvider *ELBClient,
+	service *v1.Service,
+	jobs []tempJobInfo,
+	listenerID string,
+	newMembers []*Member,
+	tryAgain bool) {
+	if len(jobs) == 0 && !tryAgain {
 		return
 	}
 
 	go func() {
 		var errs []error
-		klog.Infof("Begin to wait jobs of service(%s/%s) finish...", service.Namespace, service.Name)
+		if len(jobs) != 0 {
+			klog.Infof("Begin to wait jobs of service(%s/%s) finish...", service.Namespace, service.Name)
+		}
 		for _, job := range jobs {
 			err := elbProvider.WaitJobComplete(job.jobID)
 			if err != nil {
 				errs = append(errs, err)
 				msg := fmt.Sprintf("Job(%s) is abnormal: %v", job.detail, err)
-				elb.sendEvent("CreateLoadBalancerFailed", msg, service)
+				sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
 				continue
 			}
 			klog.Infof("Job(%s) is success.", job.detail)
@@ -130,51 +146,24 @@ func (elb *ELBCloud) asyncWaitJobs(elbProvider *ELBClient, service *v1.Service, 
 
 		if len(errs) != 0 {
 			klog.Warning("There have some abnormal jobs, needs to try again")
-			elb.updateServiceStatus(service)
-		}
-
-		klog.Infof("Jobs of service(%s/%s) have finished: total: %d, failed: %d",
-			service.Namespace, service.Name, len(jobs), len(errs))
-	}()
-}
-
-func (elb *ELBCloud) updateServiceStatus(service *v1.Service) {
-	for i := 0; i < 5; i++ {
-		mark, ok := service.Annotations[ELBMarkAnnotation]
-		if !ok {
-			mark = Ping
-			if service.Annotations == nil {
-				service.Annotations = map[string]string{}
-			}
+			updateServiceStatus(elb.kubeClient, elb.eventRecorder, service)
 		} else {
-			if mark == Ping {
-				mark = Pong
-			} else {
-				mark = Ping
+			if len(newMembers) != 0 {
+				err := elbProvider.WaitMemberComplete(listenerID, newMembers)
+				if err != nil {
+					klog.Warningf("AsyncWaitJobs(%s/%s) wait member complete error: %v",
+						service.Namespace, service.Name, err)
+				}
 			}
-		}
-		service.Annotations[ELBMarkAnnotation] = mark
-		_, err := elb.kubeClient.Services(service.Namespace).Update(service)
-		if err == nil {
-			return
-		}
-		// If the object no longer exists, we don't want to recreate it. Just bail
-		// out so that we can process the delete, which we should soon be receiving
-		// if we haven't already.
-		if apierrors.IsNotFound(err) {
-			klog.Infof("Not persisting update to service '%s/%s' that no longer exists: %v",
-				service.Namespace, service.Name, err)
-			return
+
+			updateServiceMarkIfNeeded(elb.kubeClient, service, tryAgain)
 		}
 
-		if apierrors.IsConflict(err) {
-			service, err = elb.kubeClient.Services(service.Namespace).Get(service.Name, metav1.GetOptions{})
-			if err != nil {
-				klog.Warningf("Get service(%s/%s) error: %v", service.Namespace, service.Name, err)
-				continue
-			}
+		if len(jobs) != 0 {
+			klog.Infof("Jobs of service(%s/%s) have finished: total: %d, failed: %d",
+				service.Namespace, service.Name, len(jobs), len(errs))
 		}
-	}
+	}()
 }
 
 func findELBDetail(elbProvider *ELBClient, loadBalanceIP string) (elbDetail *ElbDetail, err error) {
@@ -196,8 +185,9 @@ func (elb *ELBCloud) ensureCreateListener(
 	name string,
 	elbAlgorithm ELBAlgorithm,
 	port v1.ServicePort,
-	service *v1.Service,
-	sessionSticky bool) (listenerID string, err error) {
+	loadBalancerID string,
+	sessionAffinity string,
+	sessionAffinityOpts map[string]string) (listenerID string, err error) {
 	listenerConf := &Listener{
 		LoadbalancerID:  "",
 		Protocol:        ELBProtocol(port.Protocol),
@@ -209,30 +199,18 @@ func (elb *ELBCloud) ensureCreateListener(
 
 	listenerConf.Name = name
 	listenerConf.AdminStateUp = true
-	listenerConf.Description = ListenerDescription
-	if sessionSticky {
-		listenerConf.SessionSticky = sessionSticky
-		listenerConf.TCPTimeout = DefaultSessionAffinityTime
-	}
-	params := make(map[string]string)
-	if vpcID := service.Annotations[VPCIDAnnotation]; vpcID != "" {
-		params["vpc_id"] = vpcID
-	}
-	if service.Spec.LoadBalancerIP != "" {
-		params["vip_address"] = service.Spec.LoadBalancerIP
-	}
-	lbList, err := elbProvider.ListLoadBalancers(params)
-	if err != nil {
-		return "", err
+	listenerConf.Description = Attention
+
+	switch sessionAffinity {
+	case ELBSessionSourceIP:
+		listenerConf.SessionSticky = true
+		listenerConf.TCPTimeout, _ = strconv.Atoi(sessionAffinityOpts[ELBPersistenTimeout])
+	case ELBSessionNone:
+		//do nothing
 	}
 
-	if len(lbList.Loadbalancers) > 1 {
-		return "", fmt.Errorf("Find more than one Loadbalancer(service:%s/%s)", service.Namespace, service.Name)
-	} else if len(lbList.Loadbalancers) == 0 {
-		return "", fmt.Errorf("Can't find matched Loadbalancer.")
-	}
-	listenerConf.LoadbalancerID = lbList.Loadbalancers[0].LoadbalancerId
-	klog.Infof("Begin to create listener(%s/%d) of loadbalancer(%s/%s)...", name, port.Port, lbList.Loadbalancers[0].LoadbalancerId, service.Spec.LoadBalancerIP)
+	listenerConf.LoadbalancerID = loadBalancerID
+	klog.Infof("Begin to create listener(%s/%d) of loadbalancer(%s)...", name, port.Port, loadBalancerID)
 	listener, errRsp, err := elbProvider.CreateListener(listenerConf)
 	if err != nil {
 		// if the listener already exit
@@ -289,11 +267,30 @@ func (elb *ELBCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 		return nil, err
 	}
 
-	needsCreate, needsUpdate, needsDelete := elb.compare(service, listeners)
+	params := make(map[string]string)
+	if elb.config.VPCId != "" {
+		params["vpc_id"] = elb.config.VPCId
+	}
+	if service.Spec.LoadBalancerIP != "" {
+		params["vip_address"] = service.Spec.LoadBalancerIP
+	}
+	lbList, err := elbProvider.ListLoadBalancers(params)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(lbList.Loadbalancers) > 1 {
+		return nil, fmt.Errorf("Find more than one Loadbalancer(service:%s/%s)", service.Namespace, service.Name)
+	} else if len(lbList.Loadbalancers) == 0 {
+		return nil, fmt.Errorf("Can't find matched Loadbalancer.")
+	}
+
+	loadBalancerID := lbList.Loadbalancers[0].LoadbalancerId
+	needsCreate, needsUpdate, needsDelete := elb.compare(loadBalancerID, service, listeners)
 	ch := make(chan error, 3)
 
 	go func() {
-		ch <- elb.createLoadBalancer(elbProvider, service, needsCreate, healthCheckPort, members)
+		ch <- elb.createLoadBalancer(elbProvider, loadBalancerID, service, needsCreate, healthCheckPort, members)
 	}()
 
 	go func() {
@@ -369,7 +366,7 @@ func (elb *ELBCloud) updateListenerMembers(
 	newMembers []*Member,
 	preMembers []*MemDetail) error {
 	addMembers := []*Member{}
-	matchedMembers := map[string]bool{}
+	matchedMembers := map[string]*MemDetail{}
 	membersDel := &MembersDel{}
 	jobs := []tempJobInfo{}
 
@@ -378,7 +375,7 @@ func (elb *ELBCloud) updateListenerMembers(
 		for _, preMember := range preMembers {
 			if preMember.ServerID == member.ServerID {
 				create = false
-				matchedMembers[preMember.ServerID] = true
+				matchedMembers[preMember.ServerID] = preMember
 				break
 			}
 		}
@@ -389,18 +386,18 @@ func (elb *ELBCloud) updateListenerMembers(
 	}
 
 	for _, preMember := range preMembers {
-		if !matchedMembers[preMember.ServerID] {
+		if _, ok := matchedMembers[preMember.ServerID]; !ok {
 			memberRm := MemberRm{ID: preMember.ID, Address: preMember.Address}
 			membersDel.RemoveMember = append(membersDel.RemoveMember, memberRm)
 		}
 	}
 
 	if len(addMembers) != 0 {
-		klog.Infof("Begin to add members(%v) of listener(%s)", addMembers, listenerID)
+		klog.Infof("Begin to add members(%v) of service(%s/%s)", addMembers, service.Namespace, service.Name)
 		addJob, err := elbProvider.AsyncCreateMembers(listenerID, addMembers)
 		if err != nil {
 			msg := fmt.Sprintf("Add members of listener(%s) error: %v", listenerID, err)
-			elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
+			sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
 			return fmt.Errorf(msg)
 		}
 		jobs = append(jobs, tempJobInfo{
@@ -409,23 +406,49 @@ func (elb *ELBCloud) updateListenerMembers(
 		})
 	}
 
-	if len(membersDel.RemoveMember) != 0 {
-		klog.Infof("Begin to delete members(%v) of listener(%s)", membersDel.RemoveMember, listenerID)
-		delJob, err := elbProvider.AsyncDeleteMembers(listenerID, membersDel)
-		if err != nil {
-			msg := fmt.Sprintf("Delete members of listener(%s) error: %v", listenerID, err)
-			elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
-			return fmt.Errorf(msg)
+	if elb.gracefulRemoveElbMembers(matchedMembers) {
+		if len(membersDel.RemoveMember) != 0 {
+			klog.Infof("Can trigger graceful remove members(%s/%d) of service(%s/%s)",
+				listenerID, len(membersDel.RemoveMember), service.Namespace, service.Name)
+			delJob, err := elbProvider.AsyncDeleteMembers(listenerID, membersDel)
+			if err != nil {
+				msg := fmt.Sprintf("Delete members of listener(%s) error: %v", listenerID, err)
+				sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
+				return fmt.Errorf(msg)
+			}
+			jobs = append(jobs, tempJobInfo{
+				jobID:  delJob.JobID,
+				detail: fmt.Sprintf("Delete listener(%s) members", listenerID),
+			})
 		}
-		jobs = append(jobs, tempJobInfo{
-			jobID:  delJob.JobID,
-			detail: fmt.Sprintf("Delete listener(%s) members", listenerID),
-		})
 	}
 
-	elb.asyncWaitJobs(elbProvider, service, jobs)
+	if len(addMembers) != 0 {
+		klog.Infof("In upgrading process(%s/%s), when add member is finshed, needs retry to clean the useless members",
+			service.Namespace, service.Name)
+		elb.asyncWaitJobs(elbProvider, service, jobs, listenerID, addMembers, true)
+		return nil
+	} else {
+		elb.asyncWaitJobs(elbProvider, service, jobs, listenerID, nil, false)
+	}
 
 	return nil
+}
+
+// although member has already been added, in fact,
+// the member will wait the health check is ok, then
+// transfer the packages, so before delete the old member,
+// we need to check if there have available members
+func (elb *ELBCloud) gracefulRemoveElbMembers(existMembers map[string]*MemDetail) bool {
+	hasAvailableMember := false
+	for _, member := range existMembers {
+		if member.HealthStatus == MemberNormal {
+			hasAvailableMember = true
+			break
+		}
+	}
+
+	return hasAvailableMember
 }
 
 // EnsureTCPLoadBalancerDeleted is an implementation of TCPLoadBalancer.EnsureTCPLoadBalancerDeleted.
@@ -448,7 +471,7 @@ func (elb *ELBCloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName 
 		if err = deleteListener(elbProvider, listener.ID, listener.HealthcheckID); err != nil {
 			errs = append(errs, err)
 			msg := fmt.Sprintf("Delete listener(%s) error: %v", listener.ID, err)
-			elb.sendEvent("DeleteLoadBalancerFailed", msg, service)
+			sendEvent(elb.eventRecorder, "DeleteLoadBalancerFailed", msg, service)
 		}
 	}
 
@@ -484,12 +507,8 @@ func (elb *ELBCloud) getListenersByService(service *v1.Service) ([]*ListenerDeta
 	return listeners, nil
 }
 
-func (elb *ELBCloud) sendEvent(title, msg string, service *v1.Service) {
-	klog.Errorf("[%s/%s]%s", service.Namespace, service.Name, msg)
-	elb.eventRecorder.Event(service, v1.EventTypeWarning, title, fmt.Sprintf("Details: %s", msg))
-}
-
 func (elb *ELBCloud) compare(
+	loadBalancerID string,
 	service *v1.Service,
 	listeners []*ListenerDetail) ([]v1.ServicePort, map[string]tempServicePort, []*ListenerDetail) {
 	needsCreate := []v1.ServicePort{}
@@ -503,7 +522,8 @@ func (elb *ELBCloud) compare(
 		create := true
 		for j := range listeners {
 			listener := listeners[j]
-			if int(port.Port) == listener.Port {
+			if int(port.Port) == listener.Port &&
+				listener.LoadbalancerID == loadBalancerID {
 				create = false
 				needsUpdate[listener.ID] = tempServicePort{
 					servicePort: &port,
@@ -536,6 +556,16 @@ func (elb *ELBCloud) generateMembers(service *v1.Service) ([]*Member, error) {
 	members := []*Member{}
 	hasNodeExist := map[string]bool{}
 	for _, item := range podList.Items {
+		if item.Status.HostIP == "" {
+			klog.Errorf("pod(%s/%s) has not been scheduled", item.Namespace, item.Name)
+			continue
+		}
+
+		if !IsPodActive(&item) {
+			klog.Errorf("pod(%s/%s) is not active", item.Namespace, item.Name)
+			continue
+		}
+
 		if hasNodeExist[item.Status.HostIP] {
 			continue
 		}
@@ -562,6 +592,7 @@ func (elb *ELBCloud) generateMembers(service *v1.Service) ([]*Member, error) {
 
 func (elb *ELBCloud) createLoadBalancer(
 	elbProvider *ELBClient,
+	loadBalancerID string,
 	service *v1.Service,
 	needsCreate []v1.ServicePort,
 	healthCheckPort *v1.ServicePort,
@@ -571,6 +602,19 @@ func (elb *ELBCloud) createLoadBalancer(
 		jobs []tempJobInfo
 	)
 	lsName := GetListenerName(service)
+	sessionAffinity, err := elb.getSessionAffinityType(service)
+	if err != nil {
+		msg := fmt.Sprintf("Create loadbalancer(%s) error: %v", service.Spec.LoadBalancerIP, err)
+		sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
+		return err
+	}
+	sessionAffinityOptions, err := elb.getSessionAffinityOptions(service)
+	if err != nil {
+		msg := fmt.Sprintf("Create loadbalancer(%s) error: %v", service.Spec.LoadBalancerIP, err)
+		sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
+		return err
+	}
+
 	for _, port := range needsCreate {
 		// Step 1. create listener if needed
 		listenerId, err := elb.ensureCreateListener(
@@ -578,18 +622,20 @@ func (elb *ELBCloud) createLoadBalancer(
 			lsName,
 			elb.config.ELBAlgorithm, //TODO: we will support other algorithms later
 			port,
-			service,
-			GetSessionAffinity(service))
+			loadBalancerID,
+			sessionAffinity,
+			sessionAffinityOptions,
+		)
 		if err != nil {
 			errs = append(errs, err)
 			msg := fmt.Sprintf("Create listener(%d) error: %v", port.Port, err)
-			elb.sendEvent("CreateLoadBalancerFailed", msg, service)
+			sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
 			continue
 		}
 
 		if listenerId == "" {
 			msg := fmt.Sprintf("The listener(%d) has already exist", port.Port)
-			elb.sendEvent("CreateLoadBalancerFailed", msg, service)
+			sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
 			continue
 		}
 
@@ -614,7 +660,7 @@ func (elb *ELBCloud) createLoadBalancer(
 		if err != nil {
 			errs = append(errs, err)
 			msg := fmt.Sprintf("Create healthcheck of listener(%s) error: %v", listenerId, err)
-			elb.sendEvent("CreateLoadBalancerFailed", msg, service)
+			sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
 			continue
 		}
 
@@ -625,7 +671,7 @@ func (elb *ELBCloud) createLoadBalancer(
 		if err != nil {
 			errs = append(errs, err)
 			msg := fmt.Sprintf("Create members of listener(%s) error: %v", listenerId, err)
-			elb.sendEvent("CreateLoadBalancerFailed", msg, service)
+			sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
 			continue
 		}
 		klog.Infof("Create members of listener(%s) success.", listenerId)
@@ -635,7 +681,7 @@ func (elb *ELBCloud) createLoadBalancer(
 		})
 	}
 
-	elb.asyncWaitJobs(elbProvider, service, jobs)
+	elb.asyncWaitJobs(elbProvider, service, jobs, "", nil, false)
 
 	if len(errs) != 0 {
 		return utilerrors.NewAggregate(errs)
@@ -651,33 +697,52 @@ func (elb *ELBCloud) updateLoadBalancer(
 	healthCheckPort *v1.ServicePort,
 	members []*Member) error {
 	var errs []error
+
+	sessionAffinity, err := elb.getSessionAffinityType(service)
+	if err != nil {
+		msg := fmt.Sprintf("Update loadbalancer(%s) error: %v", service.Spec.LoadBalancerIP, err)
+		sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
+		return err
+	}
+	sessionAffinityOptions, err := elb.getSessionAffinityOptions(service)
+	if err != nil {
+		msg := fmt.Sprintf("Update loadbalancer(%s) error: %v", service.Spec.LoadBalancerIP, err)
+		sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
+		return err
+	}
+
 	for _, tempPort := range needsUpdate {
 		if ELBProtocol(tempPort.servicePort.Protocol) != tempPort.listener.Protocol {
 			msg := fmt.Sprintf("The protocol of listener(%s) can not be modified", tempPort.listener.ID)
-			elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
+			sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
 			continue
 		}
 
-		// needs to update listener
-		sessionAffinity := GetSessionAffinity(service)
-		if int(tempPort.servicePort.NodePort) != tempPort.listener.BackendPort || tempPort.listener.SessionSticky != sessionAffinity {
-			klog.Infof("Needs to update listener(%s)'s backend port(%d->%d), session_sticky(%v->%v) of service(%s/%s)",
-				tempPort.listener.ID, tempPort.listener.BackendPort, tempPort.servicePort.NodePort, tempPort.listener.SessionSticky, sessionAffinity, service.Namespace, service.Name)
+		var sessionSticky bool
+		var timeout int
+		switch sessionAffinity {
+		case ELBSessionSourceIP:
+			sessionSticky = true
+			timeout, _ = strconv.Atoi(sessionAffinityOptions[ELBPersistenTimeout])
+		case ELBSessionNone:
+			sessionSticky = false
+		}
 
+		// needs to update listener
+		if int(tempPort.servicePort.NodePort) != tempPort.listener.BackendPort || tempPort.listener.SessionSticky != sessionSticky || tempPort.listener.TCPTimeout != timeout {
+			klog.Infof("Needs to update listener(%s)'s backend port(%d->%d), session_sticky(%v->%v) ,session_timeout(%d->%d)of service(%s/%s)",
+				tempPort.listener.ID, tempPort.listener.BackendPort, tempPort.servicePort.NodePort, tempPort.listener.SessionSticky, sessionSticky, tempPort.listener.TCPTimeout, timeout, service.Namespace, service.Name)
 			ll := &Listener{}
 			ll.BackendPort = int(tempPort.servicePort.NodePort)
-			if sessionAffinity {
-				ll.SessionSticky = true
-				ll.TCPTimeout = DefaultSessionAffinityTime
-			} else {
-				ll.SessionSticky = false
+			ll.SessionSticky = sessionSticky
+			if sessionSticky {
+				ll.TCPTimeout = timeout
 			}
-
 			_, err := elbProvider.UpdateListener(ll, tempPort.listener.ID)
 			if err != nil {
 				errs = append(errs, err)
 				msg := fmt.Sprintf("Update listener(%s) error: %v", tempPort.listener.ID, err)
-				elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
+				sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
 				continue
 			}
 		}
@@ -720,7 +785,7 @@ func (elb *ELBCloud) deleteLoadBalancer(
 	for _, listener := range needsDelete {
 		if err := deleteListener(elbProvider, listener.ID, listener.HealthcheckID); err != nil {
 			errs = append(errs, err)
-			elb.sendEvent("DeleteLoadBalancerFailed", err.Error(), service)
+			sendEvent(elb.eventRecorder, "DeleteLoadBalancerFailed", err.Error(), service)
 			continue
 		}
 	}
@@ -812,7 +877,7 @@ func (elb *ELBCloud) updateHealthcheckIfNeeded(
 		_, err = elbProvider.CreateHealthCheck(h)
 		if err != nil {
 			msg := fmt.Sprintf("Create healthcheck of listener(%s) error: %v", tempPort.listener.ID, err)
-			elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
+			sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
 			return err
 		}
 		return nil
@@ -835,10 +900,45 @@ func (elb *ELBCloud) updateHealthcheckIfNeeded(
 		_, err = elbProvider.UpdateHealthCheck(h, tempPort.listener.HealthcheckID)
 		if err != nil {
 			msg := fmt.Sprintf("Update healthcheck of listener(%s) error: %v", tempPort.listener.ID, err)
-			elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
+			sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
 			return err
 		}
 	}
 
 	return nil
+}
+
+func (elb *ELBCloud) getSessionAffinityType(service *v1.Service) (string, error) {
+	switch mode := GetSessionAffinityType(service); mode {
+	case ELBSessionSourceIP:
+		return ELBSessionSourceIP, nil
+	case "":
+		return ELBSessionNone, nil
+	default:
+		return "", fmt.Errorf("session affinity type:%s not support now", mode)
+	}
+}
+
+func (elb *ELBCloud) getSessionAffinityOptions(service *v1.Service) (map[string]string, error) {
+	sessionAffinityOptions := make(map[string]string)
+	if option := GetSessionAffinityOptions(service); option != "" {
+		err := json.Unmarshal([]byte(option), &sessionAffinityOptions)
+		if err != nil {
+			return nil, fmt.Errorf("invalid session affinity option[parse json failed]")
+		}
+	}
+	switch mode := GetSessionAffinityType(service); mode {
+	case ELBSessionSourceIP:
+		if val, ok := sessionAffinityOptions[ELBPersistenTimeout]; ok {
+			timeout, err := strconv.Atoi(val)
+			if err != nil || timeout > ELBSessionSourceIPMaxTimeout || timeout < ELBSessionSourceIPMinTimeout {
+				return nil, fmt.Errorf("invalid session affinity option ,invalid cookie timeout [%d<timeout<%d]",
+					ELBSessionSourceIPMinTimeout, ELBSessionSourceIPMaxTimeout)
+			}
+		} else {
+			//set default persistent timeout to 60 minus
+			sessionAffinityOptions[ELBPersistenTimeout] = fmt.Sprintf("%d", ELBSessionSourceIPDefaultTimeout)
+		}
+	}
+	return sessionAffinityOptions, nil
 }
