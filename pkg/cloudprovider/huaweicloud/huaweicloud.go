@@ -575,6 +575,7 @@ func (h *HWSCloud) List(filter string) ([]types.NodeName, error) {
 
 // CurrentNodeName is an implementation of Instances.CurrentNodeName
 func (h *HWSCloud) CurrentNodeName(ctx context.Context, hostname string) (types.NodeName, error) {
+	klog.Info("CurrentNodeName is called. input hostname: %s, output node name: %s", hostname, hostname)
 	return types.NodeName(hostname), nil
 }
 
