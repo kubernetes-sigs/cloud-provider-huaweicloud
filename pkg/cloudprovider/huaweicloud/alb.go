@@ -1139,11 +1139,13 @@ func (alb *ALBCloud) createLoadBalancer(
 			m, err := albProvider.AddMember(pool.Id, member)
 			if err != nil {
 				errs = append(errs, err)
+				klog.Warningf("create member for listener failed. listener: %s, member address: %s, member protocol: %d, error: %v", listenerId, member.Address, member.ProtocolPort, err)
 				msg := fmt.Sprintf("Create members of listener(%s) error: %v", listenerId, err)
 				sendEvent(alb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
 				continue
 			}
 			newMembers[member.Address] = m
+			klog.Infof("successfully added a member for listener. listener: %s, member address: %s, member protocol: %d", listenerId, member.Address, member.ProtocolPort)
 		}
 
 		if len(newMembers) != 0 {

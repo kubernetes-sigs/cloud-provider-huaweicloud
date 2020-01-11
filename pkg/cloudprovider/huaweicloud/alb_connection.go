@@ -638,6 +638,7 @@ func (a *ALBClient) AddMember(poolId string, memberConf *ALBMember) (*ALBMember,
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_MEMBER_CREATE), req)
 	if err != nil {
+		klog.Warningf("Add member to pool failed. pool: %s, member: %s, error: %v", poolId, memberConf.Name, err)
 		return nil, err
 	}
 
