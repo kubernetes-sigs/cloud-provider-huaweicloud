@@ -11,7 +11,7 @@ metadata:
   name: nginx
 spec:
   loadBalancerIP: 119.8.41.11
-  externalTrafficPolicy: Local
+  externalTrafficPolicy: Cluster
   ports:
     - name: service0
       port: 80
