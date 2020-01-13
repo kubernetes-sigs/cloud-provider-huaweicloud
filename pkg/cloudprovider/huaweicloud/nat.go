@@ -438,19 +438,30 @@ func (nat *NATCloud) getNATClient(namespace string) (*NATClient, error) {
 		return nil, err
 	}
 
-	var sc SecurityCredential
-	err = json.Unmarshal([]byte(secret.Credential), &sc)
-	if err != nil {
-		return nil, fmt.Errorf("Unmarshal security credential failed, error: %v", err)
+	var accessKey, secretKey, securityToken string
+	if len(secret.Credential) > 0 { // 'Temporary Security Credentials'
+		klog.Infof("Using temporary security credentials.")
+		var sc SecurityCredential
+		err = json.Unmarshal([]byte(secret.Credential), &sc)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal security credential failed, error: %v", err)
+		}
+		accessKey = sc.AccessKey
+		secretKey = sc.SecretKey
+		securityToken = sc.SecurityToken
+	} else { // 'Permanent Security Credentials'
+		klog.Infof("Using permanent security credentials.")
+		accessKey = secret.AccessKey
+		secretKey = secret.SecretKey
 	}
 
 	return NewNATClient(
 		nat.config.NATEndpoint,
 		nat.config.VPCEndpoint,
 		nat.config.TenantId,
-		sc.AccessKey,
-		sc.SecretKey,
-		sc.SecurityToken,
+		accessKey,
+		secretKey,
+		securityToken,
 		nat.config.Region,
 		nat.config.SignerType,
 	), nil
@@ -476,13 +487,13 @@ func (nat *NATCloud) getSecret(namespace, secretName string) (*Secret, error) {
 		return nil, err
 	}
 
-	var secret *Secret
+	var secret Secret
 	err = json.Unmarshal(bytes, &secret)
 	if err != nil {
 		return nil, err
 	}
 
-	return secret, nil
+	return &secret, nil
 }
 
 func (nat *NATCloud) getPods(name, namespace string) (*v1.PodList, error) {
