@@ -493,6 +493,11 @@ func (nat *NATCloud) getSecret(namespace, secretName string) (*Secret, error) {
 		return nil, err
 	}
 
+	if err := secret.DecodeBase64(); err != nil {
+		klog.Errorf("Decode secret failed with error: %v", err)
+		return nil, err
+	}
+
 	return &secret, nil
 }
 

@@ -18,6 +18,7 @@ package huaweicloud
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -315,9 +316,44 @@ type Secret struct {
 // Secret is a temporary solution for both support 'Permanent Security Credentials' and 'Temporary Security Credentials'.
 // TODO(RainbowMango): Refactor later by a graceful way.
 type Secret struct {
-	Credential string `json:"security.credential,omitempty"`
-	AccessKey  string `json:"access,omitempty"`
-	SecretKey  string `json:"secret,omitempty"`
+	Credential    string `json:"security.credential,omitempty"`
+	AccessKey     string `json:"access,omitempty"`
+	SecretKey     string `json:"secret,omitempty"`
+	base64Decoded bool   `json:"-"`
+}
+
+// DecodeBase64 will decode all necessary fields with base64.
+// TODO(RainbowMango): If decode partially success means some fields has been decoded and overwritten.
+// Just limit this issue here and deal with it later with refactor actions.
+func (s *Secret) DecodeBase64() error {
+	if s.base64Decoded {
+		panic(fmt.Sprintf("secret can not be decod twice"))
+	}
+
+	decodedBytes, err := base64.StdEncoding.DecodeString(s.Credential)
+	if err != nil {
+		klog.Errorf("Decode credential failed. error: %v", err)
+		return fmt.Errorf("secret access key format is unexpected, %v", err)
+	}
+	s.Credential = string(decodedBytes)
+
+	decodedBytes, err = base64.StdEncoding.DecodeString(s.AccessKey)
+	if err != nil {
+		klog.Errorf("Decode access key failed. error: %v", err)
+		return fmt.Errorf("secret credential format is unexpected, %v", err)
+	}
+	s.AccessKey = string(decodedBytes)
+
+	decodedBytes, err = base64.StdEncoding.DecodeString(s.SecretKey)
+	if err != nil {
+		klog.Errorf("Decode secret key failed. error: %v", err)
+		return fmt.Errorf("secret secret key format is unexpected, %v", err)
+	}
+	s.SecretKey = string(decodedBytes)
+
+	s.base64Decoded = true
+
+	return nil
 }
 
 // PermanentSecurityCredentials represents 'Permanent Security Credentials'.
