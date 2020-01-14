@@ -49,7 +49,7 @@ import (
 
 // Cloud provider name: PaaS Web Services.
 const (
-	ProviderName               = "hws"
+	ProviderName               = "huaweicloud"
 	ELBIDAnnotation            = "kubernetes.io/elb.id"
 	ELBClassAnnotation         = "kubernetes.io/elb.class"
 	ELBMarkAnnotation          = "kubernetes.io/elb.mark"
