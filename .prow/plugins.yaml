@@ -1,0 +1,3 @@
+plugins:
+  huawei-cloudnative/cloud-provider-huaweicloud:
+    - size
