@@ -11,3 +11,6 @@ huawei-cloud-controller-manager: $(SOURCES)
 
 clean:
 	rm -rf huawei-cloud-controller-manager
+
+verify:
+	hack/verify.sh
