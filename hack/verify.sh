@@ -16,7 +16,7 @@
 
 KUBE_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 
-hack/verify-gofmt.sh
+${KUBE_ROOT}/hack/verify-gofmt.sh
 if [ $? -ne 0 ]; then
   exit 1
 fi
