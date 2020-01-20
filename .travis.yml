@@ -30,3 +30,8 @@ jobs:
       before_script:
       script:
         - make huawei-cloud-controller-manager
+    - stage: "Verify"
+      name: "Verify gofmt, golint, etc"
+      before_script:
+      script:
+        - make verify
