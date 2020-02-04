@@ -22,6 +22,7 @@ function find_files() {
       \( \
         -wholename './output' \
         -o -wholename './.git' \
+        -o -wholename '*/vendor/*' \
       \) -prune \
     \) -name '*.go'
 }
