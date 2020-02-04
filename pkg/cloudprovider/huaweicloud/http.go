@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"k8s.io/client-go/util/flowcontrol"
+	"k8s.io/cloud-provider-huaweicloud/pkg/apigw/core"
 	"k8s.io/klog"
 )
 
@@ -40,6 +41,7 @@ const (
 	TransportHttp       string = "http"
 	TransportHttps      string = "https"
 	HeaderSecurityToken string = "X-Security-Token"
+	HeaderProject       string = "X-Project-Id"
 
 	// longThrottleLatency defines threshold for logging requests. All requests being
 	// throttle for more than longThrottleLatency will be logged.
@@ -166,11 +168,9 @@ func DoRequest(service *ServiceClient, throttle flowcontrol.RateLimiter, r *requ
 
 	// add the sign to request header if needed.
 	if service.Access != nil {
-		sign := Signer{
-			AccessKey: service.Access.AccessKey,
-			SecretKey: service.Access.SecretKey,
-			Region:    service.Access.Region,
-			Service:   service.Access.ServiceType,
+		sign := core.Signer{
+			Key:    service.Access.AccessKey,
+			Secret: service.Access.SecretKey,
 		}
 		req.Header.Set(HeaderProject, service.TenantId)
 
