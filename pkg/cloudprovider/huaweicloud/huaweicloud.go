@@ -582,42 +582,14 @@ func getLoadBalancerVersion(service *v1.Service) (LoadBalanceVersion, error) {
 
 // type Instances interface {}
 
-// NodeAddresses is an implementation of Instances.NodeAddresses.
-func (h *HWSCloud) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
-	return nil, nil
-}
-
-func (h *HWSCloud) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
-	return []v1.NodeAddress{}, ErrNotImplemented
-}
-
 // ExternalID returns the cloud provider ID of the specified instance (deprecated).
 func (h *HWSCloud) ExternalID(ctx context.Context, instance types.NodeName) (string, error) {
 	return "", ErrNotImplemented
 }
 
-// InstanceID returns the cloud provider ID of the specified instance.
-// ID of the node assigned by the cloud provider
-// Note: format is "<ProviderName>://<ProviderSpecificNodeID>"
-// Please refer to "types.go/NodeSpec.ProviderID"
-func (h *HWSCloud) InstanceID(ctx context.Context, instance types.NodeName) (string, error) {
-	return "", nil
-}
-
 // List is an implementation of Instances.List.
 func (h *HWSCloud) List(filter string) ([]types.NodeName, error) {
 	return nil, nil
-}
-
-// CurrentNodeName is an implementation of Instances.CurrentNodeName
-func (h *HWSCloud) CurrentNodeName(ctx context.Context, hostname string) (types.NodeName, error) {
-	klog.Info("CurrentNodeName is called. input hostname: %s, output node name: %s", hostname, hostname)
-	return types.NodeName(hostname), nil
-}
-
-// AddSSHKeyToAllInstances is an implementation of Instances.AddSSHKeyToAllInstances
-func (h *HWSCloud) AddSSHKeyToAllInstances(ctx context.Context, user string, keyData []byte) error {
-	return ErrNotImplemented
 }
 
 // type Routes interface {}
@@ -689,31 +661,9 @@ func (h *HWSCloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 	return h, true
 }
 
-// Instances returns an implementation of Instances for Huawei Web Services.
+// Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.
 func (h *HWSCloud) Instances() (cloudprovider.Instances, bool) {
-	return h, true
-}
-
-//
-func (h *HWSCloud) InstanceType(ctx context.Context, instanceName types.NodeName) (string, error) {
-	return "", nil
-}
-
-// InstanceTypeByProviderID returns the cloudprovider instance type of the node with the specified unique providerID
-// This method will not be called from the node that is requesting this ID. i.e. metadata service
-// and other local methods cannot be used here
-func (h *HWSCloud) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
-	return "", ErrNotImplemented
-}
-
-// InstanceExistsByProviderID returns true if the instance for the given provider id still is running.
-// If false is returned with no error, the instance will be immediately deleted by the cloud controller manager.
-func (h *HWSCloud) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
-	return false, ErrNotImplemented
-}
-
-func (h *HWSCloud) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
-	return false, errors.New("unimplemented")
+	return &Instances{}, true
 }
 
 // Zones returns an implementation of Zones for Huawei Web Services.
