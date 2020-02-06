@@ -14,5 +14,15 @@
         "vpcEndpoint": "https://vpc.cn-north-7.ulanqab.huawei.com",
         "natEndpoint": "https://nat.cn-north-7.ulanqab.huawei.com",
         "enterpriseEnable": "false"
+    },
+    "Auth": {
+        "SecretName": "",
+        "AccessKey" : "testacceskey",
+        "SecretKey" : "testsecretkey",
+        "IAMEndpoint": "iam.ap-southeast-1.myhwclouds.com",
+        "DomainID": "052ca6e3530010490f52c0135f7ff501",
+        "ProjectID": "052d4df9f8800f2f2f99c0134ed5b282",
+        "Region": "ap-southeast-1",
+        "Cloud": "myhwclouds.com"
     }
 }
