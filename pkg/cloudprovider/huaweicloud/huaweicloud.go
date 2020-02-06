@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru"
+
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -653,7 +654,11 @@ func (h *HWSCloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 
 // Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.
 func (h *HWSCloud) Instances() (cloudprovider.Instances, bool) {
-	return &Instances{}, true
+	instance := &Instances{
+		Auth: &globalConfig.Auth,
+	}
+
+	return instance, true
 }
 
 // Zones returns an implementation of Zones for Huawei Web Services.

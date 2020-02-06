@@ -19,6 +19,10 @@ package huaweicloud
 import (
 	"context"
 
+	"github.com/gophercloud/gophercloud"
+	"github.com/huaweicloud/huaweicloud-sdk-go/auth/aksk"
+	"github.com/huaweicloud/huaweicloud-sdk-go/openstack"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
@@ -27,7 +31,7 @@ import (
 
 // Instances encapsulates an implementation of Instances.
 type Instances struct {
-	// TODO(RainbowMango): add all needed fields later.
+	Auth *AuthOpts
 }
 
 // Check if our Instances implements necessary interface
@@ -90,4 +94,42 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 // InstanceShutdownByProviderID returns true if the instance is shutdown in cloudprovider
 func (i *Instances) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
 	return false, cloudprovider.NotImplemented
+}
+
+func (i *Instances) getAKSKFromSecret() (accessKey string, secretKey string, secretToken string) {
+	// TODO(RainbowMango): Get AK/SK as well as secret token from kubernetes.secret.
+	return
+}
+
+func (i *Instances) getClient() *gophercloud.ServiceClient {
+	accessKey := i.Auth.AccessKey
+	secretKey := i.Auth.SecretKey
+	secretToken := ""
+
+	if len(i.Auth.SecretName) > 0 {
+		accessKey, secretKey, secretToken = i.getAKSKFromSecret()
+	}
+	akskOpts := aksk.AKSKOptions{
+		IdentityEndpoint: i.Auth.IAMEndpoint,
+		ProjectID:        i.Auth.ProjectID,
+		DomainID:         i.Auth.DomainID,
+		Region:           i.Auth.Region,
+		AccessKey:        accessKey,
+		SecretKey:        secretKey,
+		SecurityToken:    secretToken,
+	}
+
+	providerClient, err := openstack.AuthenticatedClient(akskOpts)
+	if err != nil {
+		klog.Errorf("init provider client failed with error: %v", err)
+		return nil
+	}
+
+	serviceClient, err := openstack.NewComputeV2(providerClient, gophercloud.EndpointOpts{})
+	if err != nil {
+		klog.Errorf("init compute service client failed: %v", err)
+		return nil
+	}
+
+	return serviceClient
 }
