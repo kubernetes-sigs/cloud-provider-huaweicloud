@@ -76,7 +76,7 @@ func (i *Instances) AddSSHKeyToAllInstances(ctx context.Context, user string, ke
 // CurrentNodeName returns the name of the node we are currently running on
 // On most clouds (e.g. GCE) this is the hostname, so we provide the hostname
 func (i *Instances) CurrentNodeName(ctx context.Context, hostname string) (types.NodeName, error) {
-	klog.Info("CurrentNodeName is called. input hostname: %s, output node name: %s", hostname, hostname)
+	klog.Infof("CurrentNodeName is called. input hostname: %s, output node name: %s", hostname, hostname)
 	return types.NodeName(hostname), nil
 }
 
