@@ -19,11 +19,8 @@ package huaweicloud
 import (
 	"context"
 	"encoding/base64"
-	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"reflect"
 	"regexp"
@@ -286,7 +283,7 @@ type Args struct {
 	Region         string `json:"region,omitempty"`
 }
 
-var cpConfig LBConfig
+var globalConfig *CloudConfig
 
 type ServiceClient struct {
 	Client   *http.Client
@@ -300,10 +297,6 @@ type ELBListenerDescription struct {
 	ServiceID string `json:"service_id,omitempty"`
 	Attention string `json:"attention,omitempty"`
 }
-
-// General errors
-var ErrNotFound = errors.New("Object not found")
-var ErrNotImplemented = errors.New("Feature not implemented")
 
 /*
 type Secret struct {
@@ -412,19 +405,16 @@ func init() {
 
 func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 	if config == nil {
-		return nil, fmt.Errorf("HWS Cloud provider configure is nil.")
+		return nil, fmt.Errorf("huaweicloud provider config is nil")
 	}
 
-	configBytes, err := ioutil.ReadAll(config)
+	globalConfig, err := ReadConf(config)
 	if err != nil {
+		klog.Errorf("Read configuration failed with error: %v", err)
 		return nil, err
 	}
 
-	err = json.Unmarshal(configBytes, &cpConfig)
-	if err != nil {
-		return nil, err
-	}
-	clientConfig, err := clientcmd.BuildConfigFromFlags(cpConfig.Apiserver, "")
+	clientConfig, err := clientcmd.BuildConfigFromFlags(globalConfig.LoadBalancer.Apiserver, "")
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +449,7 @@ func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 	secretInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			kubeSecret := obj.(*v1.Secret)
-			if kubeSecret.Name == cpConfig.SecretName {
+			if kubeSecret.Name == globalConfig.LoadBalancer.SecretName {
 				key := kubeSecret.Namespace + "/" + kubeSecret.Name
 				lrucache.Add(key, kubeSecret)
 			}
@@ -467,7 +457,7 @@ func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			oldSecret := oldObj.(*v1.Secret)
 			newSecret := newObj.(*v1.Secret)
-			if newSecret.Name == cpConfig.SecretName {
+			if newSecret.Name == globalConfig.LoadBalancer.SecretName {
 				if reflect.DeepEqual(oldSecret.Data, newSecret.Data) {
 					return
 				}
@@ -490,11 +480,11 @@ func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 		providers: map[LoadBalanceVersion]cloudprovider.LoadBalancer{},
 	}
 
-	hws.providers[VersionELB] = &ELBCloud{lrucache: lrucache, config: &cpConfig, kubeClient: kubeClient, eventRecorder: recorder}
-	hws.providers[VersionALB] = &ALBCloud{lrucache: lrucache, config: &cpConfig, kubeClient: kubeClient, eventRecorder: recorder, subnetMap: map[string]string{}}
+	hws.providers[VersionELB] = &ELBCloud{lrucache: lrucache, config: &globalConfig.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder}
+	hws.providers[VersionALB] = &ALBCloud{lrucache: lrucache, config: &globalConfig.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder, subnetMap: map[string]string{}}
 	// TODO(RainbowMango): Support PLB later.
-	// hws.providers[VersionPLB] = &PLBCloud{lrucache: lrucache, config: &cpConfig, kubeClient: kubeClient, clientPool: deprecateddynamic.NewDynamicClientPool(clientConfig), eventRecorder: recorder, subnetMap: map[string]string{}}
-	hws.providers[VersionNAT] = &NATCloud{lrucache: lrucache, config: &cpConfig, kubeClient: kubeClient, eventRecorder: recorder}
+	// hws.providers[VersionPLB] = &PLBCloud{lrucache: lrucache, config: &globalConfig.LoadBalancer, kubeClient: kubeClient, clientPool: deprecateddynamic.NewDynamicClientPool(clientConfig), eventRecorder: recorder, subnetMap: map[string]string{}}
+	hws.providers[VersionNAT] = &NATCloud{lrucache: lrucache, config: &globalConfig.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder}
 
 	return hws, nil
 }
@@ -584,7 +574,7 @@ func getLoadBalancerVersion(service *v1.Service) (LoadBalanceVersion, error) {
 
 // ExternalID returns the cloud provider ID of the specified instance (deprecated).
 func (h *HWSCloud) ExternalID(ctx context.Context, instance types.NodeName) (string, error) {
-	return "", ErrNotImplemented
+	return "", cloudprovider.NotImplemented
 }
 
 // List is an implementation of Instances.List.
@@ -822,7 +812,7 @@ func deleteSecret(obj interface{}, lrucache *lru.Cache) {
 		}
 	}
 
-	if kubeSecret.Name == cpConfig.SecretName {
+	if kubeSecret.Name == globalConfig.LoadBalancer.SecretName {
 		key := kubeSecret.Namespace + "/" + kubeSecret.Name
 		lrucache.Add(key, kubeSecret)
 	}
