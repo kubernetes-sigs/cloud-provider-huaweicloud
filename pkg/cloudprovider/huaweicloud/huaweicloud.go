@@ -284,6 +284,7 @@ type Args struct {
 	Region         string `json:"region,omitempty"`
 }
 
+// TODO(RainbowMango): we should move config to HWSCloud, otherwise will crash when start node controller.
 var globalConfig *CloudConfig
 
 type ServiceClient struct {
@@ -365,6 +366,7 @@ type SecurityCredential struct {
 }
 
 type HWSCloud struct {
+	config    *CloudConfig
 	providers map[LoadBalanceVersion]cloudprovider.LoadBalancer
 }
 
@@ -479,6 +481,7 @@ func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 	}
 
 	hws := &HWSCloud{
+		config:    globalConfig,
 		providers: map[LoadBalanceVersion]cloudprovider.LoadBalancer{},
 	}
 
@@ -656,7 +659,7 @@ func (h *HWSCloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 // Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.
 func (h *HWSCloud) Instances() (cloudprovider.Instances, bool) {
 	instance := &Instances{
-		Auth: &globalConfig.Auth,
+		Auth: &h.config.Auth,
 	}
 
 	return instance, true
