@@ -14,3 +14,6 @@ clean:
 
 verify:
 	hack/verify.sh
+
+test:
+	go test ./...

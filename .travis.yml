@@ -35,3 +35,8 @@ jobs:
       before_script:
       script:
         - make verify
+    - stage: "Unit test"
+      name: "go test"
+      before_script:
+      script:
+        - make test
