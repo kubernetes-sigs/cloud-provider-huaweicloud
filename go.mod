@@ -6,7 +6,7 @@ require (
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/gophercloud/gophercloud v0.1.0
 	github.com/hashicorp/golang-lru v0.5.1
-	github.com/huaweicloud/huaweicloud-sdk-go v1.0.20
+	github.com/huaweicloud/huaweicloud-sdk-go v0.0.0
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v0.0.0
@@ -18,6 +18,7 @@ require (
 
 replace (
 	github.com/gophercloud/gophercloud => github.com/huaweicloud/huaweicloud-sdk-go v1.0.20
+	github.com/huaweicloud/huaweicloud-sdk-go => github.com/RainbowMango/huaweicloud-sdk-go v1.0.20
 	k8s.io/api => k8s.io/kubernetes/staging/src/k8s.io/api v0.0.0-20191206012503-70132b0f130a
 	k8s.io/apiextensions-apiserver => k8s.io/kubernetes/staging/src/k8s.io/apiextensions-apiserver v0.0.0-20191206012503-70132b0f130a
 	k8s.io/apimachinery => k8s.io/kubernetes/staging/src/k8s.io/apimachinery v0.0.0-20191206012503-70132b0f130a
