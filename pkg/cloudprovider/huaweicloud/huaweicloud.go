@@ -414,6 +414,7 @@ func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 		klog.Errorf("Read configuration failed with error: %v", err)
 		return nil, err
 	}
+	LogConf(globalConfig)
 
 	clientConfig, err := clientcmd.BuildConfigFromFlags(globalConfig.LoadBalancer.Apiserver, "")
 	if err != nil {

@@ -81,3 +81,8 @@ func ReadConf(config io.Reader) (*CloudConfig, error) {
 
 	return &cfg, nil
 }
+
+func LogConf(cfg *CloudConfig) {
+	klog.Infof("Log conf, Auth.IAMEndpoint: %s", cfg.Auth.IAMEndpoint)
+	klog.Infof("Log conf, LoadBalancer.SecretName: %s", cfg.LoadBalancer.SecretName)
+}
