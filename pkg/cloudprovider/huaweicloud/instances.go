@@ -18,10 +18,13 @@ package huaweicloud
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/RainbowMango/huaweicloud-sdk-go"
 	"github.com/RainbowMango/huaweicloud-sdk-go/auth/aksk"
 	"github.com/RainbowMango/huaweicloud-sdk-go/openstack"
+	"github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/servers"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -53,6 +56,21 @@ func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 // services cannot be used in this method to obtain nodeaddresses
 func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
 	klog.Infof("NodeAddressesByProviderID is called. input provider ID: %s", providerID)
+
+	serverClient := i.getClient()
+	if serverClient == nil {
+		return nil, fmt.Errorf("create server client failed with provider id: %s", providerID)
+	}
+
+	server, err := servers.Get(serverClient, providerID).Extract()
+	if err != nil {
+		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
+		return nil, err
+	}
+
+	serverJson, _ := json.MarshalIndent(server, "", " ")
+	klog.Infof("server info: %s", string(serverJson))
+
 	return []v1.NodeAddress{}, cloudprovider.NotImplemented
 }
 
