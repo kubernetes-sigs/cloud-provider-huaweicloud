@@ -66,11 +66,27 @@ github.com/google/uuid
 github.com/googleapis/gnostic/OpenAPIv2
 github.com/googleapis/gnostic/compiler
 github.com/googleapis/gnostic/extensions
+# github.com/gophercloud/gophercloud v0.1.0 => github.com/huaweicloud/huaweicloud-sdk-go v1.0.20
+github.com/gophercloud/gophercloud
+github.com/gophercloud/gophercloud/auth
+github.com/gophercloud/gophercloud/auth/aksk
+github.com/gophercloud/gophercloud/auth/token
+github.com/gophercloud/gophercloud/internal
+github.com/gophercloud/gophercloud/openstack/identity/v2/tenants
+github.com/gophercloud/gophercloud/openstack/identity/v2/tokens
+github.com/gophercloud/gophercloud/openstack/identity/v3/endpoints
+github.com/gophercloud/gophercloud/openstack/identity/v3/services
+github.com/gophercloud/gophercloud/openstack/identity/v3/tokens
+github.com/gophercloud/gophercloud/openstack/utils
+github.com/gophercloud/gophercloud/pagination
 # github.com/grpc-ecosystem/go-grpc-prometheus v1.2.0
 github.com/grpc-ecosystem/go-grpc-prometheus
 # github.com/hashicorp/golang-lru v0.5.1
 github.com/hashicorp/golang-lru
 github.com/hashicorp/golang-lru/simplelru
+# github.com/huaweicloud/huaweicloud-sdk-go v0.0.0 => github.com/RainbowMango/huaweicloud-sdk-go v1.0.20
+github.com/huaweicloud/huaweicloud-sdk-go/auth/aksk
+github.com/huaweicloud/huaweicloud-sdk-go/openstack
 # github.com/imdario/mergo v0.3.5
 github.com/imdario/mergo
 # github.com/inconshreveable/mousetrap v1.0.0

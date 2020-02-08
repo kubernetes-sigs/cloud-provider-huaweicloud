@@ -29,6 +29,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru"
+
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -283,6 +284,7 @@ type Args struct {
 	Region         string `json:"region,omitempty"`
 }
 
+// TODO(RainbowMango): we should move config to HWSCloud, otherwise will crash when start node controller.
 var globalConfig *CloudConfig
 
 type ServiceClient struct {
@@ -364,6 +366,7 @@ type SecurityCredential struct {
 }
 
 type HWSCloud struct {
+	config    *CloudConfig
 	providers map[LoadBalanceVersion]cloudprovider.LoadBalancer
 }
 
@@ -413,6 +416,7 @@ func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 		klog.Errorf("Read configuration failed with error: %v", err)
 		return nil, err
 	}
+	LogConf(globalConfig)
 
 	clientConfig, err := clientcmd.BuildConfigFromFlags(globalConfig.LoadBalancer.Apiserver, "")
 	if err != nil {
@@ -477,6 +481,7 @@ func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 	}
 
 	hws := &HWSCloud{
+		config:    globalConfig,
 		providers: map[LoadBalanceVersion]cloudprovider.LoadBalancer{},
 	}
 
@@ -653,7 +658,11 @@ func (h *HWSCloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 
 // Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.
 func (h *HWSCloud) Instances() (cloudprovider.Instances, bool) {
-	return &Instances{}, true
+	instance := &Instances{
+		Auth: &h.config.Auth,
+	}
+
+	return instance, true
 }
 
 // Zones returns an implementation of Zones for Huawei Web Services.
