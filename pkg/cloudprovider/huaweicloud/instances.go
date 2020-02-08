@@ -19,9 +19,9 @@ package huaweicloud
 import (
 	"context"
 
-	"github.com/gophercloud/gophercloud"
-	"github.com/huaweicloud/huaweicloud-sdk-go/auth/aksk"
-	"github.com/huaweicloud/huaweicloud-sdk-go/openstack"
+	"github.com/RainbowMango/huaweicloud-sdk-go"
+	"github.com/RainbowMango/huaweicloud-sdk-go/auth/aksk"
+	"github.com/RainbowMango/huaweicloud-sdk-go/openstack"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
