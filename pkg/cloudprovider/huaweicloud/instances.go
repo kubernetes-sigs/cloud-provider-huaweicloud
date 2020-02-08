@@ -140,6 +140,7 @@ func (i *Instances) getClient() *gophercloud.ServiceClient {
 		ProjectID:        i.Auth.ProjectID,
 		DomainID:         i.Auth.DomainID,
 		Region:           i.Auth.Region,
+		Cloud:            i.Auth.Cloud,
 		AccessKey:        accessKey,
 		SecretKey:        secretKey,
 		SecurityToken:    secretToken,
