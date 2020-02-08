@@ -14,6 +14,9 @@ github.com/RainbowMango/huaweicloud-sdk-go/auth/aksk
 github.com/RainbowMango/huaweicloud-sdk-go/auth/token
 github.com/RainbowMango/huaweicloud-sdk-go/internal
 github.com/RainbowMango/huaweicloud-sdk-go/openstack
+github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/flavors
+github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/images
+github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/servers
 github.com/RainbowMango/huaweicloud-sdk-go/openstack/identity/v2/tenants
 github.com/RainbowMango/huaweicloud-sdk-go/openstack/identity/v2/tokens
 github.com/RainbowMango/huaweicloud-sdk-go/openstack/identity/v3/endpoints
