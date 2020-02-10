@@ -66,9 +66,9 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 
 	klog.Infof("NodeAddressesByProviderID is called. input provider ID: %s", providerID)
 
-	serverClient := i.getClient()
-	if serverClient == nil {
-		return nil, fmt.Errorf("create server client failed with provider id: %s", providerID)
+	serverClient, err := i.getServiceClient()
+	if err != nil || serverClient == nil {
+		return nil, fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
 	}
 
 	server, err := servers.Get(serverClient, providerID).Extract()
@@ -145,7 +145,7 @@ func (i *Instances) getAKSKFromSecret() (accessKey string, secretKey string, sec
 	return
 }
 
-func (i *Instances) getClient() *gophercloud.ServiceClient {
+func (i *Instances) getServiceClient() (*gophercloud.ServiceClient, error) {
 	accessKey := i.Auth.AccessKey
 	secretKey := i.Auth.SecretKey
 	secretToken := ""
@@ -167,16 +167,16 @@ func (i *Instances) getClient() *gophercloud.ServiceClient {
 	providerClient, err := openstack.AuthenticatedClient(akskOpts)
 	if err != nil {
 		klog.Errorf("init provider client failed with error: %v", err)
-		return nil
+		return nil, err
 	}
 
 	serviceClient, err := openstack.NewComputeV2(providerClient, gophercloud.EndpointOpts{})
 	if err != nil {
 		klog.Errorf("init compute service client failed: %v", err)
-		return nil
+		return nil, err
 	}
 
-	return serviceClient
+	return serviceClient, nil
 }
 
 func (i *Instances) parseNodeAddressFromServerInfo(srv *servers.Server) ([]v1.NodeAddress, error) {
