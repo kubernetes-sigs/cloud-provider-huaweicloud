@@ -49,3 +49,22 @@ func TestParseNodeAddressFromServerInfo(t *testing.T) {
 		t.Fatalf("expect 2 address, but got %d. addrs: %v", len(addrs), addrs)
 	}
 }
+
+func TestParseInstanceTypeFromServerInfo(t *testing.T) {
+	var serverInfo servers.Server
+	var flavor = make(map[string]interface{}, 1)
+
+	flavor["id"] = "s3.xlarge.4"
+
+	serverInfo.Flavor = flavor
+
+	instance := Instances{}
+	instanceType, err := instance.parseInstanceTypeFromServerInfo(&serverInfo)
+	if err != nil {
+		t.Fatalf("parse instance type failed with error: %v", err)
+	}
+
+	if instanceType != flavor["id"] {
+		t.Fatalf("expect instance type: %s, but got %s.", flavor["id"], instanceType)
+	}
+}

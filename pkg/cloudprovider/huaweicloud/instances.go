@@ -109,7 +109,17 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 // InstanceTypeByProviderID returns the type of the specified instance.
 func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
 	klog.Infof("InstanceTypeByProviderID is called. input provider ID: %s", providerID)
-	return "", cloudprovider.NotImplemented
+	serverClient, err := i.getServiceClient()
+	if err != nil || serverClient == nil {
+		return "", fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
+	}
+
+	server, err := servers.Get(serverClient, providerID).Extract()
+	if err != nil {
+		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
+		return "", err
+	}
+	return i.parseInstanceTypeFromServerInfo(server)
 }
 
 // AddSSHKeyToAllInstances adds an SSH public key as a legal identity for all instances
@@ -216,4 +226,19 @@ func (i *Instances) parseNodeAddressFromServerInfo(srv *servers.Server) ([]v1.No
 	}
 
 	return nodeAddresses, nil
+}
+
+func (i *Instances) parseInstanceTypeFromServerInfo(srv *servers.Server) (string, error) {
+	id, exist := srv.Flavor["id"]
+	if !exist {
+		return "", fmt.Errorf("no instance type fond from server.Flavor[id]")
+	}
+
+	instanceType, ok := id.(string)
+	if !ok {
+		klog.Errorf("server flavor id not a string")
+		return "", fmt.Errorf("server flavor id not a string")
+	}
+
+	return instanceType, nil
 }
