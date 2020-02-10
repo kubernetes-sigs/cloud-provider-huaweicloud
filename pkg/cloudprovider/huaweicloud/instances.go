@@ -103,7 +103,7 @@ func (i *Instances) InstanceID(ctx context.Context, nodeName types.NodeName) (st
 // InstanceType returns the type of the specified instance.
 func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (string, error) {
 	klog.Infof("InstanceType is called. input name: %s", name)
-	return "", nil
+	return "", cloudprovider.NotImplemented
 }
 
 // InstanceTypeByProviderID returns the type of the specified instance.
