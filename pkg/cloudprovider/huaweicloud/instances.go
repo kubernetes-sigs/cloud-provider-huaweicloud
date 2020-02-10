@@ -53,7 +53,7 @@ type Address struct {
 // make this clearer.
 func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
 	klog.Infof("NodeAddresses is called. input name: %s", name)
-	return nil, nil
+	return nil, cloudprovider.NotImplemented
 }
 
 // NodeAddressesByProviderID returns the addresses of the specified instance.
@@ -89,7 +89,7 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 
 	klog.Infof("NodeAddressesByProviderID, input provider ID: %s, output addresses: %v", providerID, nodeAddresses)
 
-	return nodeAddresses, cloudprovider.NotImplemented
+	return nodeAddresses, nil
 }
 
 // InstanceID returns the cloud provider ID of the node with the specified NodeName.
