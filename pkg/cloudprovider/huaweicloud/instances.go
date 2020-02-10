@@ -131,7 +131,19 @@ func (i *Instances) CurrentNodeName(ctx context.Context, hostname string) (types
 // This method should still return true for instances that exist but are stopped/sleeping.
 func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Infof("InstanceExistsByProviderID is called. input provider ID: %s", providerID)
-	return false, cloudprovider.NotImplemented
+
+	serverClient, err := i.getServiceClient()
+	if err != nil || serverClient == nil {
+		return false, fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
+	}
+
+	_, err = servers.Get(serverClient, providerID).Extract()
+	if err != nil {
+		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
+		return false, err
+	}
+
+	return true, nil
 }
 
 // InstanceShutdownByProviderID returns true if the instance is shutdown in cloudprovider
