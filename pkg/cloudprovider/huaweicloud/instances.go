@@ -25,6 +25,7 @@ import (
 	"github.com/RainbowMango/huaweicloud-sdk-go/auth/aksk"
 	"github.com/RainbowMango/huaweicloud-sdk-go/openstack"
 	"github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/servers"
+	"github.com/mitchellh/mapstructure"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,6 +40,12 @@ type Instances struct {
 
 // Check if our Instances implements necessary interface
 var _ cloudprovider.Instances = &Instances{}
+
+// We can't use cloudservers.Address directly as the type of `Version` is different.
+type Address struct {
+	Addr string `json:"addr"`
+	Type string `mapstructure:"OS-EXT-IPS:type"`
+}
 
 // NodeAddresses returns the addresses of the specified instance.
 // TODO(roberthbailey): This currently is only used in such a way that it
@@ -55,11 +62,13 @@ func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 // from the node whose nodeaddresses are being queried. i.e. local metadata
 // services cannot be used in this method to obtain nodeaddresses
 func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
+	var nodeAddresses []v1.NodeAddress
+
 	klog.Infof("NodeAddressesByProviderID is called. input provider ID: %s", providerID)
 
-	serverClient := i.getClient()
-	if serverClient == nil {
-		return nil, fmt.Errorf("create server client failed with provider id: %s", providerID)
+	serverClient, err := i.getServiceClient()
+	if err != nil || serverClient == nil {
+		return nil, fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
 	}
 
 	server, err := servers.Get(serverClient, providerID).Extract()
@@ -69,9 +78,18 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 	}
 
 	serverJson, _ := json.MarshalIndent(server, "", " ")
-	klog.Infof("server info: %s", string(serverJson))
+	klog.V(4).Infof("server info: %s", string(serverJson))
 
-	return []v1.NodeAddress{}, cloudprovider.NotImplemented
+	addrs, err := i.parseNodeAddressFromServerInfo(server)
+	if err != nil {
+		klog.Errorf("parse node address from server info failed. provider id: %s, error: %v", providerID, err)
+		return nil, err
+	}
+	nodeAddresses = append(nodeAddresses, addrs...)
+
+	klog.Infof("NodeAddressesByProviderID, input provider ID: %s, output addresses: %v", providerID, nodeAddresses)
+
+	return nodeAddresses, cloudprovider.NotImplemented
 }
 
 // InstanceID returns the cloud provider ID of the node with the specified NodeName.
@@ -127,7 +145,7 @@ func (i *Instances) getAKSKFromSecret() (accessKey string, secretKey string, sec
 	return
 }
 
-func (i *Instances) getClient() *gophercloud.ServiceClient {
+func (i *Instances) getServiceClient() (*gophercloud.ServiceClient, error) {
 	accessKey := i.Auth.AccessKey
 	secretKey := i.Auth.SecretKey
 	secretToken := ""
@@ -149,14 +167,41 @@ func (i *Instances) getClient() *gophercloud.ServiceClient {
 	providerClient, err := openstack.AuthenticatedClient(akskOpts)
 	if err != nil {
 		klog.Errorf("init provider client failed with error: %v", err)
-		return nil
+		return nil, err
 	}
 
 	serviceClient, err := openstack.NewComputeV2(providerClient, gophercloud.EndpointOpts{})
 	if err != nil {
 		klog.Errorf("init compute service client failed: %v", err)
-		return nil
+		return nil, err
 	}
 
-	return serviceClient
+	return serviceClient, nil
+}
+
+func (i *Instances) parseNodeAddressFromServerInfo(srv *servers.Server) ([]v1.NodeAddress, error) {
+	var nodeAddresses []v1.NodeAddress
+	var addresses map[string][]Address
+
+	err := mapstructure.Decode(srv.Addresses, &addresses)
+	if err != nil {
+		return nil, fmt.Errorf("decode address from server info failed. server id: %s, error: %v", srv.ID, err)
+	}
+
+	for _, addrs := range addresses {
+		var addressType v1.NodeAddressType
+		for i := range addrs {
+			if addrs[i].Type == "fixed" {
+				addressType = v1.NodeInternalIP
+			} else if addrs[i].Type == "floating" {
+				addressType = v1.NodeExternalIP
+			} else {
+				continue
+			}
+			klog.V(4).Infof("get a node address, type: %s, address: %s", addressType, addrs[i].Addr)
+			nodeAddresses = append(nodeAddresses, v1.NodeAddress{Type: addressType, Address: addrs[i].Addr})
+		}
+	}
+
+	return nodeAddresses, nil
 }
