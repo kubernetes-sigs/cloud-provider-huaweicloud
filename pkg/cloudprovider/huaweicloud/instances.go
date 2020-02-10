@@ -78,7 +78,7 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 	}
 
 	serverJson, _ := json.MarshalIndent(server, "", " ")
-	klog.Infof("server info: %s", string(serverJson))
+	klog.V(4).Infof("server info: %s", string(serverJson))
 
 	addrs, err := i.parseNodeAddressFromServerInfo(server)
 	if err != nil {
@@ -198,7 +198,7 @@ func (i *Instances) parseNodeAddressFromServerInfo(srv *servers.Server) ([]v1.No
 			} else {
 				continue
 			}
-			klog.Infof("get a node address, type: %s, address: %s", addressType, addrs[i].Addr)
+			klog.V(4).Infof("get a node address, type: %s, address: %s", addressType, addrs[i].Addr)
 			nodeAddresses = append(nodeAddresses, v1.NodeAddress{Type: addressType, Address: addrs[i].Addr})
 		}
 	}
