@@ -33,6 +33,11 @@ import (
 	"k8s.io/klog"
 )
 
+// instance status
+const (
+	instanceShutoff = "SHUTOFF"
+)
+
 // Instances encapsulates an implementation of Instances.
 type Instances struct {
 	Auth *AuthOpts
@@ -159,7 +164,24 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 // InstanceShutdownByProviderID returns true if the instance is shutdown in cloudprovider
 func (i *Instances) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Infof("InstanceShutdownByProviderID is called. input provider ID: %s", providerID)
-	return false, cloudprovider.NotImplemented
+
+	serverClient, err := i.getServiceClient()
+	if err != nil || serverClient == nil {
+		return false, fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
+	}
+
+	server, err := servers.Get(serverClient, providerID).Extract()
+	if err != nil {
+		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
+		return false, err
+	}
+
+	if server.Status == instanceShutoff {
+		klog.Warningf("instance has been shut down. provider id: %s", providerID)
+		return true, err
+	}
+
+	return false, err
 }
 
 func (i *Instances) getAKSKFromSecret() (accessKey string, secretKey string, secretToken string) {
