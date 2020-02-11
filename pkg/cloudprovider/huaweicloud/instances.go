@@ -102,7 +102,7 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 // cloudprovider.InstanceNotFound should NOT be returned for instances that exist but are stopped/sleeping
 func (i *Instances) InstanceID(ctx context.Context, nodeName types.NodeName) (string, error) {
 	klog.Infof("InstanceID is called. input nodeName: %s", nodeName)
-	return "", nil
+	return "", cloudprovider.NotImplemented
 }
 
 // InstanceType returns the type of the specified instance.
