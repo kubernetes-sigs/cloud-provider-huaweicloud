@@ -16,4 +16,5 @@
 # Vscode files
 .vscode
 
-
+# binaries
+huawei-cloud-controller-manager
