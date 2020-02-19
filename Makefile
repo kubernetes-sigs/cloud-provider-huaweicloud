@@ -16,8 +16,13 @@ GOOS ?= $(shell go env GOOS)
 SOURCES := $(shell find . -type f  -name '*.go')
 LDFLAGS := ""
 
-# Set your registry by env or using the default one
-REGISTRY?="k8scloudcontrollermanager"
+# Images management
+REGISTRY_REGION?="ap-southeast-1"
+ACCESS_KEY?=""
+REGISTRY_LOGIN_KEY?=""
+SWR_SERVICE_ADDRESS?="swr.ap-southeast-1.myhuaweicloud.com"
+REGISTRY?="${SWR_SERVICE_ADDRESS}/k8scloudcontrollermanager"
+
 # Set you version by env or using latest tags from git
 VERSION?=$(shell git describe --tags)
 
@@ -42,3 +47,8 @@ image-huawei-cloud-controller-manager: huawei-cloud-controller-manager
 	cp huawei-cloud-controller-manager cluster/images/cloud-controller-manager && \
 	docker build -t $(REGISTRY)/huawei-cloud-controller-manager:$(VERSION) cluster/images/cloud-controller-manager && \
 	rm cluster/images/cloud-controller-manager/huawei-cloud-controller-manager
+
+upload-images: images
+	@echo "push images to $(REGISTRY)"
+	docker login -u ${REGISTRY_REGION}@${ACCESS_KEY} -p ${REGISTRY_LOGIN_KEY} ${SWR_SERVICE_ADDRESS}
+	docker push ${REGISTRY}/huawei-cloud-controller-manager:${VERSION}
