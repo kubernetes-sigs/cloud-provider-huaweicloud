@@ -284,9 +284,6 @@ type Args struct {
 	Region         string `json:"region,omitempty"`
 }
 
-// TODO(RainbowMango): we should move config to HWSCloud, otherwise will crash when start node controller.
-var globalConfig *CloudConfig
-
 type ServiceClient struct {
 	Client   *http.Client
 	Endpoint string
@@ -470,7 +467,7 @@ func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			deleteSecret(obj, lrucache)
+			deleteSecret(obj, lrucache, globalConfig.LoadBalancer.SecretName)
 		},
 	}, 30*time.Second)
 
@@ -806,7 +803,7 @@ func GetPersistAutoCreate(service *v1.Service) bool {
 	}
 }
 
-func deleteSecret(obj interface{}, lrucache *lru.Cache) {
+func deleteSecret(obj interface{}, lrucache *lru.Cache, secretName string) {
 	kubeSecret, ok := obj.(*v1.Secret)
 	if !ok {
 		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
@@ -821,7 +818,7 @@ func deleteSecret(obj interface{}, lrucache *lru.Cache) {
 		}
 	}
 
-	if kubeSecret.Name == globalConfig.LoadBalancer.SecretName {
+	if kubeSecret.Name == secretName {
 		key := kubeSecret.Namespace + "/" + kubeSecret.Name
 		lrucache.Add(key, kubeSecret)
 	}
