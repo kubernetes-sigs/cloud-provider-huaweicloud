@@ -386,11 +386,11 @@ type Ipv6Bandwidth struct {
 type LoadBalanceVersion int
 
 const (
-	VersionNotNeedLB LoadBalanceVersion = iota //if the service type is not LoadBalancer
-	VersionELB
-	VersionALB
-	VersionPLB
-	VersionNAT
+	VersionNotNeedLB LoadBalanceVersion = iota // if the service type is not LoadBalancer
+	VersionELB                                 // classic load balancer
+	VersionALB                                 // enhanced load balancer(performance share)
+	VersionPLB                                 // enhanced load balancer(performance guarantee)
+	VersionNAT                                 // network address translation
 )
 
 func init() {
