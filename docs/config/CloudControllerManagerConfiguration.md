@@ -2,7 +2,7 @@
 This document describes all of the configuration options available to the `HUAWEICLOUD` cloud controller manager.
 
 ## Configuration Example
-We recommend you fetch the [example configuration](../examples/CloudControllerManagerConfigurationExample.json) to start 
+We recommend you fetch the [example configuration](../../examples/CloudControllerManagerConfigurationExample.json) to start 
 your configuration and the details description about the configuration please see below.
 
 ## Description of configuration
