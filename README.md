@@ -2,7 +2,7 @@
 This repository contains the [Kubernetes cloud-controller-manager](https://kubernetes.io/docs/concepts/architecture/cloud-controller/) for HUAWEICLOUD.
 
 ## Quick Start
-- [Setup your configuration](./docs/CloudControllerManagerConfiguration.md)
+- [Run with local cluster](./docs/quick-start-with-local-cluster.md)
 
 ## Building Cloud Controller Manager
 
