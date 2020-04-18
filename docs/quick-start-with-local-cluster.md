@@ -24,7 +24,7 @@ If there is something going wrong and you can't dig out by yourself, please cons
 ## Run
 #### Build `huawei-cloud-controller-manager`
 
-Build the `huawei-cloud-controller-manager` binary as per [Building Cloud Controller Manager](../README.md#https://github.com/huawei-cloudnative/cloud-provider-huaweicloud#building-cloud-controller-manager).
+Build the `huawei-cloud-controller-manager` binary as per [Building Cloud Controller Manager](../README.md#https://github.com/kubernetes-sigs/cloud-provider-huaweicloud#building-cloud-controller-manager).
 
 And then, copy the binary to your workspace, like `/root/provider/`:
 ```
