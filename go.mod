@@ -1,4 +1,4 @@
-module k8s.io/cloud-provider-huaweicloud
+module sigs.k8s.io/cloud-provider-huaweicloud
 
 go 1.13
 

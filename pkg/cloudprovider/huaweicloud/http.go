@@ -30,7 +30,7 @@ import (
 	"time"
 
 	"k8s.io/client-go/util/flowcontrol"
-	"k8s.io/cloud-provider-huaweicloud/pkg/apigw/core"
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/apigw/core"
 	"k8s.io/klog"
 )
 
