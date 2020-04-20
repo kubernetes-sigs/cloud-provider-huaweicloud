@@ -30,8 +30,8 @@ import (
 	"time"
 
 	"k8s.io/client-go/util/flowcontrol"
-	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/apigw/core"
 	"k8s.io/klog"
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/apigw/core"
 )
 
 const (
