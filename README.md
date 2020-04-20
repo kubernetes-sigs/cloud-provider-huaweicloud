@@ -17,7 +17,7 @@ To keep it simple, you can use vendor as well.
 
 #### build locally
 ```
-$ git clone https://github.com/huawei-cloudnative/cloud-provider-huaweicloud.git 
+$ git clone https://github.com/kubernetes-sigs/cloud-provider-huaweicloud.git 
 $ make huawei-cloud-controller-manager
 ```
 
@@ -27,4 +27,4 @@ $ make huawei-cloud-controller-manager
 - [Developing Cloud Controller Manager](https://kubernetes.io/docs/tasks/administer-cluster/developing-cloud-controller-manager/)
 
 ## Support
-Any questions feel free to [send an issue](https://github.com/huawei-cloudnative/cloud-provider-huaweicloud/issues/new).  
+Any questions feel free to [send an issue](https://github.com/kubernetes-sigs/cloud-provider-huaweicloud/issues/new).  
