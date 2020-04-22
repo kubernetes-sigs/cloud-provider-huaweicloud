@@ -23,7 +23,6 @@ import (
 	"io"
 	"net/http"
 	"reflect"
-	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -579,11 +578,6 @@ func (h *HWSCloud) ExternalID(ctx context.Context, instance types.NodeName) (str
 	return "", cloudprovider.NotImplemented
 }
 
-// List is an implementation of Instances.List.
-func (h *HWSCloud) List(filter string) ([]types.NodeName, error) {
-	return nil, nil
-}
-
 // type Routes interface {}
 
 // ListRoutes is an implementation of Routes.ListRoutes
@@ -620,22 +614,6 @@ func (h *HWSCloud) GetZoneByProviderID(ctx context.Context, providerID string) (
 // outside the kubelets.
 func (h *HWSCloud) GetZoneByNodeName(ctx context.Context, nodeName types.NodeName) (cloudprovider.Zone, error) {
 	return cloudprovider.Zone{}, nil
-}
-
-// type Interface interface {}
-
-// Known-useless DNS search path.
-var uselessDNSSearchRE = regexp.MustCompile(`^[0-9]+.google.internal.$`)
-
-// ScrubDNS filters DNS settings for pods.
-func (h *HWSCloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string) {
-	// GCE has too many search paths by default. Filter the ones we know are useless.
-	for _, s := range searches {
-		if !uselessDNSSearchRE.MatchString(s) {
-			srchOut = append(srchOut, s)
-		}
-	}
-	return nameservers, srchOut
 }
 
 // HasClusterID returns true if the cluster has a clusterID
