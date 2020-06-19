@@ -26,10 +26,10 @@ authentication.
     IAMEndpoint is the IAM(Identity and Access Management) service's endpoint.
     Get it from https://developer.huaweicloud.com/en-us/endpoint according to your region.
 - DomainID：
-    DomainID is the account ID. You can get yours according to [How Can I Obtain domain_name, project_name, and project_id?](https://support.huaweicloud.com/en-us/devg-sdk/en-us_topic_0070637164.html).
+    DomainID is the account ID. You can get yours according to [How Can I Obtain domain_name, project_name, and project_id?](https://support.huaweicloud.com/intl/en-us/devg-sdk/sdk_05_0003.html).
 - ProjectID：
     ProjectID is the project ID your workload working on.
-    Get yours according to [How Can I Obtain domain_name, project_name, and project_id?](https://support.huaweicloud.com/en-us/devg-sdk/en-us_topic_0070637164.html).
+    Get yours according to [How Can I Obtain domain_name, project_name, and project_id?](https://support.huaweicloud.com/intl/en-us/devg-sdk/sdk_05_0003.html).
 - Region：
     Region is the region name.
 - Cloud：

@@ -49,11 +49,11 @@ type AuthOpts struct {
 	// E.g. 'iam.ap-southeast-1.myhwclouds.com'.
 	IAMEndpoint string `json:"IAMEndpoint"`
 	// DomainID is the account ID.
-	// Please refer to https://support.huaweicloud.com/en-us/devg-sdk/en-us_topic_0070637164.html.
+	// Please refer to https://support.huaweicloud.com/intl/en-us/devg-sdk/sdk_05_0003.html.
 	// E.g. '052ca6e3530010490f52c0135f7ff501'
 	DomainID string `json:"DomainID"`
 	// ProjectID is the project ID your workload working on.
-	// Please refer to https://support.huaweicloud.com/en-us/devg-sdk/en-us_topic_0070637164.html.
+	// Please refer to https://support.huaweicloud.com/intl/en-us/devg-sdk/sdk_05_0003.html.
 	// E.g. '052d4df9f8800f2f2f99c0134ed5b282'
 	ProjectID string `json:"ProjectID"`
 	// Region is the region name.
