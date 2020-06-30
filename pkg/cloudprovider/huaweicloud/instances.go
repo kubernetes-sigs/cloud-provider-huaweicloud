@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"regexp"
+	"strings"
 
 	"github.com/RainbowMango/huaweicloud-sdk-go"
 	"github.com/RainbowMango/huaweicloud-sdk-go/auth/aksk"
@@ -39,6 +40,11 @@ import (
 // instance status
 const (
 	instanceShutoff = "SHUTOFF"
+)
+
+// prefix added to the server ID to form the prefix ID
+const (
+	providerPrefix = ProviderName + "://"
 )
 
 // ErrNotFound is used to inform that the object is missing
@@ -80,12 +86,7 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 
 	klog.Infof("NodeAddressesByProviderID is called. input provider ID: %s", providerID)
 
-	serverClient, err := i.GetServerClientFunc()
-	if err != nil || serverClient == nil {
-		return nil, fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
-	}
-
-	server, err := servers.Get(serverClient, providerID).Extract()
+	server, err := i.getServerByProviderID(providerID)
 	if err != nil {
 		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
 		return nil, err
@@ -131,12 +132,8 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 // InstanceTypeByProviderID returns the type of the specified instance.
 func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
 	klog.Infof("InstanceTypeByProviderID is called. input provider ID: %s", providerID)
-	serverClient, err := i.GetServerClientFunc()
-	if err != nil || serverClient == nil {
-		return "", fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
-	}
 
-	server, err := servers.Get(serverClient, providerID).Extract()
+	server, err := i.getServerByProviderID(providerID)
 	if err != nil {
 		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
 		return "", err
@@ -164,12 +161,7 @@ func (i *Instances) CurrentNodeName(ctx context.Context, hostname string) (types
 func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Infof("InstanceExistsByProviderID is called. input provider ID: %s", providerID)
 
-	serverClient, err := i.GetServerClientFunc()
-	if err != nil || serverClient == nil {
-		return false, fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
-	}
-
-	_, err = servers.Get(serverClient, providerID).Extract()
+	_, err := i.getServerByProviderID(providerID)
 	if err != nil {
 		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
 		return false, err
@@ -182,17 +174,11 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 func (i *Instances) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Infof("InstanceShutdownByProviderID is called. input provider ID: %s", providerID)
 
-	serverClient, err := i.GetServerClientFunc()
-	if err != nil || serverClient == nil {
-		return false, fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
-	}
-
-	server, err := servers.Get(serverClient, providerID).Extract()
+	server, err := i.getServerByProviderID(providerID)
 	if err != nil {
 		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
 		return false, err
 	}
-
 	if server.Status == instanceShutoff {
 		klog.Warningf("instance has been shut down. provider id: %s", providerID)
 		return true, err
@@ -241,6 +227,22 @@ func (i *Instances) parseInstanceTypeFromServerInfo(srv *servers.Server) (string
 	}
 
 	return instanceType, nil
+}
+
+func (i *Instances) getServerByProviderID(providerID string) (*servers.Server, error) {
+	serverClient, err := i.GetServerClientFunc()
+	if err != nil || serverClient == nil {
+		return nil, fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
+	}
+
+	// Strip the provider name prefix to get the server ID, note that
+	// providerID without prefix is still accepted for backward compatibility.
+	serverID := strings.TrimPrefix(providerID, providerPrefix)
+	server, err := servers.Get(serverClient, serverID).Extract()
+	if err != nil {
+		return nil, fmt.Errorf("error occurred while getting server with server id: %s, error: %v", serverID, err)
+	}
+	return server, nil
 }
 
 func (i *Instances) getServerByName(name types.NodeName) (*servers.Server, error) {
