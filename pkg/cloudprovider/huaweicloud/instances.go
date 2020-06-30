@@ -19,12 +19,15 @@ package huaweicloud
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"regexp"
 
 	"github.com/RainbowMango/huaweicloud-sdk-go"
 	"github.com/RainbowMango/huaweicloud-sdk-go/auth/aksk"
 	"github.com/RainbowMango/huaweicloud-sdk-go/openstack"
 	"github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/servers"
+	"github.com/RainbowMango/huaweicloud-sdk-go/pagination"
 	"github.com/mitchellh/mapstructure"
 
 	v1 "k8s.io/api/core/v1"
@@ -38,9 +41,15 @@ const (
 	instanceShutoff = "SHUTOFF"
 )
 
+// ErrNotFound is used to inform that the object is missing
+var ErrNotFound = errors.New("failed to find object")
+
+// ErrMultipleResults is used when we unexpectedly get back multiple results
+var ErrMultipleResults = errors.New("multiple results where only one expected")
+
 // Instances encapsulates an implementation of Instances.
 type Instances struct {
-	Auth *AuthOpts
+	GetServerClientFunc func() (*gophercloud.ServiceClient, error)
 }
 
 // Check if our Instances implements necessary interface
@@ -71,7 +80,7 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 
 	klog.Infof("NodeAddressesByProviderID is called. input provider ID: %s", providerID)
 
-	serverClient, err := i.getServiceClient()
+	serverClient, err := i.GetServerClientFunc()
 	if err != nil || serverClient == nil {
 		return nil, fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
 	}
@@ -100,9 +109,17 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 // InstanceID returns the cloud provider ID of the node with the specified NodeName.
 // Note that if the instance does not exist, we must return ("", cloudprovider.InstanceNotFound)
 // cloudprovider.InstanceNotFound should NOT be returned for instances that exist but are stopped/sleeping
+//
+// Based on: https://github.com/kubernetes/cloud-provider-openstack/blob/2493d93/pkg/cloudprovider/providers/openstack/openstack_instances.go#L162
 func (i *Instances) InstanceID(ctx context.Context, nodeName types.NodeName) (string, error) {
-	klog.Infof("InstanceID is called. input nodeName: %s", nodeName)
-	return "", cloudprovider.NotImplemented
+	srv, err := i.getServerByName(nodeName)
+	if err != nil {
+		if err == ErrNotFound {
+			return "", cloudprovider.InstanceNotFound
+		}
+		return "", err
+	}
+	return srv.ID, nil
 }
 
 // InstanceType returns the type of the specified instance.
@@ -114,7 +131,7 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 // InstanceTypeByProviderID returns the type of the specified instance.
 func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
 	klog.Infof("InstanceTypeByProviderID is called. input provider ID: %s", providerID)
-	serverClient, err := i.getServiceClient()
+	serverClient, err := i.GetServerClientFunc()
 	if err != nil || serverClient == nil {
 		return "", fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
 	}
@@ -147,7 +164,7 @@ func (i *Instances) CurrentNodeName(ctx context.Context, hostname string) (types
 func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Infof("InstanceExistsByProviderID is called. input provider ID: %s", providerID)
 
-	serverClient, err := i.getServiceClient()
+	serverClient, err := i.GetServerClientFunc()
 	if err != nil || serverClient == nil {
 		return false, fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
 	}
@@ -165,7 +182,7 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 func (i *Instances) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Infof("InstanceShutdownByProviderID is called. input provider ID: %s", providerID)
 
-	serverClient, err := i.getServiceClient()
+	serverClient, err := i.GetServerClientFunc()
 	if err != nil || serverClient == nil {
 		return false, fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
 	}
@@ -182,45 +199,6 @@ func (i *Instances) InstanceShutdownByProviderID(ctx context.Context, providerID
 	}
 
 	return false, err
-}
-
-func (i *Instances) getAKSKFromSecret() (accessKey string, secretKey string, secretToken string) {
-	// TODO(RainbowMango): Get AK/SK as well as secret token from kubernetes.secret.
-	return
-}
-
-func (i *Instances) getServiceClient() (*gophercloud.ServiceClient, error) {
-	accessKey := i.Auth.AccessKey
-	secretKey := i.Auth.SecretKey
-	secretToken := ""
-
-	if len(i.Auth.SecretName) > 0 {
-		accessKey, secretKey, secretToken = i.getAKSKFromSecret()
-	}
-	akskOpts := aksk.AKSKOptions{
-		IdentityEndpoint: i.Auth.IAMEndpoint,
-		ProjectID:        i.Auth.ProjectID,
-		DomainID:         i.Auth.DomainID,
-		Region:           i.Auth.Region,
-		Cloud:            i.Auth.Cloud,
-		AccessKey:        accessKey,
-		SecretKey:        secretKey,
-		SecurityToken:    secretToken,
-	}
-
-	providerClient, err := openstack.AuthenticatedClient(akskOpts)
-	if err != nil {
-		klog.Errorf("init provider client failed with error: %v", err)
-		return nil, err
-	}
-
-	serviceClient, err := openstack.NewComputeV2(providerClient, gophercloud.EndpointOpts{})
-	if err != nil {
-		klog.Errorf("init compute service client failed: %v", err)
-		return nil, err
-	}
-
-	return serviceClient, nil
 }
 
 func (i *Instances) parseNodeAddressFromServerInfo(srv *servers.Server) ([]v1.NodeAddress, error) {
@@ -263,4 +241,78 @@ func (i *Instances) parseInstanceTypeFromServerInfo(srv *servers.Server) (string
 	}
 
 	return instanceType, nil
+}
+
+func (i *Instances) getServerByName(name types.NodeName) (*servers.Server, error) {
+	opts := servers.ListOpts{
+		Name: fmt.Sprintf("^%s$", regexp.QuoteMeta(string(name))),
+	}
+
+	serverClient, err := i.GetServerClientFunc()
+	if err != nil || serverClient == nil {
+		return nil, fmt.Errorf("create server client failed, error: %v", err)
+	}
+	pager := servers.List(serverClient, opts)
+
+	var s []servers.Server
+	serverList := make([]servers.Server, 0, 1)
+
+	err = pager.EachPage(func(page pagination.Page) (bool, error) {
+		if err := servers.ExtractServersInto(page, &s); err != nil {
+			return false, err
+		}
+		serverList = append(serverList, s...)
+		if len(serverList) > 1 {
+			return false, ErrMultipleResults
+		}
+		return true, nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(serverList) == 0 {
+		return nil, ErrNotFound
+	}
+
+	return &serverList[0], nil
+}
+
+func (a *AuthOpts) getAKSKFromSecret() (accessKey string, secretKey string, secretToken string) {
+	// TODO(RainbowMango): Get AK/SK as well as secret token from kubernetes.secret.
+	return
+}
+
+func (a *AuthOpts) getServerClient() (*gophercloud.ServiceClient, error) {
+	accessKey := a.AccessKey
+	secretKey := a.SecretKey
+	secretToken := ""
+
+	if len(a.SecretName) > 0 {
+		accessKey, secretKey, secretToken = a.getAKSKFromSecret()
+	}
+	akskOpts := aksk.AKSKOptions{
+		IdentityEndpoint: a.IAMEndpoint,
+		ProjectID:        a.ProjectID,
+		DomainID:         a.DomainID,
+		Region:           a.Region,
+		Cloud:            a.Cloud,
+		AccessKey:        accessKey,
+		SecretKey:        secretKey,
+		SecurityToken:    secretToken,
+	}
+
+	providerClient, err := openstack.AuthenticatedClient(akskOpts)
+	if err != nil {
+		klog.Errorf("init provider client failed with error: %v", err)
+		return nil, err
+	}
+
+	serviceClient, err := openstack.NewComputeV2(providerClient, gophercloud.EndpointOpts{})
+	if err != nil {
+		klog.Errorf("init compute service client failed: %v", err)
+		return nil, err
+	}
+
+	return serviceClient, nil
 }
