@@ -634,7 +634,7 @@ func (h *HWSCloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 // Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.
 func (h *HWSCloud) Instances() (cloudprovider.Instances, bool) {
 	instance := &Instances{
-		Auth: &h.config.Auth,
+		GetServerClientFunc: h.config.Auth.getServerClient,
 	}
 
 	return instance, true
