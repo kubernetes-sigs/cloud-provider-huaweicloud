@@ -148,7 +148,7 @@ func MockListServers(t *testing.T, servers []servers.Server) {
 	if err != nil {
 		t.Fatalf("Error occurred while marshaling the response: %v", err)
 	}
-	// Handle server creation requests.
+	// Handle server list requests.
 	th.Mux.HandleFunc("/servers/detail", func(w http.ResponseWriter, r *http.Request) {
 		th.TestMethod(t, r, "GET")
 		th.TestHeader(t, r, "X-Auth-Token", client.TokenID)
