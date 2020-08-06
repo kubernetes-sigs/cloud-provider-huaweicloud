@@ -29,9 +29,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/huaweicloud/golangsdk"
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/klog"
-	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/apigw/core"
 )
 
 const (
@@ -168,10 +168,6 @@ func DoRequest(service *ServiceClient, throttle flowcontrol.RateLimiter, r *requ
 
 	// add the sign to request header if needed.
 	if service.Access != nil {
-		sign := core.Signer{
-			Key:    service.Access.AccessKey,
-			Secret: service.Access.SecretKey,
-		}
 		req.Header.Set(HeaderProject, service.TenantId)
 
 		// distinguish 'Permanent Security Credentials' and 'Temporary Security Credentials'
@@ -181,9 +177,10 @@ func DoRequest(service *ServiceClient, throttle flowcontrol.RateLimiter, r *requ
 			req.Header.Set(HeaderSecurityToken, service.Access.SecurityToken)
 		}
 
-		if err := sign.Sign(req); err != nil {
-			return nil, fmt.Errorf("DoRequest failed to get sign key %v", err)
-		}
+		golangsdk.Sign(req, golangsdk.SignOptions{
+			AccessKey: service.Access.AccessKey,
+			SecretKey: service.Access.SecretKey,
+		})
 	}
 
 	resp, err := service.Client.Do(req)

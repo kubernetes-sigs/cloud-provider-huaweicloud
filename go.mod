@@ -6,6 +6,7 @@ require (
 	github.com/RainbowMango/huaweicloud-sdk-go v0.0.0
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/hashicorp/golang-lru v0.5.1
+	github.com/huaweicloud/golangsdk v0.0.0-20200728004128-63646e8b1ea7
 	github.com/mitchellh/mapstructure v1.1.2
 	k8s.io/api v0.17.5
 	k8s.io/apimachinery v0.17.5
