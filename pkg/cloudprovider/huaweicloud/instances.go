@@ -18,7 +18,6 @@ package huaweicloud
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"regexp"
@@ -29,7 +28,10 @@ import (
 	"github.com/RainbowMango/huaweicloud-sdk-go/openstack"
 	"github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/servers"
 	"github.com/RainbowMango/huaweicloud-sdk-go/pagination"
-	"github.com/mitchellh/mapstructure"
+	huaweicloudsdkbasic "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
+	huaweicloudsdkconfig "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/config"
+	huaweicloudsdkecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
+	huaweicloudsdkecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -56,6 +58,7 @@ var ErrMultipleResults = errors.New("multiple results where only one expected")
 // Instances encapsulates an implementation of Instances.
 type Instances struct {
 	GetServerClientFunc func() (*gophercloud.ServiceClient, error)
+	GetECSClientFunc    func() *huaweicloudsdkecs.EcsClient
 }
 
 // Check if our Instances implements necessary interface
@@ -82,25 +85,20 @@ func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 // from the node whose nodeaddresses are being queried. i.e. local metadata
 // services cannot be used in this method to obtain nodeaddresses
 func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID string) ([]v1.NodeAddress, error) {
-	var nodeAddresses []v1.NodeAddress
-
 	klog.Infof("NodeAddressesByProviderID is called. input provider ID: %s", providerID)
 
-	server, err := i.getServerByProviderID(providerID)
+	ecs, err := i.getECSByProviderID(providerID)
 	if err != nil {
 		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
 		return nil, err
 	}
+	klog.V(4).Infof("server info: %s", ecs.String())
 
-	serverJson, _ := json.MarshalIndent(server, "", " ")
-	klog.V(4).Infof("server info: %s", string(serverJson))
-
-	addrs, err := i.parseNodeAddressFromServerInfo(server)
+	nodeAddresses, err := i.parseAddressesFromServer(ecs)
 	if err != nil {
 		klog.Errorf("parse node address from server info failed. provider id: %s, error: %v", providerID, err)
 		return nil, err
 	}
-	nodeAddresses = append(nodeAddresses, addrs...)
 
 	klog.Infof("NodeAddressesByProviderID, input provider ID: %s, output addresses: %v", providerID, nodeAddresses)
 
@@ -187,21 +185,15 @@ func (i *Instances) InstanceShutdownByProviderID(ctx context.Context, providerID
 	return false, err
 }
 
-func (i *Instances) parseNodeAddressFromServerInfo(srv *servers.Server) ([]v1.NodeAddress, error) {
+func (i *Instances) parseAddressesFromServer(server *huaweicloudsdkecsmodel.ServerDetail) ([]v1.NodeAddress, error) {
 	var nodeAddresses []v1.NodeAddress
-	var addresses map[string][]Address
 
-	err := mapstructure.Decode(srv.Addresses, &addresses)
-	if err != nil {
-		return nil, fmt.Errorf("decode address from server info failed. server id: %s, error: %v", srv.ID, err)
-	}
-
-	for _, addrs := range addresses {
+	for _, addrs := range server.Addresses {
 		var addressType v1.NodeAddressType
 		for i := range addrs {
-			if addrs[i].Type == "fixed" {
+			if addrs[i].OSEXTIPStype == huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FIXED {
 				addressType = v1.NodeInternalIP
-			} else if addrs[i].Type == "floating" {
+			} else if addrs[i].OSEXTIPStype == huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FLOATING {
 				addressType = v1.NodeExternalIP
 			} else {
 				continue
@@ -243,6 +235,28 @@ func (i *Instances) getServerByProviderID(providerID string) (*servers.Server, e
 		return nil, fmt.Errorf("error occurred while getting server with server id: %s, error: %v", serverID, err)
 	}
 	return server, nil
+}
+
+func (i *Instances) getECSByProviderID(providerID string) (*huaweicloudsdkecsmodel.ServerDetail, error) {
+	client := i.GetECSClientFunc()
+	if client == nil {
+		return nil, fmt.Errorf("create ECS client failed with provider id: %s", providerID)
+	}
+
+	// Strip the provider name prefix to get the server ID, note that
+	// providerID without prefix is still accepted for backward compatibility.
+	serverID := strings.TrimPrefix(providerID, providerPrefix)
+
+	options := &huaweicloudsdkecsmodel.ShowServerRequest{
+		ServerId: serverID,
+	}
+
+	rsp, err := client.ShowServer(options)
+	if err != nil || rsp == nil {
+		return nil, fmt.Errorf("failed to retrieve server by server ID: %s, error: %v", serverID, err)
+	}
+
+	return rsp.Server, nil
 }
 
 func (i *Instances) getServerByName(name types.NodeName) (*servers.Server, error) {
@@ -317,4 +331,28 @@ func (a *AuthOpts) getServerClient() (*gophercloud.ServiceClient, error) {
 	}
 
 	return serviceClient, nil
+}
+
+// getECSClient initializes a ECS(Elastic Cloud Server) client which will be used to operate ECS.
+func (a *AuthOpts) getECSClient() *huaweicloudsdkecs.EcsClient {
+	// There are two types of services provided by HUAWEI CLOUD according to scope:
+	// - Regional services: most of services belong to this classification, such as ECS.
+	// - Global services: such as IAM, TMS, EPS.
+	// For Regional services' authentication, projectId is required.
+	// For global services' authentication, domainId is required.
+	// More details please refer to:
+	// https://github.com/huaweicloud/huaweicloud-sdk-go-v3/blob/0281b9734f0f95ed5565729e54d96e9820262426/README.md#use-go-sdk
+	credentials := huaweicloudsdkbasic.NewCredentialsBuilder().
+		WithAk(a.AccessKey).
+		WithSk(a.SecretKey).
+		WithProjectId(a.ProjectID).
+		Build()
+
+	client := huaweicloudsdkecs.EcsClientBuilder().
+		WithEndpoint(a.ECSEndpoint).
+		WithCredential(credentials).
+		WithHttpConfig(huaweicloudsdkconfig.DefaultHttpConfig()).
+		Build()
+
+	return huaweicloudsdkecs.NewEcsClient(client)
 }

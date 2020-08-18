@@ -637,6 +637,7 @@ func (h *HWSCloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 func (h *HWSCloud) Instances() (cloudprovider.Instances, bool) {
 	instance := &Instances{
 		GetServerClientFunc: h.config.Auth.getServerClient,
+		GetECSClientFunc:    h.config.Auth.getECSClient,
 	}
 
 	return instance, true
