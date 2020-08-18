@@ -25,6 +25,9 @@ authentication.
 - IAMEndpoint:
     IAMEndpoint is the IAM(Identity and Access Management) service's endpoint.
     Get it from https://developer.huaweicloud.com/en-us/endpoint according to your region.
+- ECSEndpoint:
+    ECSEndpoint is the ECS(Elastic Cloud Server) service's endpoint.
+    Get it from https://developer.huaweicloud.com/en-us/endpoint according to your region.
 - DomainID：
     DomainID is the account ID. You can get yours according to [How Can I Obtain domain_name, project_name, and project_id?](https://support.huaweicloud.com/intl/en-us/devg-sdk/sdk_05_0003.html).
 - ProjectID：

@@ -46,8 +46,12 @@ type AuthOpts struct {
 	SecretKey string `json:"SecretKey"`
 	// IAMEndpoint is the IAM(Identity and Access Management) service's endpoint.
 	// Get it from https://developer.huaweicloud.com/en-us/endpoint according to your region.
-	// E.g. 'iam.ap-southeast-1.myhwclouds.com'.
+	// E.g. 'https://iam.ap-southeast-1.myhwclouds.com'.
 	IAMEndpoint string `json:"IAMEndpoint"`
+	// ECSEndpoint is the ECS(Elastic Cloud Server) service's endpoint.
+	// Get it from https://developer.huaweicloud.com/en-us/endpoint according to your region.
+	// E.g. 'https://iam.ap-southeast-1.myhwclouds.com'.
+	ECSEndpoint string `json:"ECSEndpoint"`
 	// DomainID is the account ID.
 	// Please refer to https://support.huaweicloud.com/intl/en-us/devg-sdk/sdk_05_0003.html.
 	// E.g. '052ca6e3530010490f52c0135f7ff501'

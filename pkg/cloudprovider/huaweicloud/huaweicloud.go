@@ -188,21 +188,23 @@ type ELBSessionPersistence struct {
 }
 
 type LBConfig struct {
-	Apiserver        string       `json:"apiserver"`
-	SecretName       string       `json:"secretName"`
-	SignerType       string       `json:"signerType"`
-	ELBAlgorithm     ELBAlgorithm `json:"elbAlgorithm"`
-	TenantId         string       `json:"tenantId"`
-	Region           string       `json:"region"`
-	VPCId            string       `json:"vpcId"`
-	SubnetId         string       `json:"subnetId"`
-	ECSEndpoint      string       `json:"ecsEndpoint"`
-	ELBEndpoint      string       `json:"elbEndpoint"`
-	ALBEndpoint      string       `json:"albEndpoint"`
-	GLBEndpoint      string       `json:"plbEndpoint"`
-	NATEndpoint      string       `json:"natEndpoint"`
-	VPCEndpoint      string       `json:"vpcEndpoint"`
-	EnterpriseEnable string       `json:"enterpriseEnable"`
+	Apiserver    string       `json:"apiserver"`
+	SecretName   string       `json:"secretName"`
+	SignerType   string       `json:"signerType"`
+	ELBAlgorithm ELBAlgorithm `json:"elbAlgorithm"`
+	TenantId     string       `json:"tenantId"`
+	Region       string       `json:"region"`
+	VPCId        string       `json:"vpcId"`
+	SubnetId     string       `json:"subnetId"`
+	// Deprecated: We are going to move this ECSEndpoint to CloudConfig.Auth.
+	// During the transition, you need to specify the same ECS endpoint both here and CloudConfig.Auth.ECSEndpoint.
+	ECSEndpoint      string `json:"ecsEndpoint"`
+	ELBEndpoint      string `json:"elbEndpoint"`
+	ALBEndpoint      string `json:"albEndpoint"`
+	GLBEndpoint      string `json:"plbEndpoint"`
+	NATEndpoint      string `json:"natEndpoint"`
+	VPCEndpoint      string `json:"vpcEndpoint"`
+	EnterpriseEnable string `json:"enterpriseEnable"`
 }
 
 type PublicIp struct {
