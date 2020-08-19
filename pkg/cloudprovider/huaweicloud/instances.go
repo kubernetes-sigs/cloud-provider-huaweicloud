@@ -25,7 +25,6 @@ import (
 	"github.com/RainbowMango/huaweicloud-sdk-go"
 	"github.com/RainbowMango/huaweicloud-sdk-go/auth/aksk"
 	"github.com/RainbowMango/huaweicloud-sdk-go/openstack"
-	"github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/servers"
 	huaweicloudsdkbasic "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	huaweicloudsdkconfig "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/config"
 	huaweicloudsdkecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
@@ -172,7 +171,7 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 func (i *Instances) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Infof("InstanceShutdownByProviderID is called. input provider ID: %s", providerID)
 
-	server, err := i.getServerByProviderID(providerID)
+	server, err := i.getECSByProviderID(providerID)
 	if err != nil {
 		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
 		return false, err
@@ -216,22 +215,6 @@ func (i *Instances) parseInstanceTypeFromServerInfo(server *huaweicloudsdkecsmod
 	}
 
 	return server.Flavor.Id, nil
-}
-
-func (i *Instances) getServerByProviderID(providerID string) (*servers.Server, error) {
-	serverClient, err := i.GetServerClientFunc()
-	if err != nil || serverClient == nil {
-		return nil, fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
-	}
-
-	// Strip the provider name prefix to get the server ID, note that
-	// providerID without prefix is still accepted for backward compatibility.
-	serverID := strings.TrimPrefix(providerID, providerPrefix)
-	server, err := servers.Get(serverClient, serverID).Extract()
-	if err != nil {
-		return nil, fmt.Errorf("error occurred while getting server with server id: %s, error: %v", serverID, err)
-	}
-	return server, nil
 }
 
 func (i *Instances) getECSByProviderID(providerID string) (*huaweicloudsdkecsmodel.ServerDetail, error) {
