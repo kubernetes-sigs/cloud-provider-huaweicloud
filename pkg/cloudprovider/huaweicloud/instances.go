@@ -22,10 +22,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/RainbowMango/huaweicloud-sdk-go"
-	"github.com/RainbowMango/huaweicloud-sdk-go/auth/aksk"
-	"github.com/RainbowMango/huaweicloud-sdk-go/openstack"
-	"github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/servers"
 	huaweicloudsdkbasic "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	huaweicloudsdkconfig "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/config"
 	huaweicloudsdkecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
@@ -55,8 +51,7 @@ var ErrMultipleResults = errors.New("multiple results where only one expected")
 
 // Instances encapsulates an implementation of Instances.
 type Instances struct {
-	GetServerClientFunc func() (*gophercloud.ServiceClient, error)
-	GetECSClientFunc    func() *huaweicloudsdkecs.EcsClient
+	GetECSClientFunc func() *huaweicloudsdkecs.EcsClient
 }
 
 // Check if our Instances implements necessary interface
@@ -128,11 +123,12 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
 	klog.Infof("InstanceTypeByProviderID is called. input provider ID: %s", providerID)
 
-	server, err := i.getServerByProviderID(providerID)
+	server, err := i.getECSByProviderID(providerID)
 	if err != nil {
 		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
 		return "", err
 	}
+
 	return i.parseInstanceTypeFromServerInfo(server)
 }
 
@@ -156,7 +152,9 @@ func (i *Instances) CurrentNodeName(ctx context.Context, hostname string) (types
 func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Infof("InstanceExistsByProviderID is called. input provider ID: %s", providerID)
 
-	_, err := i.getServerByProviderID(providerID)
+	// TODO(RainbowMango): There is no convenient way to tell if an error due to server not exist or other kind of error.
+	// So, this method will never return (false, nil) for now.
+	_, err := i.getECSByProviderID(providerID)
 	if err != nil {
 		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
 		return false, err
@@ -169,7 +167,7 @@ func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID s
 func (i *Instances) InstanceShutdownByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Infof("InstanceShutdownByProviderID is called. input provider ID: %s", providerID)
 
-	server, err := i.getServerByProviderID(providerID)
+	server, err := i.getECSByProviderID(providerID)
 	if err != nil {
 		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
 		return false, err
@@ -203,35 +201,16 @@ func (i *Instances) parseAddressesFromServer(server *huaweicloudsdkecsmodel.Serv
 	return nodeAddresses, nil
 }
 
-func (i *Instances) parseInstanceTypeFromServerInfo(srv *servers.Server) (string, error) {
-	id, exist := srv.Flavor["id"]
-	if !exist {
-		return "", fmt.Errorf("no instance type fond from server.Flavor[id]")
+func (i *Instances) parseInstanceTypeFromServerInfo(server *huaweicloudsdkecsmodel.ServerDetail) (string, error) {
+	if server.Flavor == nil {
+		return "", fmt.Errorf("failed to parse instance type from server as flavor info missing, server ID: %s", server.Id)
 	}
 
-	instanceType, ok := id.(string)
-	if !ok {
-		klog.Errorf("server flavor id not a string")
-		return "", fmt.Errorf("server flavor id not a string")
+	if len(server.Flavor.Id) == 0 {
+		return "", fmt.Errorf("flavor ID is empty, server ID: %s", server.Id)
 	}
 
-	return instanceType, nil
-}
-
-func (i *Instances) getServerByProviderID(providerID string) (*servers.Server, error) {
-	serverClient, err := i.GetServerClientFunc()
-	if err != nil || serverClient == nil {
-		return nil, fmt.Errorf("create server client failed with provider id: %s, error: %v", providerID, err)
-	}
-
-	// Strip the provider name prefix to get the server ID, note that
-	// providerID without prefix is still accepted for backward compatibility.
-	serverID := strings.TrimPrefix(providerID, providerPrefix)
-	server, err := servers.Get(serverClient, serverID).Extract()
-	if err != nil {
-		return nil, fmt.Errorf("error occurred while getting server with server id: %s, error: %v", serverID, err)
-	}
-	return server, nil
+	return server.Flavor.Id, nil
 }
 
 func (i *Instances) getECSByProviderID(providerID string) (*huaweicloudsdkecsmodel.ServerDetail, error) {
@@ -287,40 +266,6 @@ func (i *Instances) getECSByName(name string) (*huaweicloudsdkecsmodel.ServerDet
 func (a *AuthOpts) getAKSKFromSecret() (accessKey string, secretKey string, secretToken string) {
 	// TODO(RainbowMango): Get AK/SK as well as secret token from kubernetes.secret.
 	return
-}
-
-func (a *AuthOpts) getServerClient() (*gophercloud.ServiceClient, error) {
-	accessKey := a.AccessKey
-	secretKey := a.SecretKey
-	secretToken := ""
-
-	if len(a.SecretName) > 0 {
-		accessKey, secretKey, secretToken = a.getAKSKFromSecret()
-	}
-	akskOpts := aksk.AKSKOptions{
-		IdentityEndpoint: a.IAMEndpoint,
-		ProjectID:        a.ProjectID,
-		DomainID:         a.DomainID,
-		Region:           a.Region,
-		Cloud:            a.Cloud,
-		AccessKey:        accessKey,
-		SecretKey:        secretKey,
-		SecurityToken:    secretToken,
-	}
-
-	providerClient, err := openstack.AuthenticatedClient(akskOpts)
-	if err != nil {
-		klog.Errorf("init provider client failed with error: %v", err)
-		return nil, err
-	}
-
-	serviceClient, err := openstack.NewComputeV2(providerClient, gophercloud.EndpointOpts{})
-	if err != nil {
-		klog.Errorf("init compute service client failed: %v", err)
-		return nil, err
-	}
-
-	return serviceClient, nil
 }
 
 // getECSClient initializes a ECS(Elastic Cloud Server) client which will be used to operate ECS.

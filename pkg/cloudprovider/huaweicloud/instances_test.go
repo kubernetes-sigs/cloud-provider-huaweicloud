@@ -19,7 +19,6 @@ package huaweicloud
 import (
 	"testing"
 
-	"github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/servers"
 	huaweicloudsdkecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 )
 
@@ -57,12 +56,10 @@ func TestAddressesFromServer(t *testing.T) {
 }
 
 func TestParseInstanceTypeFromServerInfo(t *testing.T) {
-	var serverInfo servers.Server
-	var flavor = make(map[string]interface{}, 1)
-
-	flavor["id"] = "s3.xlarge.4"
-
-	serverInfo.Flavor = flavor
+	var serverInfo huaweicloudsdkecsmodel.ServerDetail
+	serverInfo.Flavor = &huaweicloudsdkecsmodel.ServerFlavor{
+		Id: "s3.xlarge.4",
+	}
 
 	instance := Instances{}
 	instanceType, err := instance.parseInstanceTypeFromServerInfo(&serverInfo)
@@ -70,7 +67,7 @@ func TestParseInstanceTypeFromServerInfo(t *testing.T) {
 		t.Fatalf("parse instance type failed with error: %v", err)
 	}
 
-	if instanceType != flavor["id"] {
-		t.Fatalf("expect instance type: %s, but got %s.", flavor["id"], instanceType)
+	if instanceType != serverInfo.Flavor.Id {
+		t.Fatalf("expect instance type: %s, but got %s.", serverInfo.Flavor.Id, instanceType)
 	}
 }
