@@ -157,7 +157,9 @@ func (i *Instances) CurrentNodeName(ctx context.Context, hostname string) (types
 func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Infof("InstanceExistsByProviderID is called. input provider ID: %s", providerID)
 
-	_, err := i.getServerByProviderID(providerID)
+	// TODO(RainbowMango): There is no convenient way to tell if an error due to server not exist or other kind of error.
+	// So, this method will never return (false, nil) for now.
+	_, err := i.getECSByProviderID(providerID)
 	if err != nil {
 		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
 		return false, err
