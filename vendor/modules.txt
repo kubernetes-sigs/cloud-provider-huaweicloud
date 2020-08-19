@@ -7,25 +7,6 @@ github.com/NYTimes/gziphandler
 github.com/PuerkitoBio/purell
 # github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578
 github.com/PuerkitoBio/urlesc
-# github.com/RainbowMango/huaweicloud-sdk-go v0.0.0 => github.com/RainbowMango/huaweicloud-sdk-go v1.0.21-0.20200208034621-214008016257
-github.com/RainbowMango/huaweicloud-sdk-go
-github.com/RainbowMango/huaweicloud-sdk-go/auth
-github.com/RainbowMango/huaweicloud-sdk-go/auth/aksk
-github.com/RainbowMango/huaweicloud-sdk-go/auth/token
-github.com/RainbowMango/huaweicloud-sdk-go/internal
-github.com/RainbowMango/huaweicloud-sdk-go/openstack
-github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/flavors
-github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/images
-github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/servers
-github.com/RainbowMango/huaweicloud-sdk-go/openstack/identity/v2/tenants
-github.com/RainbowMango/huaweicloud-sdk-go/openstack/identity/v2/tokens
-github.com/RainbowMango/huaweicloud-sdk-go/openstack/identity/v3/endpoints
-github.com/RainbowMango/huaweicloud-sdk-go/openstack/identity/v3/services
-github.com/RainbowMango/huaweicloud-sdk-go/openstack/identity/v3/tokens
-github.com/RainbowMango/huaweicloud-sdk-go/openstack/utils
-github.com/RainbowMango/huaweicloud-sdk-go/pagination
-github.com/RainbowMango/huaweicloud-sdk-go/testhelper
-github.com/RainbowMango/huaweicloud-sdk-go/testhelper/client
 # github.com/beorn7/perks v1.0.0
 github.com/beorn7/perks/quantile
 # github.com/blang/semver v3.5.0+incompatible

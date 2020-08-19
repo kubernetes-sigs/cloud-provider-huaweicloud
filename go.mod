@@ -3,7 +3,6 @@ module sigs.k8s.io/cloud-provider-huaweicloud
 go 1.13
 
 require (
-	github.com/RainbowMango/huaweicloud-sdk-go v0.0.0
 	github.com/fsnotify/fsnotify v1.4.7
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.3-beta
@@ -17,7 +16,6 @@ require (
 )
 
 replace (
-	github.com/RainbowMango/huaweicloud-sdk-go => github.com/RainbowMango/huaweicloud-sdk-go v1.0.21-0.20200208034621-214008016257
 	k8s.io/api => k8s.io/api v0.17.5
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.17.5
 	k8s.io/apimachinery => k8s.io/apimachinery v0.17.5
