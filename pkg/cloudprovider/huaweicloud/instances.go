@@ -128,11 +128,12 @@ func (i *Instances) InstanceType(ctx context.Context, name types.NodeName) (stri
 func (i *Instances) InstanceTypeByProviderID(ctx context.Context, providerID string) (string, error) {
 	klog.Infof("InstanceTypeByProviderID is called. input provider ID: %s", providerID)
 
-	server, err := i.getServerByProviderID(providerID)
+	server, err := i.getECSByProviderID(providerID)
 	if err != nil {
 		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
 		return "", err
 	}
+
 	return i.parseInstanceTypeFromServerInfo(server)
 }
 
@@ -203,19 +204,16 @@ func (i *Instances) parseAddressesFromServer(server *huaweicloudsdkecsmodel.Serv
 	return nodeAddresses, nil
 }
 
-func (i *Instances) parseInstanceTypeFromServerInfo(srv *servers.Server) (string, error) {
-	id, exist := srv.Flavor["id"]
-	if !exist {
-		return "", fmt.Errorf("no instance type fond from server.Flavor[id]")
+func (i *Instances) parseInstanceTypeFromServerInfo(server *huaweicloudsdkecsmodel.ServerDetail) (string, error) {
+	if server.Flavor == nil {
+		return "", fmt.Errorf("failed to parse instance type from server as flavor info missing, server ID: %s", server.Id)
 	}
 
-	instanceType, ok := id.(string)
-	if !ok {
-		klog.Errorf("server flavor id not a string")
-		return "", fmt.Errorf("server flavor id not a string")
+	if len(server.Flavor.Id) == 0 {
+		return "", fmt.Errorf("flavor ID is empty, server ID: %s", server.Id)
 	}
 
-	return instanceType, nil
+	return server.Flavor.Id, nil
 }
 
 func (i *Instances) getServerByProviderID(providerID string) (*servers.Server, error) {
