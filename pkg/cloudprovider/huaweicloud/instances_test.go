@@ -27,29 +27,35 @@ import (
 	"github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/servers"
 	th "github.com/RainbowMango/huaweicloud-sdk-go/testhelper"
 	"github.com/RainbowMango/huaweicloud-sdk-go/testhelper/client"
+	huaweicloudsdkecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 
 	"k8s.io/apimachinery/pkg/types"
 )
 
-func TestParseNodeAddressFromServerInfo(t *testing.T) {
-	var serverInfo servers.Server
-	var addresses = make(map[string]interface{}, 1)
+func TestAddressesFromServer(t *testing.T) {
+	var addr1 = huaweicloudsdkecsmodel.ServerAddress{
+		Version:            "4",
+		Addr:               "192.168.1.122",
+		OSEXTIPStype:       huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FIXED,
+		OSEXTIPSMACmacAddr: "fa:16:3e:c3:85:c2",
+		OSEXTIPSportId:     "b0b37c62-2514-4fcd-9dee-47933a7fa668",
+	}
+	var addr2 = huaweicloudsdkecsmodel.ServerAddress{
+		Version:            "4",
+		Addr:               "159.138.131.176",
+		OSEXTIPStype:       huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FLOATING,
+		OSEXTIPSMACmacAddr: "fa:16:3e:c3:85:c2",
+		OSEXTIPSportId:     "b0b37c62-2514-4fcd-9dee-47933a7fa668",
+	}
 
-	addresses["cc24f1c9-9357-465a-bcc2-329d17001824"] = []Address{
-		{
-			Addr: "192.168.1.122",
-			Type: "fixed",
-		},
-		{
-			Addr: "159.138.131.176",
-			Type: "floating",
+	var server = &huaweicloudsdkecsmodel.ServerDetail{
+		Addresses: map[string][]huaweicloudsdkecsmodel.ServerAddress{
+			"cc24f1c9-9357-465a-bcc2-329d17001824": {addr1, addr2},
 		},
 	}
 
-	serverInfo.Addresses = addresses
-
 	instance := Instances{}
-	addrs, err := instance.parseNodeAddressFromServerInfo(&serverInfo)
+	addrs, err := instance.parseAddressesFromServer(server)
 	if err != nil {
 		t.Fatalf("parse node address failed with error: %v", err)
 	}
