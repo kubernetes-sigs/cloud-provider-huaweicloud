@@ -57,7 +57,9 @@ func TestAddressesFromServer(t *testing.T) {
 
 func TestParseInstanceTypeFromServerInfo(t *testing.T) {
 	var serverInfo huaweicloudsdkecsmodel.ServerDetail
-	serverInfo.Flavor.Id = "s3.xlarge.4"
+	serverInfo.Flavor = &huaweicloudsdkecsmodel.ServerFlavor{
+		Id: "s3.xlarge.4",
+	}
 
 	instance := Instances{}
 	instanceType, err := instance.parseInstanceTypeFromServerInfo(&serverInfo)
