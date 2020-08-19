@@ -18,12 +18,14 @@ package huaweicloud
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
 
 	huaweicloudsdkbasic "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	huaweicloudsdkconfig "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/config"
+	huaweicloudsdkerr "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/sdkerr"
 	huaweicloudsdkecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
 	huaweicloudsdkecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 
@@ -152,10 +154,13 @@ func (i *Instances) CurrentNodeName(ctx context.Context, hostname string) (types
 func (i *Instances) InstanceExistsByProviderID(ctx context.Context, providerID string) (bool, error) {
 	klog.Infof("InstanceExistsByProviderID is called. input provider ID: %s", providerID)
 
-	// TODO(RainbowMango): There is no convenient way to tell if an error due to server not exist or other kind of error.
-	// So, this method will never return (false, nil) for now.
 	_, err := i.getECSByProviderID(providerID)
 	if err != nil {
+		if i.isNonExistError(err) {
+			klog.Infof("Instance not exist. provider ID: %s", providerID)
+			return false, nil
+		}
+
 		klog.Errorf("Get server info failed. provider id: %s, error: %v", providerID, err)
 		return false, err
 	}
@@ -201,6 +206,55 @@ func (i *Instances) parseAddressesFromServer(server *huaweicloudsdkecsmodel.Serv
 	return nodeAddresses, nil
 }
 
+// isNonExistError tells if an error means server not exit, particularly in case of retrieve an server.
+// The error looks like as follows:
+// {
+//    "status_code": 404,
+//    "request_id": "1413f385f969310963ab30a32ac958d9",
+//    "error_code": "",
+//    "error_message": "{\"error\":{\"message\":\"Instance[a44af098-7548-4519-8243-a88ba3e5de4fnoexist] could not be found.\",\"code\":\"Ecs.0114\"}}"
+// }
+// If the error_message.error["code"] == "Ecs.0114", that means "could not be found".
+func (i *Instances) isNonExistError(originErr error) bool {
+	sre := huaweicloudsdkerr.ServiceResponseError{}
+
+	// parse error message to 'ServiceResponseError'
+	if err := json.Unmarshal([]byte(originErr.Error()), &sre); err != nil {
+		klog.Warningf("unmarshal error: %v", err)
+		return false
+	}
+
+	// parse sre.error_message which is a map[string]interface{}
+	errorMsg := make(map[string]interface{})
+	if err := json.Unmarshal([]byte(sre.ErrorMessage), &errorMsg); err != nil {
+		klog.Warningf("unmarshal error message failed: %v", err)
+		return false
+	}
+
+	// parse sre.error_message["error"]
+	errorMsgInner, ok := errorMsg["error"]
+	if !ok {
+		klog.Warningf("invalid error format: %v", errorMsg)
+		return false
+	}
+
+	// parse sre.error_message["error"] which is a map[string]interface{}
+	errorMsgInnerMap, ok := errorMsgInner.(map[string]interface{})
+	if !ok {
+		klog.Warningf("invalid error format: %v", errorMsgInner)
+		return false
+	}
+
+	// parse error code
+	errCode, ok := errorMsgInnerMap["code"]
+	if !ok {
+		klog.Warningf("invalid error format: %v", errorMsgInnerMap)
+		return false
+	}
+
+	return errCode == "Ecs.0114"
+}
+
 func (i *Instances) parseInstanceTypeFromServerInfo(server *huaweicloudsdkecsmodel.ServerDetail) (string, error) {
 	if server.Flavor == nil {
 		return "", fmt.Errorf("failed to parse instance type from server as flavor info missing, server ID: %s", server.Id)
@@ -229,7 +283,8 @@ func (i *Instances) getECSByProviderID(providerID string) (*huaweicloudsdkecsmod
 
 	rsp, err := client.ShowServer(options)
 	if err != nil || rsp == nil {
-		return nil, fmt.Errorf("failed to retrieve server by server ID: %s, error: %v", serverID, err)
+		klog.Warningf("failed to retrieve server by server ID: %s, error: %v", serverID, err)
+		return nil, err
 	}
 
 	return rsp.Server, nil
