@@ -22,9 +22,6 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/RainbowMango/huaweicloud-sdk-go"
-	"github.com/RainbowMango/huaweicloud-sdk-go/auth/aksk"
-	"github.com/RainbowMango/huaweicloud-sdk-go/openstack"
 	huaweicloudsdkbasic "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	huaweicloudsdkconfig "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/config"
 	huaweicloudsdkecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
@@ -54,8 +51,7 @@ var ErrMultipleResults = errors.New("multiple results where only one expected")
 
 // Instances encapsulates an implementation of Instances.
 type Instances struct {
-	GetServerClientFunc func() (*gophercloud.ServiceClient, error)
-	GetECSClientFunc    func() *huaweicloudsdkecs.EcsClient
+	GetECSClientFunc func() *huaweicloudsdkecs.EcsClient
 }
 
 // Check if our Instances implements necessary interface
@@ -270,40 +266,6 @@ func (i *Instances) getECSByName(name string) (*huaweicloudsdkecsmodel.ServerDet
 func (a *AuthOpts) getAKSKFromSecret() (accessKey string, secretKey string, secretToken string) {
 	// TODO(RainbowMango): Get AK/SK as well as secret token from kubernetes.secret.
 	return
-}
-
-func (a *AuthOpts) getServerClient() (*gophercloud.ServiceClient, error) {
-	accessKey := a.AccessKey
-	secretKey := a.SecretKey
-	secretToken := ""
-
-	if len(a.SecretName) > 0 {
-		accessKey, secretKey, secretToken = a.getAKSKFromSecret()
-	}
-	akskOpts := aksk.AKSKOptions{
-		IdentityEndpoint: a.IAMEndpoint,
-		ProjectID:        a.ProjectID,
-		DomainID:         a.DomainID,
-		Region:           a.Region,
-		Cloud:            a.Cloud,
-		AccessKey:        accessKey,
-		SecretKey:        secretKey,
-		SecurityToken:    secretToken,
-	}
-
-	providerClient, err := openstack.AuthenticatedClient(akskOpts)
-	if err != nil {
-		klog.Errorf("init provider client failed with error: %v", err)
-		return nil, err
-	}
-
-	serviceClient, err := openstack.NewComputeV2(providerClient, gophercloud.EndpointOpts{})
-	if err != nil {
-		klog.Errorf("init compute service client failed: %v", err)
-		return nil, err
-	}
-
-	return serviceClient, nil
 }
 
 // getECSClient initializes a ECS(Elastic Cloud Server) client which will be used to operate ECS.
