@@ -20,14 +20,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"regexp"
 	"strings"
 
 	"github.com/RainbowMango/huaweicloud-sdk-go"
 	"github.com/RainbowMango/huaweicloud-sdk-go/auth/aksk"
 	"github.com/RainbowMango/huaweicloud-sdk-go/openstack"
 	"github.com/RainbowMango/huaweicloud-sdk-go/openstack/compute/v2/servers"
-	"github.com/RainbowMango/huaweicloud-sdk-go/pagination"
 	huaweicloudsdkbasic "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
 	huaweicloudsdkconfig "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/config"
 	huaweicloudsdkecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
@@ -108,17 +106,16 @@ func (i *Instances) NodeAddressesByProviderID(ctx context.Context, providerID st
 // InstanceID returns the cloud provider ID of the node with the specified NodeName.
 // Note that if the instance does not exist, we must return ("", cloudprovider.InstanceNotFound)
 // cloudprovider.InstanceNotFound should NOT be returned for instances that exist but are stopped/sleeping
-//
-// Based on: https://github.com/kubernetes/cloud-provider-openstack/blob/2493d93/pkg/cloudprovider/providers/openstack/openstack_instances.go#L162
 func (i *Instances) InstanceID(ctx context.Context, nodeName types.NodeName) (string, error) {
-	srv, err := i.getServerByName(nodeName)
+	klog.Infof("InstanceID is called. input nodeName: %s", string(nodeName))
+
+	server, err := i.getECSByName(string(nodeName))
 	if err != nil {
-		if err == ErrNotFound {
-			return "", cloudprovider.InstanceNotFound
-		}
+		klog.Warningf("failed to get ECS by name: %s, error: %s", string(nodeName), err)
 		return "", err
 	}
-	return srv.ID, nil
+
+	return server.Id, nil
 }
 
 // InstanceType returns the type of the specified instance.
@@ -259,39 +256,32 @@ func (i *Instances) getECSByProviderID(providerID string) (*huaweicloudsdkecsmod
 	return rsp.Server, nil
 }
 
-func (i *Instances) getServerByName(name types.NodeName) (*servers.Server, error) {
-	opts := servers.ListOpts{
-		Name: fmt.Sprintf("^%s$", regexp.QuoteMeta(string(name))),
+func (i *Instances) getECSByName(name string) (*huaweicloudsdkecsmodel.ServerDetail, error) {
+	client := i.GetECSClientFunc()
+	if client == nil {
+		return nil, fmt.Errorf("create ECS client failed with name: %s", name)
 	}
 
-	serverClient, err := i.GetServerClientFunc()
-	if err != nil || serverClient == nil {
-		return nil, fmt.Errorf("create server client failed, error: %v", err)
+	options := &huaweicloudsdkecsmodel.ListServersDetailsRequest{
+		Name: name,
 	}
-	pager := servers.List(serverClient, opts)
-
-	var s []servers.Server
-	serverList := make([]servers.Server, 0, 1)
-
-	err = pager.EachPage(func(page pagination.Page) (bool, error) {
-		if err := servers.ExtractServersInto(page, &s); err != nil {
-			return false, err
-		}
-		serverList = append(serverList, s...)
-		if len(serverList) > 1 {
-			return false, ErrMultipleResults
-		}
-		return true, nil
-	})
+	rsp, err := client.ListServersDetails(options)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to retrieve server list by name: %s, error: %w", name, err)
 	}
 
-	if len(serverList) == 0 {
-		return nil, ErrNotFound
+	// If no server found, the count will be 0.
+	if rsp.Count == 0 {
+		klog.Warningf("no server found with name: %s", name)
+
+		return nil, cloudprovider.InstanceNotFound
 	}
 
-	return &serverList[0], nil
+	if rsp.Count > 1 {
+		return nil, fmt.Errorf("found more than one server with same name: %s, which is not allowed", name)
+	}
+
+	return &rsp.Servers[0], nil
 }
 
 func (a *AuthOpts) getAKSKFromSecret() (accessKey string, secretKey string, secretToken string) {
