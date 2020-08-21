@@ -9,6 +9,8 @@ package model
 
 import (
 	"encoding/json"
+	"errors"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/converter"
 	"strings"
 )
 
@@ -21,9 +23,9 @@ type ServerAddress struct {
 	// IP地址类型。  - fixed：代表私有IP地址。 - floating：代表浮动IP地址。
 	OSEXTIPStype ServerAddressOSEXTIPStype `json:"OS-EXT-IPS:type,omitempty"`
 	// MAC地址。
-	OSEXTIPSMACmacAddr string `json:"OS-EXT-IPS-MAC:mac_addr,omitempty"`
+	OSEXTIPSMACmacAddr *string `json:"OS-EXT-IPS-MAC:mac_addr,omitempty"`
 	// IP地址对应的端口ID。
-	OSEXTIPSportId string `json:"OS-EXT-IPS:port_id,omitempty"`
+	OSEXTIPSportId *string `json:"OS-EXT-IPS:port_id,omitempty"`
 }
 
 func (o ServerAddress) String() string {
@@ -56,6 +58,15 @@ func (c ServerAddressOSEXTIPStype) MarshalJSON() ([]byte, error) {
 }
 
 func (c *ServerAddressOSEXTIPStype) UnmarshalJSON(b []byte) error {
-	c.value = string(strings.Trim(string(b[:]), "\""))
-	return nil
+	myConverter := converter.StringConverterFactory("string")
+	if myConverter != nil {
+		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+		if err == nil {
+			c.value = val.(string)
+			return nil
+		}
+		return err
+	} else {
+		return errors.New("convert enum data to string error")
+	}
 }

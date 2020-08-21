@@ -9,18 +9,20 @@ package model
 
 import (
 	"encoding/json"
+	"errors"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/converter"
 	"strings"
 )
 
 // Request Object
 type ListResizeFlavorsRequest struct {
-	InstanceUuid     string                          `json:"instance_uuid,omitempty"`
-	Limit            int32                           `json:"limit,omitempty"`
-	Marker           string                          `json:"marker,omitempty"`
+	InstanceUuid     *string                         `json:"instance_uuid,omitempty"`
+	Limit            *int32                          `json:"limit,omitempty"`
+	Marker           *string                         `json:"marker,omitempty"`
 	SortDir          ListResizeFlavorsRequestSortDir `json:"sort_dir,omitempty"`
 	SortKey          ListResizeFlavorsRequestSortKey `json:"sort_key,omitempty"`
-	SourceFlavorId   string                          `json:"source_flavor_id,omitempty"`
-	SourceFlavorName string                          `json:"source_flavor_name,omitempty"`
+	SourceFlavorId   *string                         `json:"source_flavor_id,omitempty"`
+	SourceFlavorName *string                         `json:"source_flavor_name,omitempty"`
 }
 
 func (o ListResizeFlavorsRequest) String() string {
@@ -53,8 +55,17 @@ func (c ListResizeFlavorsRequestSortDir) MarshalJSON() ([]byte, error) {
 }
 
 func (c *ListResizeFlavorsRequestSortDir) UnmarshalJSON(b []byte) error {
-	c.value = string(strings.Trim(string(b[:]), "\""))
-	return nil
+	myConverter := converter.StringConverterFactory("string")
+	if myConverter != nil {
+		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+		if err == nil {
+			c.value = val.(string)
+			return nil
+		}
+		return err
+	} else {
+		return errors.New("convert enum data to string error")
+	}
 }
 
 type ListResizeFlavorsRequestSortKey struct {
@@ -98,6 +109,15 @@ func (c ListResizeFlavorsRequestSortKey) MarshalJSON() ([]byte, error) {
 }
 
 func (c *ListResizeFlavorsRequestSortKey) UnmarshalJSON(b []byte) error {
-	c.value = string(strings.Trim(string(b[:]), "\""))
-	return nil
+	myConverter := converter.StringConverterFactory("string")
+	if myConverter != nil {
+		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+		if err == nil {
+			c.value = val.(string)
+			return nil
+		}
+		return err
+	} else {
+		return errors.New("convert enum data to string error")
+	}
 }
