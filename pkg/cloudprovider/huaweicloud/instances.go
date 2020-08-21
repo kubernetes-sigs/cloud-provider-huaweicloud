@@ -297,7 +297,7 @@ func (i *Instances) getECSByName(name string) (*huaweicloudsdkecsmodel.ServerDet
 	}
 
 	options := &huaweicloudsdkecsmodel.ListServersDetailsRequest{
-		Name: name,
+		Name: &name,
 	}
 	rsp, err := client.ListServersDetails(options)
 	if err != nil {
@@ -305,13 +305,13 @@ func (i *Instances) getECSByName(name string) (*huaweicloudsdkecsmodel.ServerDet
 	}
 
 	// If no server found, the count will be 0.
-	if rsp.Count == 0 {
+	if rsp.Count == nil || *rsp.Count == 0 {
 		klog.Warningf("no server found with name: %s", name)
 
 		return nil, cloudprovider.InstanceNotFound
 	}
 
-	if rsp.Count > 1 {
+	if *rsp.Count > 1 {
 		return nil, fmt.Errorf("found more than one server with same name: %s, which is not allowed", name)
 	}
 
