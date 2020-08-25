@@ -9,12 +9,13 @@ package model
 
 import (
 	"encoding/json"
+
 	"strings"
 )
 
 // Request Object
 type ListFlavorsRequest struct {
-	AvailabilityZone string `json:"availability_zone,omitempty"`
+	AvailabilityZone *string `json:"availability_zone,omitempty"`
 }
 
 func (o ListFlavorsRequest) String() string {

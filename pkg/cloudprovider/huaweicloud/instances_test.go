@@ -17,6 +17,7 @@ limitations under the License.
 package huaweicloud
 
 import (
+	"fmt"
 	"testing"
 
 	huaweicloudsdkecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
@@ -24,18 +25,14 @@ import (
 
 func TestAddressesFromServer(t *testing.T) {
 	var addr1 = huaweicloudsdkecsmodel.ServerAddress{
-		Version:            "4",
-		Addr:               "192.168.1.122",
-		OSEXTIPStype:       huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FIXED,
-		OSEXTIPSMACmacAddr: "fa:16:3e:c3:85:c2",
-		OSEXTIPSportId:     "b0b37c62-2514-4fcd-9dee-47933a7fa668",
+		Version:      "4",
+		Addr:         "192.168.1.122",
+		OSEXTIPStype: huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FIXED,
 	}
 	var addr2 = huaweicloudsdkecsmodel.ServerAddress{
-		Version:            "4",
-		Addr:               "159.138.131.176",
-		OSEXTIPStype:       huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FLOATING,
-		OSEXTIPSMACmacAddr: "fa:16:3e:c3:85:c2",
-		OSEXTIPSportId:     "b0b37c62-2514-4fcd-9dee-47933a7fa668",
+		Version:      "4",
+		Addr:         "159.138.131.176",
+		OSEXTIPStype: huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FLOATING,
 	}
 
 	var server = &huaweicloudsdkecsmodel.ServerDetail{
@@ -69,5 +66,35 @@ func TestParseInstanceTypeFromServerInfo(t *testing.T) {
 
 	if instanceType != serverInfo.Flavor.Id {
 		t.Fatalf("expect instance type: %s, but got %s.", serverInfo.Flavor.Id, instanceType)
+	}
+}
+
+func TestIsNonExistError(t *testing.T) {
+	var tests = []struct {
+		name       string
+		error      error
+		isNonExist bool
+	}{
+		{
+			name:       "not a non exist error",
+			error:      fmt.Errorf("{\"status_code\":404,\"request_id\":\"0dca522c65f45fd2cc56d28986c05fee\",\"error_code\":\"non non-exist\",\"error_message\":\"Instance[a44af098-7548-4519-8243-a88ba3e5de4fnoexist] could not be found.\"}"),
+			isNonExist: false,
+		},
+		{
+			name:       "non-exist error",
+			error:      fmt.Errorf("{\"status_code\":404,\"request_id\":\"0dca522c65f45fd2cc56d28986c05fee\",\"error_code\":\"Ecs.0114\",\"error_message\":\"Instance[a44af098-7548-4519-8243-a88ba3e5de4fnoexist] could not be found.\"}"),
+			isNonExist: true,
+		},
+	}
+
+	instance := Instances{}
+
+	for _, test := range tests {
+		tc := test
+		t.Run(tc.name, func(t *testing.T) {
+			if instance.isNonExistError(tc.error) != tc.isNonExist {
+				t.Fatalf("expect isNonExist: %v, but got: %v", tc.isNonExist, instance.isNonExistError(tc.error))
+			}
+		})
 	}
 }

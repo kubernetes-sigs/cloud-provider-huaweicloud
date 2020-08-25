@@ -71,13 +71,14 @@ github.com/grpc-ecosystem/go-grpc-prometheus
 # github.com/hashicorp/golang-lru v0.5.1
 github.com/hashicorp/golang-lru
 github.com/hashicorp/golang-lru/simplelru
-# github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.3-beta
+# github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.6-beta
 github.com/huaweicloud/huaweicloud-sdk-go-v3/core
 github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth
 github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic
 github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/global
 github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/signer
 github.com/huaweicloud/huaweicloud-sdk-go-v3/core/config
+github.com/huaweicloud/huaweicloud-sdk-go-v3/core/converter
 github.com/huaweicloud/huaweicloud-sdk-go-v3/core/def
 github.com/huaweicloud/huaweicloud-sdk-go-v3/core/httphandler
 github.com/huaweicloud/huaweicloud-sdk-go-v3/core/impl

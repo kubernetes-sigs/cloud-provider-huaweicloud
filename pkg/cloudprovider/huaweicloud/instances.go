@@ -45,6 +45,13 @@ const (
 	providerPrefix = ProviderName + "://"
 )
 
+// Only define the ECS error code what we care about.
+// More error code please refer to: https://support.huaweicloud.com/en-us/api-ecs/ecs_07_0002.html
+const (
+	// ECSErrorNotExist means the ECS cannot be detected.
+	ECSErrorNotExist = "Ecs.0114"
+)
+
 // ErrNotFound is used to inform that the object is missing
 var ErrNotFound = errors.New("failed to find object")
 
@@ -210,11 +217,10 @@ func (i *Instances) parseAddressesFromServer(server *huaweicloudsdkecsmodel.Serv
 // The error looks like as follows:
 // {
 //    "status_code": 404,
-//    "request_id": "1413f385f969310963ab30a32ac958d9",
-//    "error_code": "",
-//    "error_message": "{\"error\":{\"message\":\"Instance[a44af098-7548-4519-8243-a88ba3e5de4fnoexist] could not be found.\",\"code\":\"Ecs.0114\"}}"
+//    "request_id": "bb0361f3e5893add5b6810eef1123b41",
+//    "error_code": "Ecs.0114",
+//    "error_message": "Instance[a44af098-7548-4519-8243-a88ba3e5de4fnoexist] could not be found."
 // }
-// If the error_message.error["code"] == "Ecs.0114", that means "could not be found".
 func (i *Instances) isNonExistError(originErr error) bool {
 	sre := huaweicloudsdkerr.ServiceResponseError{}
 
@@ -224,35 +230,11 @@ func (i *Instances) isNonExistError(originErr error) bool {
 		return false
 	}
 
-	// parse sre.error_message which is a map[string]interface{}
-	errorMsg := make(map[string]interface{})
-	if err := json.Unmarshal([]byte(sre.ErrorMessage), &errorMsg); err != nil {
-		klog.Warningf("unmarshal error message failed: %v", err)
-		return false
+	if sre.ErrorCode == ECSErrorNotExist {
+		return true
 	}
 
-	// parse sre.error_message["error"]
-	errorMsgInner, ok := errorMsg["error"]
-	if !ok {
-		klog.Warningf("invalid error format: %v", errorMsg)
-		return false
-	}
-
-	// parse sre.error_message["error"] which is a map[string]interface{}
-	errorMsgInnerMap, ok := errorMsgInner.(map[string]interface{})
-	if !ok {
-		klog.Warningf("invalid error format: %v", errorMsgInner)
-		return false
-	}
-
-	// parse error code
-	errCode, ok := errorMsgInnerMap["code"]
-	if !ok {
-		klog.Warningf("invalid error format: %v", errorMsgInnerMap)
-		return false
-	}
-
-	return errCode == "Ecs.0114"
+	return false
 }
 
 func (i *Instances) parseInstanceTypeFromServerInfo(server *huaweicloudsdkecsmodel.ServerDetail) (string, error) {
@@ -297,7 +279,7 @@ func (i *Instances) getECSByName(name string) (*huaweicloudsdkecsmodel.ServerDet
 	}
 
 	options := &huaweicloudsdkecsmodel.ListServersDetailsRequest{
-		Name: name,
+		Name: &name,
 	}
 	rsp, err := client.ListServersDetails(options)
 	if err != nil {
@@ -305,13 +287,13 @@ func (i *Instances) getECSByName(name string) (*huaweicloudsdkecsmodel.ServerDet
 	}
 
 	// If no server found, the count will be 0.
-	if rsp.Count == 0 {
+	if rsp.Count == nil || *rsp.Count == 0 {
 		klog.Warningf("no server found with name: %s", name)
 
 		return nil, cloudprovider.InstanceNotFound
 	}
 
-	if rsp.Count > 1 {
+	if *rsp.Count > 1 {
 		return nil, fmt.Errorf("found more than one server with same name: %s, which is not allowed", name)
 	}
 

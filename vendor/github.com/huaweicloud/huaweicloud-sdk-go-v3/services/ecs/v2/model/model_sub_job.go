@@ -9,6 +9,8 @@ package model
 
 import (
 	"encoding/json"
+	"errors"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/converter"
 	"strings"
 )
 
@@ -18,17 +20,17 @@ type SubJob struct {
 	Status   SubJobStatus    `json:"status,omitempty"`
 	Entities *SubJobEntities `json:"entities,omitempty"`
 	// 子任务的ID。
-	JobId string `json:"job_id,omitempty"`
+	JobId *string `json:"job_id,omitempty"`
 	// 子任务的类型。
-	JobType string `json:"job_type,omitempty"`
+	JobType *string `json:"job_type,omitempty"`
 	// 开始时间。
-	BeginTime string `json:"begin_time,omitempty"`
+	BeginTime *string `json:"begin_time,omitempty"`
 	// 结束时间。
-	EndTime string `json:"end_time,omitempty"`
+	EndTime *string `json:"end_time,omitempty"`
 	// Job执行失败时的错误码。  Job执行成功后，该值为null。
-	ErrorCode string `json:"error_code,omitempty"`
+	ErrorCode *string `json:"error_code,omitempty"`
 	// Job执行失败时的错误原因。  Job执行成功后，该值为null。
-	FailReason string `json:"fail_reason,omitempty"`
+	FailReason *string `json:"fail_reason,omitempty"`
 }
 
 func (o SubJob) String() string {
@@ -69,6 +71,15 @@ func (c SubJobStatus) MarshalJSON() ([]byte, error) {
 }
 
 func (c *SubJobStatus) UnmarshalJSON(b []byte) error {
-	c.value = string(strings.Trim(string(b[:]), "\""))
-	return nil
+	myConverter := converter.StringConverterFactory("string")
+	if myConverter != nil {
+		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+		if err == nil {
+			c.value = val.(string)
+			return nil
+		}
+		return err
+	} else {
+		return errors.New("convert enum data to string error")
+	}
 }
