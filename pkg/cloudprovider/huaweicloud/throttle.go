@@ -262,7 +262,7 @@ func (t *Throttler) syncThrottleFromConfig() {
 
 	fi, err := os.Stat(conf)
 	if err != nil && os.IsNotExist(err) {
-		klog.Warning("Throttle config file is not exist.")
+		klog.V(2).Info("Throttle config file is not exist.")
 		return
 	}
 
