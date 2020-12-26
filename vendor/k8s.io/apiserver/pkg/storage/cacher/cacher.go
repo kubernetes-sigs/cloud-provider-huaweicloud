@@ -100,6 +100,10 @@ type Config struct {
 	// needs to process an incoming event.
 	IndexerFuncs storage.IndexerFuncs
 
+	// Indexers is used to accelerate the list operation, falls back to regular list
+	// operation if no indexer found.
+	Indexers *cache.Indexers
+
 	// NewFunc is a function that creates new empty object storing a object of type Type.
 	NewFunc func() runtime.Object
 
@@ -172,8 +176,10 @@ func (i *indexedWatchers) terminateAll(objectType reflect.Type, done func(*cache
 // second in a bucket, and pop up them once at the timeout. To be more specific,
 // if you set fire time at X, you can get the bookmark within (X-1,X+1) period.
 type watcherBookmarkTimeBuckets struct {
-	lock            sync.Mutex
+	lock sync.Mutex
+	// the key of watcherBuckets is the number of seconds since createTime
 	watchersBuckets map[int64][]*cacheWatcher
+	createTime      time.Time
 	startBucketID   int64
 	clock           clock.Clock
 }
@@ -181,7 +187,8 @@ type watcherBookmarkTimeBuckets struct {
 func newTimeBucketWatchers(clock clock.Clock) *watcherBookmarkTimeBuckets {
 	return &watcherBookmarkTimeBuckets{
 		watchersBuckets: make(map[int64][]*cacheWatcher),
-		startBucketID:   clock.Now().Unix(),
+		createTime:      clock.Now(),
+		startBucketID:   0,
 		clock:           clock,
 	}
 }
@@ -193,7 +200,7 @@ func (t *watcherBookmarkTimeBuckets) addWatcher(w *cacheWatcher) bool {
 	if !ok {
 		return false
 	}
-	bucketID := nextTime.Unix()
+	bucketID := int64(nextTime.Sub(t.createTime) / time.Second)
 	t.lock.Lock()
 	defer t.lock.Unlock()
 	if bucketID < t.startBucketID {
@@ -205,7 +212,7 @@ func (t *watcherBookmarkTimeBuckets) addWatcher(w *cacheWatcher) bool {
 }
 
 func (t *watcherBookmarkTimeBuckets) popExpiredWatchers() [][]*cacheWatcher {
-	currentBucketID := t.clock.Now().Unix()
+	currentBucketID := int64(t.clock.Since(t.createTime) / time.Second)
 	// There should be one or two elements in almost all cases
 	expiredWatchers := make([][]*cacheWatcher, 0, 2)
 	t.lock.Lock()
@@ -367,7 +374,7 @@ func NewCacherFromConfig(config Config) (*Cacher, error) {
 	}
 
 	watchCache := newWatchCache(
-		config.CacheCapacity, config.KeyFunc, cacher.processEvent, config.GetAttrsFunc, config.Versioner)
+		config.CacheCapacity, config.KeyFunc, cacher.processEvent, config.GetAttrsFunc, config.Versioner, config.Indexers)
 	listerWatcher := NewCacherListerWatcher(config.Storage, config.ResourcePrefix, config.NewListFunc)
 	reflectorName := "storage/cacher.go:" + config.ResourcePrefix
 
@@ -701,7 +708,7 @@ func (c *Cacher) List(ctx context.Context, key string, resourceVersion string, p
 	}
 	filter := filterWithAttrsFunction(key, pred)
 
-	objs, readResourceVersion, err := c.watchCache.WaitUntilFreshAndList(listRV, trace)
+	objs, readResourceVersion, err := c.watchCache.WaitUntilFreshAndList(listRV, pred.MatcherIndex(), trace)
 	if err != nil {
 		return err
 	}
