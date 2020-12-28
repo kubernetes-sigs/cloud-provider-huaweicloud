@@ -60,7 +60,7 @@ func (elb *ELBCloud) getSecret(namespace, secretName string) (*Secret, error) {
 	if ok {
 		kubeSecret = obj.(*v1.Secret)
 	} else {
-		secret, err := elb.kubeClient.Secrets(namespace).Get(secretName, metav1.GetOptions{})
+		secret, err := elb.kubeClient.Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -239,7 +239,7 @@ func (elb *ELBCloud) ensureCreateListener(
 }
 
 func (elb *ELBCloud) getPods(name, namespace string) (*v1.PodList, error) {
-	service, err := elb.kubeClient.Services(namespace).Get(name, metav1.GetOptions{})
+	service, err := elb.kubeClient.Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -252,7 +252,7 @@ func (elb *ELBCloud) getPods(name, namespace string) (*v1.PodList, error) {
 	set = service.Spec.Selector
 	labelSelector := set.AsSelector()
 	opts := metav1.ListOptions{LabelSelector: labelSelector.String()}
-	return elb.kubeClient.Pods(namespace).List(opts)
+	return elb.kubeClient.Pods(namespace).List(context.TODO(), opts)
 }
 
 // Not implemented
@@ -586,7 +586,7 @@ func (elb *ELBCloud) generateMembers(service *v1.Service) ([]*Member, error) {
 			continue
 		}
 
-		node, err := elb.kubeClient.Nodes().Get(item.Spec.NodeName, metav1.GetOptions{})
+		node, err := elb.kubeClient.Nodes().Get(context.TODO(), item.Spec.NodeName, metav1.GetOptions{})
 		if err != nil {
 			klog.Warningf("Get node(%s) error: %v", item.Spec.NodeName, err)
 			continue

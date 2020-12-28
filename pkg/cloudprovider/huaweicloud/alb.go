@@ -499,7 +499,7 @@ func (alb *ALBCloud) getSecret(namespace, secretName string) (*Secret, error) {
 	if ok {
 		kubeSecret = obj.(*v1.Secret)
 	} else {
-		secret, err := alb.kubeClient.Secrets(namespace).Get(secretName, metav1.GetOptions{})
+		secret, err := alb.kubeClient.Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -526,7 +526,7 @@ func (alb *ALBCloud) getSecret(namespace, secretName string) (*Secret, error) {
 }
 
 func (alb *ALBCloud) getPods(name, namespace string) (*v1.PodList, error) {
-	service, err := alb.kubeClient.Services(namespace).Get(name, metav1.GetOptions{})
+	service, err := alb.kubeClient.Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -539,7 +539,7 @@ func (alb *ALBCloud) getPods(name, namespace string) (*v1.PodList, error) {
 	set = service.Spec.Selector
 	labelSelector := set.AsSelector()
 	opts := metav1.ListOptions{LabelSelector: labelSelector.String()}
-	return alb.kubeClient.Pods(namespace).List(opts)
+	return alb.kubeClient.Pods(namespace).List(context.TODO(), opts)
 }
 
 func (alb *ALBCloud) ensureCreateLoadbalancer(albProvider *ALBClient, elbAC ElbAutoCreate, service *v1.Service) (*ALB, error) {
@@ -1513,7 +1513,7 @@ func (alb *ALBCloud) updateService(service *v1.Service) (*v1.Service, error) {
 	serviceCopy := service.DeepCopy()
 	for i := 0; i < MaxRetry; i++ {
 		toUpdate := service.DeepCopy()
-		toUpdate, err = alb.kubeClient.Services(toUpdate.Namespace).Update(toUpdate)
+		toUpdate, err = alb.kubeClient.Services(toUpdate.Namespace).Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
 		if err == nil {
 			return toUpdate, nil
 		}
@@ -1525,7 +1525,7 @@ func (alb *ALBCloud) updateService(service *v1.Service) (*v1.Service, error) {
 		}
 
 		if apierrors.IsConflict(err) {
-			service, err = alb.kubeClient.Services(service.Namespace).Get(service.Name, metav1.GetOptions{})
+			service, err = alb.kubeClient.Services(service.Namespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
 			if err != nil {
 				service = serviceCopy
 				klog.Warningf("Get service(%s/%s) error: %v", service.Namespace, service.Name, err)

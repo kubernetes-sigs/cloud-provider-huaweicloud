@@ -196,7 +196,7 @@ func (nat *NATCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 	}
 
 	//get service with loadbalancer type and loadbalancer ip
-	lbServers, err := nat.kubeClient.Services("").List(metav1.ListOptions{})
+	lbServers, err := nat.kubeClient.Services("").List(context.TODO(), metav1.ListOptions{})
 	var lbPorts []v1.ServicePort
 	for _, svc := range lbServers.Items {
 		lbType := svc.Annotations[ELBClassAnnotation]
@@ -362,7 +362,7 @@ func (nat *NATCloud) UpdateLoadBalancer(ctx context.Context, clusterName string,
 				errs = append(errs, fmt.Errorf("The port has no ipAddress binded "))
 				continue
 			}
-			node, err := nat.kubeClient.Nodes().Get(networkPort.FixedIps[0].IpAddress, metav1.GetOptions{})
+			node, err := nat.kubeClient.Nodes().Get(context.TODO(), networkPort.FixedIps[0].IpAddress, metav1.GetOptions{})
 			if err != nil {
 				klog.Errorf("Get node(%s) error: %v", networkPort.FixedIps[0].IpAddress, err)
 				continue
@@ -475,7 +475,7 @@ func (nat *NATCloud) getSecret(namespace, secretName string) (*Secret, error) {
 	if ok {
 		kubeSecret = obj.(*v1.Secret)
 	} else {
-		secret, err := nat.kubeClient.Secrets(namespace).Get(secretName, metav1.GetOptions{})
+		secret, err := nat.kubeClient.Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -502,7 +502,7 @@ func (nat *NATCloud) getSecret(namespace, secretName string) (*Secret, error) {
 }
 
 func (nat *NATCloud) getPods(name, namespace string) (*v1.PodList, error) {
-	service, err := nat.kubeClient.Services(namespace).Get(name, metav1.GetOptions{})
+	service, err := nat.kubeClient.Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -515,7 +515,7 @@ func (nat *NATCloud) getPods(name, namespace string) (*v1.PodList, error) {
 	set = service.Spec.Selector
 	labelSelector := set.AsSelector()
 	opts := metav1.ListOptions{LabelSelector: labelSelector.String()}
-	return nat.kubeClient.Pods(namespace).List(opts)
+	return nat.kubeClient.Pods(namespace).List(context.TODO(), opts)
 }
 
 func genDNATRuleDescription() string {
