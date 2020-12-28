@@ -619,7 +619,7 @@ func (h *HWSCloud) GetZoneByNodeName(ctx context.Context, nodeName types.NodeNam
 }
 
 // HasClusterID returns true if the cluster has a clusterID
-func (hws *HWSCloud) HasClusterID() bool {
+func (h *HWSCloud) HasClusterID() bool {
 	return true
 }
 
@@ -660,6 +660,12 @@ func (h *HWSCloud) Routes() (cloudprovider.Routes, bool) {
 // ProviderName returns the cloud provider ID.
 func (h *HWSCloud) ProviderName() string {
 	return ProviderName
+}
+
+// InstancesV2 is an implementation for instances and should only be implemented by external cloud providers.
+// Don't support this feature for now.
+func (h *HWSCloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
+	return nil, false
 }
 
 // Session Affinity Type string
