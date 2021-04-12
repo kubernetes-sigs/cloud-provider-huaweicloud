@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// nolint:golint // stop check lint issues as this file will be refactored
 package huaweicloud
 
 import (
@@ -305,12 +306,8 @@ const ELBNameFmt string = "[a-zA-Z\\_][a-zA-Z0-9\\_\\-]{0,63}"
 // description: 0-128
 const ELBDescFmt string = "[a-zA-Z0-9\\_\\-]{0,128}"
 
-// uri: 1-80
-const ELBURIFmt string = "[\\/][a-zA-Z0-9\\-\\/\\.%\\?#&]{0,79}"
-
 var elbNameFmtRegexp = regexp.MustCompile("^" + ELBNameFmt + "$")
 var elnDescFmtRegexp = regexp.MustCompile("^" + ELBDescFmt + "$")
-var elbURIFmtRegexp = regexp.MustCompile("^" + ELBURIFmt + "$")
 
 func IsValidName(name string) bool {
 	return elbNameFmtRegexp.MatchString(name)
@@ -320,50 +317,14 @@ func IsValidDesc(desc string) bool {
 	return elnDescFmtRegexp.MatchString(desc)
 }
 
-func IsValidURI(uri string) bool {
-	return elbURIFmtRegexp.MatchString(uri)
-}
-
 // ELB bandwidth: 1-300
 func IsValidBandwidth(bandwidth int) bool {
 	return 1 <= bandwidth && bandwidth <= 300
 }
 
-// ELB port: 1-65535
-func IsValidPortNum(port int) bool {
-	return 1 <= port && port <= 65535
-}
-
-// ELB health check port: 1-65535 || -520
-func IsValidHealthCheckConnectPort(port int) bool {
-	if (1 <= port && port <= 65535) || port == -520 {
-		return true
-	}
-	return false
-}
-
-// ELB healthy threshold: 1-10
-func IsValidHealthyThreshold(threshold int) bool {
-	return 1 <= threshold && threshold <= 10
-}
-
-func IsValidUnhealthyThreshold(threshold int) bool {
-	return IsValidHealthyThreshold(threshold)
-}
-
-// ELB health check timeout: 1-50(s)
-func IsValidHealthCheckTimeout(timeout int) bool {
-	return 1 <= timeout && timeout <= 50
-}
-
-// ELB health check interval: 1-50(s)
-func IsValidHealthCheckInterval(interval int) bool {
-	return IsValidHealthCheckTimeout(interval)
-}
-
-func (e *ELBClient) waitJobEnd(jobId string) (*AsyncJobResp, error) {
+func (e *ELBClient) waitJobEnd(jobID string) (*AsyncJobResp, error) {
 	for i := 0; i < tryJobStatusTimes; i++ {
-		job, err := e.GetJobStatus(jobId)
+		job, err := e.GetJobStatus(jobID)
 		if err != nil {
 			return nil, err
 		}
@@ -372,21 +333,21 @@ func (e *ELBClient) waitJobEnd(jobId string) (*AsyncJobResp, error) {
 		case ELBJobStatusSuccess:
 			return job, nil
 		case ELBJobStatusFail:
-			return nil, fmt.Errorf("job status is failed. id: %s, reason: %s", jobId, job.FailReason)
+			return nil, fmt.Errorf("job status is failed. id: %s, reason: %s", jobID, job.FailReason)
 		default:
 			time.Sleep(time.Second * 3)
 			continue
 		}
 	}
 
-	return nil, fmt.Errorf("start job time out id: %s", jobId)
+	return nil, fmt.Errorf("start job time out id: %s", jobID)
 }
 
-func (e *ELBClient) WaitJobComplete(jobId string) error {
+func (e *ELBClient) WaitJobComplete(jobID string) error {
 	err := wait.Poll(time.Second*2, time.Minute*5, func() (bool, error) {
-		job, err := e.GetJobStatus(jobId)
+		job, err := e.GetJobStatus(jobID)
 		if err != nil {
-			klog.Errorf("Get job(%s) status error: %v", jobId, err)
+			klog.Errorf("Get job(%s) status error: %v", jobID, err)
 			return false, nil
 		}
 
@@ -394,7 +355,7 @@ func (e *ELBClient) WaitJobComplete(jobId string) error {
 		case ELBJobStatusSuccess:
 			return true, nil
 		case ELBJobStatusFail:
-			return false, fmt.Errorf("job status is failed. id: %s, reason: %s", jobId, job.FailReason)
+			return false, fmt.Errorf("job status is failed. id: %s, reason: %s", jobID, job.FailReason)
 		default:
 			klog.Infof("Job is handling...")
 			return false, nil
@@ -432,8 +393,8 @@ func (e *ELBClient) WaitMemberComplete(listenerID string, newMembers []*Member) 
 	return err
 }
 
-func (e *ELBClient) GetJobStatus(jobId string) (*AsyncJobResp, error) {
-	url := "/v1.0/" + e.elbClient.TenantId + "/jobs/" + jobId
+func (e *ELBClient) GetJobStatus(jobID string) (*AsyncJobResp, error) {
+	url := "/v1.0/" + e.elbClient.TenantId + "/jobs/" + jobID
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
 	resp, err := DoRequest(e.elbClient, nil, req)
@@ -444,7 +405,7 @@ func (e *ELBClient) GetJobStatus(jobId string) (*AsyncJobResp, error) {
 	var job AsyncJobResp
 	err = DecodeBody(resp, &job)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to getAsyncJobStatus : %v", err)
+		return nil, fmt.Errorf("failed to getAsyncJobStatus : %v", err)
 	}
 
 	return &job, nil
@@ -474,7 +435,7 @@ func (e *ELBClient) CreateLoadBalancer(elbConf *ELB) (string, error) {
 		!IsValidName(elbConf.Name) ||
 		!IsValidDesc(elbConf.Description) ||
 		(elbConf.Type != ELBTypeInternal && elbConf.Type != ELBTypeExternal) {
-		return "", fmt.Errorf("Invalid param.")
+		return "", fmt.Errorf("invalid param")
 	}
 
 	quota, err := e.Quota()
@@ -487,15 +448,15 @@ func (e *ELBClient) CreateLoadBalancer(elbConf *ELB) (string, error) {
 		if resource.Type == QuotaTypeElb {
 			bMatched = true
 			if resource.Used >= resource.Quota {
-				return "", fmt.Errorf("The elb quota is not enough.")
-			} else {
-				break
+				return "", fmt.Errorf("the elb quota is not enough")
 			}
+
+			break
 		}
 	}
 
 	if !bMatched {
-		return "", fmt.Errorf("The quota of elb type can not be found.")
+		return "", fmt.Errorf("the quota of elb type can not be found")
 	}
 
 	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/loadbalancers"
@@ -519,9 +480,9 @@ func (e *ELBClient) CreateLoadBalancer(elbConf *ELB) (string, error) {
 	return asyJob.Entities.Elb.LoadbalancerId, nil
 }
 
-//delete an ELB by loadbalancer Id
-func (e *ELBClient) DeleteLoadBalancer(loadbalancerId string) error {
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/loadbalancers/" + loadbalancerId
+// DeleteLoadBalancer deletes loadbalancer by ID.
+func (e *ELBClient) DeleteLoadBalancer(loadbalancerID string) error {
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/loadbalancers/" + loadbalancerID
 
 	req := NewRequest(http.MethodDelete, url, nil, nil)
 
@@ -544,9 +505,9 @@ func (e *ELBClient) DeleteLoadBalancer(loadbalancerId string) error {
 	return nil
 }
 
-//Get an ELB detail by loadbalancer Id
-func (e *ELBClient) GetLoadBalancer(loadbalancerId string) (*ElbDetail, error) {
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/loadbalancers/" + loadbalancerId
+// GetLoadBalancer gets an ELB instance by ID.
+func (e *ELBClient) GetLoadBalancer(loadbalancerID string) (*ElbDetail, error) {
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/loadbalancers/" + loadbalancerID
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
 	resp, err := DoRequest(e.elbClient, nil, req)
@@ -563,7 +524,7 @@ func (e *ELBClient) GetLoadBalancer(loadbalancerId string) (*ElbDetail, error) {
 	return &elbDetail, nil
 }
 
-//Get an ELB list by loadbalancer Id
+// ListLoadBalancers list ELBs.
 func (e *ELBClient) ListLoadBalancers(params map[string]string) (*ElbList, error) {
 	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/loadbalancers"
 	var query string
@@ -646,8 +607,8 @@ func (e *ELBClient) CreateListener(listenerConf *Listener) (*ListenerRsp, *Error
 	return &listener, nil, nil
 }
 
-func (e *ELBClient) DeleteListener(listenerId string) error {
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerId
+func (e *ELBClient) DeleteListener(listenerID string) error {
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerID
 
 	req := NewRequest(http.MethodDelete, url, nil, nil)
 
@@ -665,8 +626,8 @@ func (e *ELBClient) DeleteListener(listenerId string) error {
 	return nil
 }
 
-func (e *ELBClient) GetListener(listenerId string) (*ListenerDetail, error) {
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerId
+func (e *ELBClient) GetListener(listenerID string) (*ListenerDetail, error) {
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerID
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
 	resp, err := DoRequest(e.elbClient, nil, req)
@@ -683,10 +644,10 @@ func (e *ELBClient) GetListener(listenerId string) (*ListenerDetail, error) {
 	return &listener, nil
 }
 
-func (e *ELBClient) ListListeners(loadbalancerId string) ([]*ListenerDetail, error) {
+func (e *ELBClient) ListListeners(loadbalancerID string) ([]*ListenerDetail, error) {
 	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners"
-	if len(loadbalancerId) != 0 {
-		url = url + "?loadbalancer_id=" + loadbalancerId
+	if len(loadbalancerID) != 0 {
+		url = url + "?loadbalancer_id=" + loadbalancerID
 	}
 
 	req := NewRequest(http.MethodGet, url, nil, nil)
@@ -705,8 +666,8 @@ func (e *ELBClient) ListListeners(loadbalancerId string) ([]*ListenerDetail, err
 	return listenerList, nil
 }
 
-func (e *ELBClient) UpdateListener(listener *Listener, listenerId string) (*ListenerDetail, error) {
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerId
+func (e *ELBClient) UpdateListener(listener *Listener, listenerID string) (*ListenerDetail, error) {
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerID
 	req := NewRequest(http.MethodPut, url, nil, listener)
 
 	resp, err := DoRequest(e.elbClient, nil, req)
@@ -742,8 +703,9 @@ func (e *ELBClient) CreateHealthCheck(healthConf *HealthCheck) (*HealthCheckRsp,
 	return &healthCheck, nil
 }
 
-func (e *ELBClient) DeleteHealthCheck(healthcheckId string) error {
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/healthcheck/" + healthcheckId
+// DeleteHealthCheck deletes a health check.
+func (e *ELBClient) DeleteHealthCheck(healthcheckID string) error {
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/healthcheck/" + healthcheckID
 
 	req := NewRequest(http.MethodDelete, url, nil, nil)
 	resp, err := DoRequest(e.elbClient, nil, req)
@@ -761,8 +723,9 @@ func (e *ELBClient) DeleteHealthCheck(healthcheckId string) error {
 	return nil
 }
 
-func (e *ELBClient) GetHealthCheck(healthcheckId string) (*HealthCheckDetail, *ErrorRsp, error) {
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/healthcheck/" + healthcheckId
+// GetHealthCheck gets health check details info.
+func (e *ELBClient) GetHealthCheck(healthcheckID string) (*HealthCheckDetail, *ErrorRsp, error) {
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/healthcheck/" + healthcheckID
 
 	req := NewRequest(http.MethodGet, url, nil, nil)
 	resp, err := DoRequest(e.elbClient, nil, req)
@@ -791,8 +754,8 @@ func (e *ELBClient) GetHealthCheck(healthcheckId string) (*HealthCheckDetail, *E
 	return &healthCheck, nil, nil
 }
 
-func (e *ELBClient) UpdateHealthCheck(healthConf *HealthCheck, healthcheckId string) (*HealthCheckRsp, error) {
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/healthcheck/" + healthcheckId
+func (e *ELBClient) UpdateHealthCheck(healthConf *HealthCheck, healthcheckID string) (*HealthCheckRsp, error) {
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/healthcheck/" + healthcheckID
 
 	req := NewRequest(http.MethodPut, url, nil, healthConf)
 
@@ -810,8 +773,8 @@ func (e *ELBClient) UpdateHealthCheck(healthConf *HealthCheck, healthcheckId str
 	return &healthCheck, nil
 }
 
-func (e *ELBClient) RegisterInstancesWithListener(listenerId string, memberConf []*Member) (*AsyncJobResp, error) {
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerId + "/members"
+func (e *ELBClient) RegisterInstancesWithListener(listenerID string, memberConf []*Member) (*AsyncJobResp, error) {
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerID + "/members"
 
 	req := NewRequest(http.MethodPost, url, nil, memberConf)
 
@@ -834,8 +797,8 @@ func (e *ELBClient) RegisterInstancesWithListener(listenerId string, memberConf 
 	return asyJobRsp, nil
 }
 
-func (e *ELBClient) ListMembers(listenerId string) ([]*MemDetail, error) {
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerId + "/members"
+func (e *ELBClient) ListMembers(listenerID string) ([]*MemDetail, error) {
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerID + "/members"
 
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
@@ -865,8 +828,8 @@ func (e *ELBClient) ListMembers(listenerId string) ([]*MemDetail, error) {
 }
 
 // members as type *MembersDel
-func (e *ELBClient) DeleteMembers(listenerId string) error {
-	members, err := e.ListMembers(listenerId)
+func (e *ELBClient) DeleteMembers(listenerID string) error {
+	members, err := e.ListMembers(listenerID)
 	if err != nil {
 		return err
 	}
@@ -881,7 +844,7 @@ func (e *ELBClient) DeleteMembers(listenerId string) error {
 		return nil
 	}
 
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerId + "/members/action"
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerID + "/members/action"
 
 	req := NewRequest(http.MethodPost, url, nil, memDel)
 	resp, err := DoRequest(e.elbClient, nil, req)
@@ -904,8 +867,8 @@ func (e *ELBClient) DeleteMembers(listenerId string) error {
 }
 
 // members as type *MembersDel
-func (e *ELBClient) DeregisterInstancesFromListener(listenerId string, memDel *MembersDel) error {
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerId + "/members/action"
+func (e *ELBClient) DeregisterInstancesFromListener(listenerID string, memDel *MembersDel) error {
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerID + "/members/action"
 	req := NewRequest(http.MethodPost, url, nil, memDel)
 	resp, err := DoRequest(e.elbClient, nil, req)
 	if err != nil {
@@ -944,8 +907,8 @@ func (e *ELBClient) ListMachines() (*EcsServers, error) {
 	return &servers, nil
 }
 
-func (e *ELBClient) AsyncCreateMembers(listenerId string, memberConf []*Member) (*JobResp, error) {
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerId + "/members"
+func (e *ELBClient) AsyncCreateMembers(listenerID string, memberConf []*Member) (*JobResp, error) {
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerID + "/members"
 
 	req := NewRequest(http.MethodPost, url, nil, memberConf)
 
@@ -963,9 +926,9 @@ func (e *ELBClient) AsyncCreateMembers(listenerId string, memberConf []*Member) 
 	return &job, nil
 }
 
-// members as type *MembersDel
-func (e *ELBClient) AsyncDeleteMembers(listenerId string, memDel *MembersDel) (*JobResp, error) {
-	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerId + "/members/action"
+// AsyncDeleteMembers deletes members as type *MembersDel.
+func (e *ELBClient) AsyncDeleteMembers(listenerID string, memDel *MembersDel) (*JobResp, error) {
+	url := "/v1.0/" + e.elbClient.TenantId + "/elbaas/listeners/" + listenerID + "/members/action"
 	req := NewRequest(http.MethodPost, url, nil, memDel)
 	resp, err := DoRequest(e.elbClient, nil, req)
 	if err != nil {

@@ -68,6 +68,7 @@ type AuthOpts struct {
 	Cloud string `json:"Cloud"`
 }
 
+// ReadConf reads and parse configuration.
 func ReadConf(config io.Reader) (*CloudConfig, error) {
 	configBytes, err := ioutil.ReadAll(config)
 	if err != nil {
@@ -86,6 +87,8 @@ func ReadConf(config io.Reader) (*CloudConfig, error) {
 	return &cfg, nil
 }
 
+// LogConf logs configuration.
+// Note: sensitive information should not be logged.
 func LogConf(cfg *CloudConfig) {
 	klog.Infof("Log conf, Auth.IAMEndpoint: %s", cfg.Auth.IAMEndpoint)
 	klog.Infof("Log conf, LoadBalancer.SecretName: %s", cfg.LoadBalancer.SecretName)

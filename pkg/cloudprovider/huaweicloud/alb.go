@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// nolint:golint // stop check lint issues as this file will be refactored
 package huaweicloud
 
 import (
@@ -39,11 +40,11 @@ import (
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 )
 
+// ALBCloud implements shared load balancers
 type ALBCloud struct {
 	config        *LBConfig
 	kubeClient    corev1.CoreV1Interface
 	lrucache      *lru.Cache
-	secret        *Secret
 	eventRecorder record.EventRecorder
 	subnetMap     map[string]string
 	subnetMapLock sync.RWMutex
@@ -54,16 +55,7 @@ type tempALBServicePort struct {
 	listener    ALBListener
 }
 
-/*
- *    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
- *    ALB implement of functions in cloud.go, including
- *               GetLoadBalancer()
- *               GetLoadBalancerName()
- *               EnsureLoadBalancer()
- *               UpdateLoadBalancer()
- *               EnsureLoadBalancerDeleted()
- *    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
- */
+// GetLoadBalancer get a loadbalancer for a service.
 func (alb *ALBCloud) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
 	status = &v1.LoadBalancerStatus{}
 	albProvider, err := alb.getALBClient(service.Namespace)
@@ -148,11 +140,9 @@ func (alb *ALBCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 
 	var errs []error
 	for i := 3; i > 0; i-- {
-		select {
-		case err := <-ch:
-			if err != nil {
-				errs = append(errs, err)
-			}
+		err := <-ch
+		if err != nil {
+			errs = append(errs, err)
 		}
 	}
 
@@ -288,11 +278,7 @@ func (alb *ALBCloud) UpdateLoadBalancer(ctx context.Context, clusterName string,
 		}
 		preMembers := make(map[string][]ALBMember)
 		for _, member := range preListMembers.Members {
-			if _, ok := preMembers[member.Address]; ok {
-				preMembers[member.Address] = append(preMembers[member.Address], member)
-			} else {
-				preMembers[member.Address] = []ALBMember{member}
-			}
+			preMembers[member.Address] = append(preMembers[member.Address], member)
 		}
 
 		addedMember, err := alb.updateALbMembers(albProvider, service, curMembers, preMembers, pool.Id)
@@ -532,12 +518,12 @@ func (alb *ALBCloud) getPods(name, namespace string) (*v1.PodList, error) {
 	}
 
 	if len(service.Spec.Selector) == 0 {
-		return nil, fmt.Errorf("The service %s-%s has no selector to associate the pods.", service.Namespace, service.Name)
+		return nil, fmt.Errorf("the service %s-%s has no selector to associate the pods", service.Namespace, service.Name)
 	}
 
-	set := labels.Set{}
-	set = service.Spec.Selector
-	labelSelector := set.AsSelector()
+	set := labels.Set(service.Spec.Selector)
+	labelSelector := labels.SelectorFromSet(set)
+
 	opts := metav1.ListOptions{LabelSelector: labelSelector.String()}
 	return alb.kubeClient.Pods(namespace).List(context.TODO(), opts)
 }
@@ -560,7 +546,7 @@ func (alb *ALBCloud) ensureCreateLoadbalancer(albProvider *ALBClient, elbAC ElbA
 	}
 	if alb.config.EnterpriseEnable == "true" {
 		if service.Annotations[ELBEnterpriseAnnotationKey] == "" {
-			albInstanceConf.EnterpriseProjectId = DefaultEnterpriseProjectId
+			albInstanceConf.EnterpriseProjectId = DefaultEnterpriseProjectID
 		}
 		albInstanceConf.EnterpriseProjectId = service.Annotations[ELBEnterpriseAnnotationKey]
 	}
@@ -871,7 +857,7 @@ func (alb *ALBCloud) checkAlbInstance(service *v1.Service, albProvider *ALBClien
 		}
 		serviceCopy.Annotations[ELBIDAnnotation] = lb.Id
 		if service.Spec.LoadBalancerIP == "" {
-			eip, err := alb.getPublicIpFromPrivateIp(service.Namespace, lb.VipPortDd)
+			eip, err := alb.getPublicIPFromPrivateIP(service.Namespace, lb.VipPortDd)
 			if err != nil {
 				return "", err
 			}
@@ -1028,7 +1014,7 @@ func (alb *ALBCloud) generateMembers(service *v1.Service, nodes []*v1.Node) ([]*
 
 	// TODO: consider the pods have been deleted.
 	if len(members) == 0 {
-		return nil, fmt.Errorf("Have no node to bind.")
+		return nil, fmt.Errorf("have no node to bind")
 	}
 
 	return members, nil
@@ -1345,10 +1331,7 @@ func (alb *ALBCloud) updateLoadBalancer(
 						return true
 					}
 					if p1 != nil && p2 != nil {
-						if *p1 == *p2 {
-							return true
-						}
-						return false
+						return *p1 == *p2
 					}
 					return false
 				}
@@ -1463,12 +1446,7 @@ func (alb *ALBCloud) updateLoadBalancer(
 		}
 		preMembers := make(map[string][]ALBMember)
 		for _, member := range preListMembers.Members {
-			if _, ok := preMembers[member.Address]; ok {
-				preMembers[member.Address] = append(preMembers[member.Address], member)
-			} else {
-				preMembers[member.Address] = []ALBMember{member}
-			}
-
+			preMembers[member.Address] = append(preMembers[member.Address], member)
 		}
 
 		addedMembers, err := alb.updateALbMembers(albProvider, service, curMembers, preMembers, pool.Id)
@@ -1617,7 +1595,7 @@ func (alb *ALBCloud) getPrivateIpFromLoadbalancerIp(ns, ipStr string) (string, e
 	return ipStr, nil
 }
 
-func (alb *ALBCloud) getPublicIpFromPrivateIp(ns, portID string) (string, error) {
+func (alb *ALBCloud) getPublicIPFromPrivateIP(ns, portID string) (string, error) {
 	albProvider, err := alb.getALBClient(ns)
 	if err != nil {
 		return "", err
@@ -1791,7 +1769,7 @@ func (alb *ALBCloud) getMemberProtocolPort(service *v1.Service, servicePort v1.S
 	}
 
 	if len(podList.Items) == 0 {
-		return listenerPort, fmt.Errorf("Can't find backend pod with serivce (%s).", service.Name)
+		return listenerPort, fmt.Errorf("can't find backend pod with serivce (%s)", service.Name)
 	}
 
 	if podList.Items[0].Spec.HostNetwork {

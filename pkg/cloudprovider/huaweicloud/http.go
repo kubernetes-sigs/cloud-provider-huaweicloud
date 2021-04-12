@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// nolint:golint // stop check lint issues as this file will be refactored
 package huaweicloud
 
 import (
@@ -35,11 +36,6 @@ import (
 )
 
 const (
-	HwsHeaderXHwsDate   string = "X-Hws-Date"
-	Authorization       string = "Authorization"
-	HwsHost             string = "iam.hws.com"
-	TransportHttp       string = "http"
-	TransportHttps      string = "https"
 	HeaderSecurityToken string = "X-Security-Token"
 	HeaderProject       string = "X-Project-Id"
 
@@ -94,7 +90,7 @@ func init() {
 	}
 }
 
-// newRequest is used to create a new request
+// NewRequest is used to create a new request
 // if accessIn == nil mean not to sign header
 func NewRequest(method, url string, headersIn map[string]string, obj interface{}) *request {
 	r := &request{
@@ -145,15 +141,15 @@ func encodeBody(obj interface{}) (io.Reader, error) {
 
 // doRequest runs a request with our client
 func DoRequest(service *ServiceClient, throttle flowcontrol.RateLimiter, r *request) (*http.Response, error) {
-	//client := service.Client
 	var body io.Reader
 	// Check if we should encode the body
 	if r.obj != nil {
-		if b, err := encodeBody(r.obj); err != nil {
+		b, err := encodeBody(r.obj)
+		if err != nil {
 			return nil, err
-		} else {
-			body = b
 		}
+
+		body = b
 	}
 
 	tryThrottle(throttle, r)

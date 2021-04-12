@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// nolint:golint // stop check lint issues as this file will be refactored
 package huaweicloud
 
 import (
@@ -49,7 +50,6 @@ const (
 type NATCloud struct {
 	config        *LBConfig
 	kubeClient    corev1.CoreV1Interface
-	secret        *Secret
 	lrucache      *lru.Cache
 	eventRecorder record.EventRecorder
 }
@@ -195,8 +195,8 @@ func (nat *NATCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 		}
 	}
 
-	//get service with loadbalancer type and loadbalancer ip
-	lbServers, err := nat.kubeClient.Services("").List(context.TODO(), metav1.ListOptions{})
+	// get service with loadbalancer type and loadbalancer ip
+	lbServers, _ := nat.kubeClient.Services("").List(context.TODO(), metav1.ListOptions{})
 	var lbPorts []v1.ServicePort
 	for _, svc := range lbServers.Items {
 		lbType := svc.Annotations[ELBClassAnnotation]
@@ -235,7 +235,9 @@ func (nat *NATCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 
 func (nat *NATCloud) getServicePort(dnatRule *DNATRule, ports []v1.ServicePort) *v1.ServicePort {
 	for _, port := range ports {
-		if dnatRule.ExternalServicePort == port.Port && dnatRule.InternalServicePort == port.NodePort && strings.ToLower(string(dnatRule.Protocol)) == strings.ToLower(string(port.Protocol)) {
+		if dnatRule.ExternalServicePort == port.Port &&
+			dnatRule.InternalServicePort == port.NodePort &&
+			strings.EqualFold(string(dnatRule.Protocol), string(port.Protocol)) {
 			return &port
 		}
 	}
@@ -508,12 +510,12 @@ func (nat *NATCloud) getPods(name, namespace string) (*v1.PodList, error) {
 	}
 
 	if len(service.Spec.Selector) == 0 {
-		return nil, fmt.Errorf("The service %s has no selector to associate the pods.", name)
+		return nil, fmt.Errorf("the service %s has no selector to associate the pods", name)
 	}
 
-	set := labels.Set{}
-	set = service.Spec.Selector
-	labelSelector := set.AsSelector()
+	set := labels.Set(service.Spec.Selector)
+	labelSelector := labels.SelectorFromSet(set)
+
 	opts := metav1.ListOptions{LabelSelector: labelSelector.String()}
 	return nat.kubeClient.Pods(namespace).List(context.TODO(), opts)
 }
@@ -582,7 +584,9 @@ func (nat *NATCloud) checkFloatingIp(dnatRuleList *DNATRuleList, floatingIp *Flo
 
 func (nat *NATCloud) getDNATRule(dnatRuleList *DNATRuleList, port *v1.ServicePort) *DNATRule {
 	for _, dnatRule := range dnatRuleList.DNATRules {
-		if dnatRule.ExternalServicePort == port.Port && dnatRule.InternalServicePort == port.NodePort && strings.ToLower(string(dnatRule.Protocol)) == strings.ToLower(string(port.Protocol)) {
+		if dnatRule.ExternalServicePort == port.Port &&
+			dnatRule.InternalServicePort == port.NodePort &&
+			strings.EqualFold(string(dnatRule.Protocol), string(port.Protocol)) {
 			return &dnatRule
 		}
 	}

@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// nolint:golint // stop check lint issues as this file will be refactored
 package huaweicloud
 
 import (
@@ -29,40 +30,57 @@ import (
 	"k8s.io/klog"
 )
 
-// list type
+// ALBList represents a list of ALB.
 type ALBList struct {
 	Loadbalancers []ALB `json:"loadbalancers"`
 }
+
+// MemberList represents a list of ALBMember.
 type MemberList struct {
 	Members []ALBMember `json:"members"`
 }
+
+// ListenerList represents a list of ALBListener.
 type ListenerList struct {
 	Listeners []ALBListener `json:"listeners"`
 }
+
+// PoolList represents a list of ALBPool.
 type PoolList struct {
 	Pools []ALBPool `json:"pools"`
 }
+
+// HealthMonitorList represents a list of ALBHealthMonitor.
 type HealthMonitorList struct {
 	HealthMonitors []ALBHealthMonitor `json:"healthmonitors"`
 }
 
+// SubnetList represents a list of SubnetItem.
 type SubnetList struct {
 	Subnets []SubnetItem `json:"subnets"`
 }
 
-// array json style for compatibility with ALB API
+// ALBArr defines json style for compatibility with ALB API.
 type ALBArr struct {
 	Loadbalancer ALB `json:"loadbalancer"`
 }
+
+// MemberArr defines json style for ALBMember.
 type MemberArr struct {
 	Member ALBMember `json:"member"`
 }
+
+// ListenerArr defines json style for ALBListener.
 type ListenerArr struct {
 	Listener ALBListener `json:"listener"`
 }
+
+// PoolArr defines json style for ALBPool.
 type PoolArr struct {
 	Pool ALBPool `json:"pool"`
 }
+
+// HealthMonitorArr defines json style for ALBHealthMonitor.
 type HealthMonitorArr struct {
 	HealthMonitor ALBHealthMonitor `json:"healthmonitor"`
 }
@@ -85,7 +103,7 @@ type ALB struct {
 	EnterpriseProjectId string             `json:"enterprise_project_id,omitempty"`
 }
 
-// Listener
+// ALBListener represents the listerner.
 type ALBListener struct {
 	Id                     string      `json:"id,omitempty"`
 	TenantId               string      `json:"tenant_id,omitempty"`
@@ -102,8 +120,7 @@ type ALBListener struct {
 	SniContainerRefs       []string    `json:"sni_container_refs,omitempty"`
 }
 
-// healthMonitor
-// we name it healthMonitor rather than healthCheck in ALB
+// ALBHealthMonitor implements the health monitor for ALB.
 type ALBHealthMonitor struct {
 	Id            string      `json:"id,omitempty"`
 	TenantId      string      `json:"tenant_id,omitempty"`
@@ -121,7 +138,7 @@ type ALBHealthMonitor struct {
 	MonitorPort   *int        `json:"monitor_port"`
 }
 
-// backend host member
+// ALBMember represents the backend host member
 type ALBMember struct {
 	Id              string       `json:"id,omitempty"`
 	TenantId        string       `json:"tenant_id,omitempty"`
@@ -134,7 +151,7 @@ type ALBMember struct {
 	OperatingStatus MemberStatus `json:"operating_status,omitempty"`
 }
 
-// pool is an union of: loadbalance algorithm, load balancers, session_persistence, listeners, members, backend protocol and health monitor
+// ALBPool is an union of: loadbalance algorithm, load balancers, session_persistence, listeners, members, backend protocol and health monitor
 // it only stores the id(s) of each object: load balancers, listeners, members and health monitor
 type ALBPool struct {
 	Id                 string                `json:"id,omitempty"`
@@ -151,17 +168,17 @@ type ALBPool struct {
 	SessionPersistence ELBSessionPersistence `json:"session_persistence"`
 }
 
-// ALB client has two parts:
+// ALBClient has two parts:
 // ecsClient connect EcsEndpoint
 // albClient connect albClient
 type ALBClient struct {
-	// ServiceClient is a general service client defines a client used to connect an Endpoint defined in elb_connection.go
 	albClient *ServiceClient
 	vpcClient *ServiceClient
 	throttler *Throttler
 	enableEPS string
 }
 
+// NewALBClient builds a new ALBClient.
 func NewALBClient(albEndpoint, vpcEndpoint, id, accessKey, secretKey, securityToken, region, serviceType, enableEPS string) *ALBClient {
 	access := &AccessInfo{
 		AccessKey:     accessKey,
@@ -197,6 +214,7 @@ func NewALBClient(albEndpoint, vpcEndpoint, id, accessKey, secretKey, securityTo
  *    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
  */
 
+// CreateLoadBalancer creates loadbalancer by conf.
 func (a *ALBClient) CreateLoadBalancer(albConf *ALB) (*ALB, error) {
 	var alb ALBArr
 	alb.Loadbalancer = *albConf
@@ -216,8 +234,9 @@ func (a *ALBClient) CreateLoadBalancer(albConf *ALB) (*ALB, error) {
 	return &(albResp.Loadbalancer), nil
 }
 
-func (a *ALBClient) DeleteLoadBalancer(loadbalancerId string) (int, error) {
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/loadbalancers/" + loadbalancerId
+// DeleteLoadBalancer deletes loadbalancer by ID.
+func (a *ALBClient) DeleteLoadBalancer(loadbalancerID string) (int, error) {
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/loadbalancers/" + loadbalancerID
 	req := NewRequest(http.MethodDelete, url, nil, nil)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_INSTANCE_DELETE), req)
@@ -234,8 +253,9 @@ func (a *ALBClient) DeleteLoadBalancer(loadbalancerId string) (int, error) {
 	return resp.StatusCode, nil
 }
 
-func (a *ALBClient) GetLoadBalancer(loadbalancerId string) (*ALB, error) {
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/loadbalancers/" + loadbalancerId
+// GetLoadBalancer gets loadbalancer by ID.
+func (a *ALBClient) GetLoadBalancer(loadbalancerID string) (*ALB, error) {
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/loadbalancers/" + loadbalancerID
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_INSTANCE_GET), req)
@@ -252,6 +272,7 @@ func (a *ALBClient) GetLoadBalancer(loadbalancerId string) (*ALB, error) {
 	return &(albResp.Loadbalancer), nil
 }
 
+// ListLoadBalancers list the loadbalancers by params.
 func (a *ALBClient) ListLoadBalancers(params map[string]string) (*ALBList, error) {
 	var query string
 
@@ -283,11 +304,7 @@ func (a *ALBClient) ListLoadBalancers(params map[string]string) (*ALBList, error
 	return &albList, nil
 }
 
-/*
- *    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
- *               ALB implement of functions regrding listeners
- *    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
- */
+// CreateListener creates listeners via configuration.
 // l connection_limit is allowed to be set by admin only
 // 3 protocol TCP, HTTP and TERMINATED_HTTPS are supported
 // 4 admin_state_up has to be true
@@ -312,17 +329,18 @@ func (a *ALBClient) CreateListener(listenerConf *ALBListener) (*ALBListener, err
 	return &(lsResp.Listener), nil
 }
 
+// DeleteListener deletes listener by referencing ID.
 // before deleting a listener, we have to remove all related pools in advance
-func (a *ALBClient) DeleteListener(listenerId string) error {
-	pool, err := a.findPoolOfListener(listenerId)
+func (a *ALBClient) DeleteListener(listenerID string) error {
+	pool, err := a.findPoolOfListener(listenerID)
 	if err != nil {
 		return err
 	}
 	if pool != nil {
-		return fmt.Errorf("Failed to delete listener %s: pool %s still exists", listenerId, pool.Id)
+		return fmt.Errorf("Failed to delete listener %s: pool %s still exists", listenerID, pool.Id)
 	}
 
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/listeners/" + listenerId
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/listeners/" + listenerID
 	req := NewRequest(http.MethodDelete, url, nil, nil)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_LISTENER_DELETE), req)
@@ -339,8 +357,9 @@ func (a *ALBClient) DeleteListener(listenerId string) error {
 	return nil
 }
 
-func (a *ALBClient) GetListener(listenerId string) (*ALBListener, error) {
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/listeners/" + listenerId
+// GetListener gets the listener instance by listener ID
+func (a *ALBClient) GetListener(listenerID string) (*ALBListener, error) {
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/listeners/" + listenerID
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_LISTENER_GET), req)
@@ -357,6 +376,7 @@ func (a *ALBClient) GetListener(listenerId string) (*ALBListener, error) {
 	return &(lsResp.Listener), nil
 }
 
+// ListListeners lists listeners by params.
 func (a *ALBClient) ListListeners(params map[string]string) (*ListenerList, error) {
 	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/listeners"
 	var query string
@@ -387,17 +407,18 @@ func (a *ALBClient) ListListeners(params map[string]string) (*ListenerList, erro
 	return &listenerList, nil
 }
 
+// UpdateListener updates listener.
 // l connection_limit is allowed to be set by admin only
 // 2 default_pool_id is supportted in the following ways:
 //        (1) from specific default_pool_id to nil
 //        (2) from nil to specific default_pool_id
 // 3 default_pool_id cannot be a pool used by another listener
 // !!!!! ONLY SUPPORT UPDATE: name, connection_limit, description, default_pool_id, default_tls_container_id !!!!!
-func (a *ALBClient) UpdateListener(listenerMod *ALBListener, listenerId string) (*ALBListener, error) {
+func (a *ALBClient) UpdateListener(listenerMod *ALBListener, listenerID string) (*ALBListener, error) {
 	var ls ListenerArr
 	ls.Listener = *listenerMod
 
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/listeners/" + listenerId
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/listeners/" + listenerID
 	req := NewRequest(http.MethodPut, url, nil, &ls)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_LISTENER_UPDATE), req)
@@ -419,6 +440,8 @@ func (a *ALBClient) UpdateListener(listenerMod *ALBListener, listenerId string) 
  *               ALB implement of functions regrding HealthMonitor
  *    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
  */
+
+// CreateHealthMonitor creates health monitor.
 // 1 100.125.0.0/16 should be open whtin safe group
 // 2 admin_state_up has to be true
 // !!!!! MUST SET IN CREATION: type, delay, timeout, max_retries, pool_id !!!!!
@@ -437,14 +460,15 @@ func (a *ALBClient) CreateHealthMonitor(healthConf *ALBHealthMonitor) (*ALBHealt
 	var hmResp HealthMonitorArr
 	err = DecodeBody(resp, &hmResp)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to CreateHealthMonitor : %v", err)
+		return nil, fmt.Errorf("failed to CreateHealthMonitor : %v", err)
 	}
 
 	return &(hmResp.HealthMonitor), nil
 }
 
-func (a *ALBClient) DeleteHealthMonitor(healthMonitorId string) error {
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/healthmonitors/" + healthMonitorId
+// DeleteHealthMonitor deletes health monitor by ID.
+func (a *ALBClient) DeleteHealthMonitor(healthMonitorID string) error {
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/healthmonitors/" + healthMonitorID
 	req := NewRequest(http.MethodDelete, url, nil, nil)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_HEALTHZ_DELETE), req)
@@ -455,14 +479,15 @@ func (a *ALBClient) DeleteHealthMonitor(healthMonitorId string) error {
 
 	if resp.StatusCode != http.StatusNoContent {
 		resBody, _ := ioutil.ReadAll(resp.Body)
-		return fmt.Errorf("Failed to delete HealthMonitor : %s, status code: %d", string(resBody), resp.StatusCode)
+		return fmt.Errorf("failed to delete HealthMonitor : %s, status code: %d", string(resBody), resp.StatusCode)
 	}
 
 	return nil
 }
 
-func (a *ALBClient) GetHealthMonitor(healthMonitorId string) (*ALBHealthMonitor, error) {
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/healthmonitors/" + healthMonitorId
+// GetHealthMonitor gets health monitor by ID.
+func (a *ALBClient) GetHealthMonitor(healthMonitorID string) (*ALBHealthMonitor, error) {
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/healthmonitors/" + healthMonitorID
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_HEALTHZ_GET), req)
@@ -479,12 +504,13 @@ func (a *ALBClient) GetHealthMonitor(healthMonitorId string) (*ALBHealthMonitor,
 	return &(hmResp.HealthMonitor), nil
 }
 
+// UpdateHealthMonitor updates health monitor.
 // !!!!! ONLY SUPPORT UPDATE: delay, max_retries, name, timeout, http_method, expected_codes, url_path !!!!!
-func (a *ALBClient) UpdateHealthMonitor(healthMod *ALBHealthMonitor, healthMonitorId string) (*ALBHealthMonitor, error) {
+func (a *ALBClient) UpdateHealthMonitor(healthMod *ALBHealthMonitor, healthMonitorID string) (*ALBHealthMonitor, error) {
 	var hm HealthMonitorArr
 	hm.HealthMonitor = *healthMod
 
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/healthmonitors/" + healthMonitorId
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/healthmonitors/" + healthMonitorID
 	req := NewRequest(http.MethodPut, url, nil, &hm)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_HEALTHZ_UPDATE), req)
@@ -506,6 +532,8 @@ func (a *ALBClient) UpdateHealthMonitor(healthMod *ALBHealthMonitor, healthMonit
  *               ALB implement of functions regrding Pools
  *    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
  */
+
+// CreatePool creates pool by conf.
 // 1 TCP & HTTP are supported only
 // 2 admin_state_up has to be true
 // !!!!! MUST SET IN CREATION: lb_algorithm, protocol, listener_id !!!!!
@@ -530,17 +558,18 @@ func (a *ALBClient) CreatePool(poolConf *ALBPool) (*ALBPool, error) {
 	return &(plResp.Pool), nil
 }
 
+// DeletePool deletes a pool by ID.
 // before deleting a pool, we have to remove all related members & healthmonitor in advance
-func (a *ALBClient) DeletePool(poolId string) error {
-	listMembers, err := a.ListMembers(poolId)
+func (a *ALBClient) DeletePool(poolID string) error {
+	listMembers, err := a.ListMembers(poolID)
 	if err != nil {
 		return err
 	}
 	if len(listMembers.Members) != 0 {
-		return fmt.Errorf("Failed to delete pool %s: members still exist", poolId)
+		return fmt.Errorf("Failed to delete pool %s: members still exist", poolID)
 	}
 
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/pools/" + poolId
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/pools/" + poolID
 	req := NewRequest(http.MethodDelete, url, nil, nil)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_POOL_DELETE), req)
@@ -557,8 +586,9 @@ func (a *ALBClient) DeletePool(poolId string) error {
 	return nil
 }
 
-func (a *ALBClient) GetPool(poolId string) (*ALBPool, error) {
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/pools/" + poolId
+// GetPool get pool by ID.
+func (a *ALBClient) GetPool(poolID string) (*ALBPool, error) {
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/pools/" + poolID
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_POOL_GET), req)
@@ -575,12 +605,13 @@ func (a *ALBClient) GetPool(poolId string) (*ALBPool, error) {
 	return &(plResp.Pool), nil
 }
 
+// UpdatePool updates pool.
 // !!!!! ONLY SUPPORT UPDATE: lb_algorithm, session_persistence, name, description !!!!!
-func (a *ALBClient) UpdatePool(poolMod *ALBPool, poolId string) (*ALBPool, error) {
+func (a *ALBClient) UpdatePool(poolMod *ALBPool, poolID string) (*ALBPool, error) {
 	var pl PoolArr
 	pl.Pool = *poolMod
 
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/pools/" + poolId
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/pools/" + poolID
 	req := NewRequest(http.MethodPut, url, nil, &pl)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_POOL_UPDATE), req)
@@ -620,6 +651,8 @@ func (a *ALBClient) listPools() (*PoolList, error) {
  *               ALB implement of functions regrding members
  *    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
  */
+
+// AddMember adds a member.
 // 1 differs from elb, which register a host to a listener directly
 //         (see.RegisterInstancesWithListener() in file elb.go)
 //         alb add a host to a pool, rather than to a listener
@@ -629,16 +662,16 @@ func (a *ALBClient) listPools() (*PoolList, error) {
 // 5 admin_state_up has to be true
 // 6 the subset of the member should be same as the ELB
 // !!!!! MUST SET IN CREATION: address, protocol_port, subnet_id !!!!!
-func (a *ALBClient) AddMember(poolId string, memberConf *ALBMember) (*ALBMember, error) {
+func (a *ALBClient) AddMember(poolID string, memberConf *ALBMember) (*ALBMember, error) {
 	var mem MemberArr
 	mem.Member = *memberConf
 
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/pools/" + poolId + "/members"
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/pools/" + poolID + "/members"
 	req := NewRequest(http.MethodPost, url, nil, &mem)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_MEMBER_CREATE), req)
 	if err != nil {
-		klog.Warningf("Add member to pool failed. pool: %s, member: %s, error: %v", poolId, memberConf.Name, err)
+		klog.Warningf("Add member to pool failed. pool: %s, member: %s, error: %v", poolID, memberConf.Name, err)
 		return nil, err
 	}
 
@@ -651,8 +684,9 @@ func (a *ALBClient) AddMember(poolId string, memberConf *ALBMember) (*ALBMember,
 	return &(memResp.Member), nil
 }
 
-func (a *ALBClient) DeleteMember(poolId string, memberId string) error {
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/pools/" + poolId + "/members/" + memberId
+// DeleteMember deletes a member.
+func (a *ALBClient) DeleteMember(poolId string, memberID string) error {
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/pools/" + poolId + "/members/" + memberID
 	req := NewRequest(http.MethodDelete, url, nil, nil)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_MEMBER_DELETE), req)
@@ -669,8 +703,9 @@ func (a *ALBClient) DeleteMember(poolId string, memberId string) error {
 	return nil
 }
 
-func (a *ALBClient) ListMembers(poolId string) (*MemberList, error) {
-	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/pools/" + poolId + "/members"
+// ListMembers lists members.
+func (a *ALBClient) ListMembers(poolID string) (*MemberList, error) {
+	url := generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId) + "/pools/" + poolID + "/members"
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
 	resp, err := DoRequest(a.albClient, a.throttler.GetThrottleByKey(ELB_MEMBER_LIST), req)
@@ -681,12 +716,13 @@ func (a *ALBClient) ListMembers(poolId string) (*MemberList, error) {
 	var memberList MemberList
 	err = DecodeBody(resp, &memberList)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to ListMembers : %v", err)
+		return nil, fmt.Errorf("failed to ListMembers : %v", err)
 	}
 
 	return &memberList, nil
 }
 
+// GetMember gets member.
 func (a *ALBClient) GetMember(poolID, memberID string) (*MemberArr, error) {
 	url := fmt.Sprintf("%s/pools/%s/members/%s", generateELBRoutePrefix(a.enableEPS, a.albClient.TenantId), poolID, memberID)
 	req := NewRequest(http.MethodGet, url, nil, nil)
@@ -705,6 +741,7 @@ func (a *ALBClient) GetMember(poolID, memberID string) (*MemberArr, error) {
 	return &member, nil
 }
 
+// DeleteMembers deletes members.
 func (a *ALBClient) DeleteMembers(poolId string) error {
 	memberList, err := a.ListMembers(poolId)
 	if err != nil {
@@ -724,6 +761,7 @@ func (a *ALBClient) DeleteMembers(poolId string) error {
 	return nil
 }
 
+// WaitMemberComplete waits member complete.
 func (a *ALBClient) WaitMemberComplete(poolID, memberID string) error {
 	err := wait.Poll(time.Second*2, time.Minute*3, func() (bool, error) {
 		m, err := a.GetMember(poolID, memberID)
@@ -783,7 +821,7 @@ func (a *ALBClient) findListenerOfService(service *v1.Service) (map[string]ALBLi
 	return listeners, nil
 }
 
-func (a *ALBClient) findPoolOfListener(listenerId string) (*ALBPool, error) {
+func (a *ALBClient) findPoolOfListener(listenerID string) (*ALBPool, error) {
 	poolList, err := a.listPools()
 	if err != nil {
 		return nil, err
@@ -793,7 +831,7 @@ func (a *ALBClient) findPoolOfListener(listenerId string) (*ALBPool, error) {
 	var resultPool ALBPool
 	for _, pool := range poolList.Pools {
 		if len(pool.Listeners) == 1 {
-			if pool.Listeners[0].Id == listenerId {
+			if pool.Listeners[0].Id == listenerID {
 				poolCnt++
 				resultPool = pool
 			}
@@ -804,19 +842,12 @@ func (a *ALBClient) findPoolOfListener(listenerId string) (*ALBPool, error) {
 		return nil, nil
 	}
 	if poolCnt > 1 {
-		return nil, fmt.Errorf("More than one pools found (%c pool)for listenerid %s", poolCnt, listenerId)
+		return nil, fmt.Errorf("More than one pools found (%c pool)for listenerid %s", poolCnt, listenerID)
 	}
 	return &resultPool, nil
 }
 
-func memberIPs(members []ALBMember) []string {
-	ret := make([]string, len(members))
-	for i, mem := range members {
-		ret[i] = mem.Address
-	}
-	return ret
-}
-
+// CreateEip creates an EIP.
 func (a *ALBClient) CreateEip(publicip *PublicIp) (*PublicIp, error) {
 
 	url := "/v1/" + a.vpcClient.TenantId + "/publicips"
@@ -835,8 +866,9 @@ func (a *ALBClient) CreateEip(publicip *PublicIp) (*PublicIp, error) {
 	return &eipResp, nil
 }
 
-func (a *ALBClient) DeleteEip(id string) (int, error) {
-	url := "/v1/" + a.vpcClient.TenantId + "/publicips/" + id
+// DeleteEip deletes a EIP.
+func (a *ALBClient) DeleteEip(ID string) (int, error) {
+	url := "/v1/" + a.vpcClient.TenantId + "/publicips/" + ID
 	req := NewRequest(http.MethodDelete, url, nil, nil)
 
 	resp, err := DoRequest(a.vpcClient, a.throttler.GetThrottleByKey(EIP_DELETE), req)
@@ -853,9 +885,10 @@ func (a *ALBClient) DeleteEip(id string) (int, error) {
 	return resp.StatusCode, nil
 }
 
-func (a *ALBClient) BindEip(publicip *PublicIp, publicipID string) (*PublicIp, error) {
+// BindEip binds EIP
+func (a *ALBClient) BindEip(publicIP *PublicIp, publicipID string) (*PublicIp, error) {
 	url := "/v1/" + a.vpcClient.TenantId + "/publicips/" + publicipID
-	req := NewRequest(http.MethodPut, url, nil, &publicip)
+	req := NewRequest(http.MethodPut, url, nil, &publicIP)
 
 	resp, err := DoRequest(a.vpcClient, a.throttler.GetThrottleByKey(EIP_BIND), req)
 	if err != nil {
@@ -870,6 +903,7 @@ func (a *ALBClient) BindEip(publicip *PublicIp, publicipID string) (*PublicIp, e
 	return &eipResp, nil
 }
 
+// ListEips lists EIPs
 func (a *ALBClient) ListEips(params map[string]string) (*PublicIps, error) {
 	url := "/v1/" + a.vpcClient.TenantId + "/publicips"
 	var query string
@@ -901,8 +935,9 @@ func (a *ALBClient) ListEips(params map[string]string) (*PublicIps, error) {
 	return &eipList, nil
 }
 
-func (a *ALBClient) GetSubnet(subnetId string) (*SubnetItem, error) {
-	url := "/v1/" + a.vpcClient.TenantId + "/subnets/" + subnetId
+// GetSubnet get subnet by ID.
+func (a *ALBClient) GetSubnet(subnetID string) (*SubnetItem, error) {
+	url := "/v1/" + a.vpcClient.TenantId + "/subnets/" + subnetID
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
 	resp, err := DoRequest(a.vpcClient, a.throttler.GetThrottleByKey(SUBNET_GET), req)
@@ -919,6 +954,7 @@ func (a *ALBClient) GetSubnet(subnetId string) (*SubnetItem, error) {
 	return &subnetResp.Subnet, nil
 }
 
+// ListSubnets lists subnets.
 func (a *ALBClient) ListSubnets(params map[string]string) (*SubnetList, error) {
 	var query string
 
@@ -947,10 +983,9 @@ func (a *ALBClient) ListSubnets(params map[string]string) (*SubnetList, error) {
 	return &subnetResp, nil
 }
 
-func generateELBRoutePrefix(enableEnterpriseProject string, projectId string) string {
+func generateELBRoutePrefix(enableEnterpriseProject string, projectID string) string {
 	if enableEnterpriseProject == "true" {
-		return "/v2/" + projectId + "/elb"
-	} else {
-		return "/v2.0/lbaas"
+		return "/v2/" + projectID + "/elb"
 	}
+	return "/v2.0/lbaas"
 }

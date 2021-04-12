@@ -45,4 +45,5 @@ linters:
 issues:
   # The list of ids of default excludes to include or disable. By default it's empty.
   include:
-    - EXC0002 # disable excluding of issues about comments from golint
+    # There are too many issues about comments from golint, fix them in future.
+    #- EXC0002 # disable excluding of issues about comments from golint

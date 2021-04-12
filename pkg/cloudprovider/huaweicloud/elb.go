@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// nolint:golint // stop check lint issues as this file will be refactored
 package huaweicloud
 
 import (
@@ -36,7 +37,6 @@ type ELBCloud struct {
 	config        *LBConfig
 	kubeClient    corev1.CoreV1Interface
 	lrucache      *lru.Cache
-	secret        *Secret
 	eventRecorder record.EventRecorder
 }
 
@@ -113,6 +113,7 @@ func (elb *ELBCloud) ELBClient(namespace string) (*ELBClient, error) {
 	return NewELBClient(elb.config.ECSEndpoint, elb.config.ELBEndpoint, elb.config.TenantId, accessKey, secretKey, securityToken, elb.config.Region, elb.config.SignerType), nil
 }
 
+// GetLoadBalancer gets loadbalancer for service.
 func (elb *ELBCloud) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
 	status = &v1.LoadBalancerStatus{}
 	// get the apigateway client
@@ -182,20 +183,6 @@ func (elb *ELBCloud) asyncWaitJobs(
 	}()
 }
 
-func findELBDetail(elbProvider *ELBClient, loadBalanceIP string) (elbDetail *ElbDetail, err error) {
-	params := map[string]string{"vip_address": loadBalanceIP}
-	lbList, err := elbProvider.ListLoadBalancers(params)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(lbList.Loadbalancers) == 0 {
-		return nil, fmt.Errorf("Can't find LoadbalanceIP(%s) detail information", loadBalanceIP)
-	}
-
-	return &lbList.Loadbalancers[0], nil
-}
-
 func (elb *ELBCloud) ensureCreateListener(
 	elbProvider *ELBClient,
 	name string,
@@ -245,12 +232,12 @@ func (elb *ELBCloud) getPods(name, namespace string) (*v1.PodList, error) {
 	}
 
 	if len(service.Spec.Selector) == 0 {
-		return nil, fmt.Errorf("The service %s has no selector to associate the pods.", name)
+		return nil, fmt.Errorf("the service %s has no selector to associate the pods", name)
 	}
 
-	set := labels.Set{}
-	set = service.Spec.Selector
-	labelSelector := set.AsSelector()
+	set := labels.Set(service.Spec.Selector)
+	labelSelector := labels.SelectorFromSet(set)
+
 	opts := metav1.ListOptions{LabelSelector: labelSelector.String()}
 	return elb.kubeClient.Pods(namespace).List(context.TODO(), opts)
 }
@@ -296,9 +283,9 @@ func (elb *ELBCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 	}
 
 	if len(lbList.Loadbalancers) > 1 {
-		return nil, fmt.Errorf("Find more than one Loadbalancer(service:%s/%s)", service.Namespace, service.Name)
+		return nil, fmt.Errorf("find more than one Loadbalancer(service:%s/%s)", service.Namespace, service.Name)
 	} else if len(lbList.Loadbalancers) == 0 {
-		return nil, fmt.Errorf("Can't find matched Loadbalancer.")
+		return nil, fmt.Errorf("can't find matched Loadbalancer")
 	}
 
 	loadBalancerID := lbList.Loadbalancers[0].LoadbalancerId
@@ -319,11 +306,9 @@ func (elb *ELBCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 
 	var errs []error
 	for i := 3; i > 0; i-- {
-		select {
-		case err := <-ch:
-			if err != nil {
-				errs = append(errs, err)
-			}
+		err := <-ch
+		if err != nil {
+			errs = append(errs, err)
 		}
 	}
 
@@ -444,9 +429,8 @@ func (elb *ELBCloud) updateListenerMembers(
 			service.Namespace, service.Name)
 		elb.asyncWaitJobs(elbProvider, service, jobs, listenerID, addMembers, true)
 		return nil
-	} else {
-		elb.asyncWaitJobs(elbProvider, service, jobs, listenerID, nil, false)
 	}
+	elb.asyncWaitJobs(elbProvider, service, jobs, listenerID, nil, false)
 
 	return nil
 }
@@ -600,7 +584,7 @@ func (elb *ELBCloud) generateMembers(service *v1.Service) ([]*Member, error) {
 
 	// TODO: consider the pods have been deleted.
 	if len(members) == 0 {
-		return nil, fmt.Errorf("Have no node to bind.")
+		return nil, fmt.Errorf("have no node to bind")
 	}
 
 	return members, nil
@@ -633,7 +617,7 @@ func (elb *ELBCloud) createLoadBalancer(
 
 	for _, port := range needsCreate {
 		// Step 1. create listener if needed
-		listenerId, err := elb.ensureCreateListener(
+		listenerID, err := elb.ensureCreateListener(
 			elbProvider,
 			lsName,
 			elb.config.ELBAlgorithm, //TODO: we will support other algorithms later
@@ -649,7 +633,7 @@ func (elb *ELBCloud) createLoadBalancer(
 			continue
 		}
 
-		if listenerId == "" {
+		if listenerID == "" {
 			msg := fmt.Sprintf("The listener(%d) has already exist", port.Port)
 			sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
 			continue
@@ -664,7 +648,7 @@ func (elb *ELBCloud) createLoadBalancer(
 			HealthcheckProtocol:    ELBProtocol(port.Protocol),
 			HealthcheckTimeout:     10,
 			HealthyThreshold:       3,
-			ListenerID:             listenerId,
+			ListenerID:             listenerID,
 			UnhealthyThreshold:     3,
 		}
 		if healthCheckPort != nil {
@@ -675,25 +659,25 @@ func (elb *ELBCloud) createLoadBalancer(
 		_, err = elbProvider.CreateHealthCheck(&healthCheck)
 		if err != nil {
 			errs = append(errs, err)
-			msg := fmt.Sprintf("Create healthcheck of listener(%s) error: %v", listenerId, err)
+			msg := fmt.Sprintf("Create healthcheck of listener(%s) error: %v", listenerID, err)
 			sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
 			continue
 		}
 
-		klog.Infof("Create healthcheck of listener(%s) success.", listenerId)
+		klog.Infof("Create healthcheck of listener(%s) success.", listenerID)
 
 		// Step 3. add backend hosts
-		job, err := elbProvider.AsyncCreateMembers(listenerId, members)
+		job, err := elbProvider.AsyncCreateMembers(listenerID, members)
 		if err != nil {
 			errs = append(errs, err)
-			msg := fmt.Sprintf("Create members of listener(%s) error: %v", listenerId, err)
+			msg := fmt.Sprintf("Create members of listener(%s) error: %v", listenerID, err)
 			sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
 			continue
 		}
-		klog.Infof("Create members of listener(%s) success.", listenerId)
+		klog.Infof("Create members of listener(%s) success.", listenerID)
 		jobs = append(jobs, tempJobInfo{
 			jobID:  job.JobID,
-			detail: fmt.Sprintf("Create members of listener(%s)", listenerId),
+			detail: fmt.Sprintf("Create members of listener(%s)", listenerID),
 		})
 	}
 
