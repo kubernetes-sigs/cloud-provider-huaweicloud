@@ -116,7 +116,7 @@ const (
 	ELBAlgorithmSRC ELBAlgorithm = "SOURCE_IP"
 
 	PodNetworkAttachmentDefinitionKey = "k8s.v1.cni.cncf.io/networks"
-	DefaultEnterpriseProjectId        = "0"
+	DefaultEnterpriseProjectID        = "0"
 )
 
 type ELBProtocol string
@@ -134,7 +134,7 @@ type MemberStatus string
 type ELBAlgorithm string
 
 type UUID struct {
-	Id string `json:"id"`
+	Id string `json:"id"` // nolint:golint //struct field `Id` should be `ID`
 }
 
 type LBSessionAffinityOption struct {
@@ -149,7 +149,7 @@ type LBSessionAffinityConfig struct {
 type LBHealthCheckOption struct {
 	CheckPort  *int
 	Protocol   ELBProtocol
-	UrlPath    string
+	UrlPath    string // nolint:golint // struct field `UrlPath` should be `URLPath`
 	Delay      int
 	Timeout    int
 	MaxRetries int
@@ -166,7 +166,7 @@ type ServiceLBConfig struct {
 	HMConfig *LBHealthMonitorConfig
 }
 
-//example: kubernetes.io/elb.autocreate: '{"type":"public", "bandwidth_name":"bandwidth-d334","bandwidth_chargemode":"traffic","bandwidth_size":10,"bandwidth_sharetype":"PER","eip_type":"5_bgp"}'
+// example: kubernetes.io/elb.autocreate: '{"type":"public", "bandwidth_name":"bandwidth-d334","bandwidth_chargemode":"traffic","bandwidth_size":10,"bandwidth_sharetype":"PER","eip_type":"5_bgp"}'
 type ElbAutoCreate struct {
 	ELbName             string `json:"name,omitempty"`
 	ElbType             string `json:"type,omitempty"`
@@ -192,10 +192,10 @@ type LBConfig struct {
 	SecretName   string       `json:"secretName"`
 	SignerType   string       `json:"signerType"`
 	ELBAlgorithm ELBAlgorithm `json:"elbAlgorithm"`
-	TenantId     string       `json:"tenantId"`
+	TenantId     string       `json:"tenantId"` // nolint:golint // struct field `TenantId` should be `TenantID` (golint)
 	Region       string       `json:"region"`
 	VPCId        string       `json:"vpcId"`
-	SubnetId     string       `json:"subnetId"`
+	SubnetId     string       `json:"subnetId"` // nolint:golint //struct field `SubnetId` should be `SubnetID` (golint)
 	// Deprecated: We are going to move this ECSEndpoint to CloudConfig.Auth.
 	// During the transition, you need to specify the same ECS endpoint both here and CloudConfig.Auth.ECSEndpoint.
 	ECSEndpoint      string `json:"ecsEndpoint"`
@@ -207,16 +207,18 @@ type LBConfig struct {
 	EnterpriseEnable string `json:"enterpriseEnable"`
 }
 
+// nolint:golint // type `PublicIp` should be `PublicIP`
 type PublicIp struct {
 	Publicip  PublicIpSpec  `json:"publicip,omitempty"`
 	Bandwidth BandwidthSpec `json:"bandwidth,omitempty"`
 }
 
+// nolint:golint // type `PublicIpSpec` should be `PublicIPSpec`
 type PublicIpSpec struct {
 	Type             string `json:"type,omitempty"`
 	Status           string `json:"status,omitempty"`
-	PublicIpAddress  string `json:"public_ip_address,omitempty"`
-	PrivateIpAddress string `json:"private_ip_address,omitempty"`
+	PublicIpAddress  string `json:"public_ip_address,omitempty"`  // nolint:golint // struct field `PublicIpAddress` should be `PublicIPAddress`
+	PrivateIpAddress string `json:"private_ip_address,omitempty"` // nolint:golint // struct field `PrivateIpAddress` should be `PrivateIPAddress`
 	ID               string `json:"id,omitempty"`
 	PortID           string `json:"port_id,omitempty"`
 }
@@ -234,7 +236,7 @@ type BandwidthSpec struct {
 
 type SubnetItem struct {
 	ID              string `json:"id,omitempty"`
-	NeutronSubnetId string `json:"neutron_subnet_id,omitempty"`
+	NeutronSubnetId string `json:"neutron_subnet_id,omitempty"` // nolint:golint // struct field `TenantId` should be `TenantID`
 	Cidr            string `json:"cidr,omitempty"`
 }
 
@@ -289,7 +291,7 @@ type ServiceClient struct {
 	Client   *http.Client
 	Endpoint string
 	Access   *AccessInfo
-	TenantId string
+	TenantId string // nolint:golint // struct field `TenantId` should be `TenantID`
 }
 
 type ELBListenerDescription struct {
@@ -320,7 +322,7 @@ type Secret struct {
 // Just limit this issue here and deal with it later with refactor actions.
 func (s *Secret) DecodeBase64() error {
 	if s.base64Decoded {
-		panic(fmt.Sprintf("secret can not be decod twice"))
+		panic("secret can not be decod twice")
 	}
 
 	decodedBytes, err := base64.StdEncoding.DecodeString(s.Credential)
@@ -784,9 +786,8 @@ func GetPersistAutoCreate(service *v1.Service) bool {
 	persist := service.Annotations[ELBPersistAutoCreate]
 	if persist == "" || persist == "false" {
 		return false
-	} else {
-		return true
 	}
+	return true
 }
 
 func deleteSecret(obj interface{}, lrucache *lru.Cache, secretName string) {
@@ -845,7 +846,7 @@ func updateServiceStatus(
 					sendEvent(eventRecorder, "CreateLoadBalancerFailed", "Retry LoadBalancer configuration too many times", service)
 					return
 				}
-				retry += 1
+				retry++
 				mark = fmt.Sprintf("%d", retry)
 			}
 		}

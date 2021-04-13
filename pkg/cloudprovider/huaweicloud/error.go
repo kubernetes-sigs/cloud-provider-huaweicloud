@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// nolint:golint // stop check lint issues as this file will be refactored
 package huaweicloud
 
 type LbErrorCode string

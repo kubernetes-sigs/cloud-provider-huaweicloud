@@ -26,6 +26,8 @@ REGISTRY?="${SWR_SERVICE_ADDRESS}/k8scloudcontrollermanager"
 # Set you version by env or using latest tags from git
 VERSION?=$(shell git describe --tags)
 
+all: huawei-cloud-controller-manager
+
 huawei-cloud-controller-manager: $(SOURCES)
 	CGO_ENABLED=0 GOOS=$(GOOS) go build \
 		-ldflags $(LDFLAGS) \
@@ -38,8 +40,9 @@ clean:
 verify:
 	hack/verify.sh
 
+.PHONY: test
 test:
-	go test ./...
+	go test ./pkg/...
 
 images: image-huawei-cloud-controller-manager
 

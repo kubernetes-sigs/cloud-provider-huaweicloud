@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// nolint:golint // stop check lint issues as this file will be refactored
 package huaweicloud
 
 import (
@@ -298,11 +299,6 @@ func (i *Instances) getECSByName(name string) (*huaweicloudsdkecsmodel.ServerDet
 	}
 
 	return &rsp.Servers[0], nil
-}
-
-func (a *AuthOpts) getAKSKFromSecret() (accessKey string, secretKey string, secretToken string) {
-	// TODO(RainbowMango): Get AK/SK as well as secret token from kubernetes.secret.
-	return
 }
 
 // getECSClient initializes a ECS(Elastic Cloud Server) client which will be used to operate ECS.

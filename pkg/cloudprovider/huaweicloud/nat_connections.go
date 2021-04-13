@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// nolint:golint // stop check lint issues as this file will be refactored
 package huaweicloud
 
 import (
@@ -130,7 +131,7 @@ type Port struct {
 	Id                  string              `json:"id,omitempty"`
 	Name                string              `json:"name,omitempty"`
 	NetworkId           string              `json:"network_id,omitempty"`
-	AdminStateUp        bool                `json:"admin_state_up,default:true,omitempty"`
+	AdminStateUp        bool                `json:"admin_state_up,omitempty"`
 	MacAddress          string              `json:"mac_address,omitempty"`
 	FixedIps            []*FixedIp          `json:"fixed_ips,omitempty"`
 	DeviceId            string              `json:"device_id,omitempty"`
