@@ -4,8 +4,16 @@ go 1.15
 
 require (
 	github.com/fsnotify/fsnotify v1.4.9
+	github.com/google/go-cmp v0.5.8 // indirect
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.6-beta
+	github.com/onsi/ginkgo v1.16.4
+	github.com/onsi/gomega v1.18.1
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
+	golang.org/x/net v0.0.0-20220722155237-a158d28d115b // indirect
+	golang.org/x/sync v0.0.0-20220722155255-886fb9371eb4 // indirect
+	golang.org/x/sys v0.0.0-20220722155257-8c9f86f7a55f // indirect
+	google.golang.org/protobuf v1.28.0 // indirect
 	k8s.io/api v0.19.14
 	k8s.io/apimachinery v0.19.14
 	k8s.io/client-go v0.19.14
@@ -13,6 +21,7 @@ require (
 	k8s.io/component-base v0.19.14
 	k8s.io/klog v1.0.0
 	k8s.io/kubernetes v1.19.14
+	k8s.io/utils v0.0.0-20200729134348-d5654de09c73
 )
 
 replace (
