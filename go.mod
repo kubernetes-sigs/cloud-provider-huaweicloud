@@ -1,6 +1,6 @@
 module sigs.k8s.io/cloud-provider-huaweicloud
 
-go 1.13
+go 1.15
 
 require (
 	github.com/fsnotify/fsnotify v1.4.9
