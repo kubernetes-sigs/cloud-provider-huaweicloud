@@ -52,15 +52,15 @@ type tempServicePort struct {
 	listener    *ListenerDetail
 }
 
-func (elb *ELBCloud) getSecret(namespace, secretName string) (*Secret, error) {
+func (elb *ELBCloud) getSecret(secretName string) (*Secret, error) {
 	var kubeSecret *v1.Secret
 
-	key := namespace + "/" + secretName
+	key := providerNamespace + "/" + secretName
 	obj, ok := elb.lrucache.Get(key)
 	if ok {
 		kubeSecret = obj.(*v1.Secret)
 	} else {
-		secret, err := elb.kubeClient.Secrets(namespace).Get(context.TODO(), secretName, metav1.GetOptions{})
+		secret, err := elb.kubeClient.Secrets(providerNamespace).Get(context.TODO(), secretName, metav1.GetOptions{})
 		if err != nil {
 			return nil, err
 		}
@@ -87,8 +87,8 @@ func (elb *ELBCloud) getSecret(namespace, secretName string) (*Secret, error) {
 }
 
 //getELBClient
-func (elb *ELBCloud) ELBClient(namespace string) (*ELBClient, error) {
-	secret, err := elb.getSecret(namespace, elb.config.SecretName)
+func (elb *ELBCloud) ELBClient() (*ELBClient, error) {
+	secret, err := elb.getSecret(elb.config.SecretName)
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +254,7 @@ func (elb *ELBCloud) GetLoadBalancerName(ctx context.Context, clusterName string
 func (elb *ELBCloud) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, hosts []*v1.Node) (*v1.LoadBalancerStatus, error) {
 	// func (elb *ELBCloud) EnsureLoadBalancer(name, region string, loadBalancerIP net.IP, ports []*v1.ServicePort, hosts []string, servicename types.NamespacedName, affinityType v1.ServiceAffinity, annotations map[string]string) (*v1.LoadBalancerStatus, error) {
 	klog.Infof("Begin to ensure loadbalancer configuration of service(%s/%s)", service.Namespace, service.Name)
-	elbProvider, err := elb.ELBClient(service.Namespace)
+	elbProvider, err := elb.ELBClient()
 	if err != nil {
 		return nil, err
 	}
@@ -326,7 +326,7 @@ func (elb *ELBCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 func (elb *ELBCloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, hosts []*v1.Node) error {
 	// if the node changed ,the server_id mark the VM will change, need to update the global
 	klog.Infof("Begin to update loadbalancer configuration of service(%s/%s)", service.Namespace, service.Name)
-	elbProvider, err := elb.ELBClient(service.Namespace)
+	elbProvider, err := elb.ELBClient()
 	if err != nil {
 		return err
 	}
@@ -454,7 +454,7 @@ func (elb *ELBCloud) gracefulRemoveElbMembers(existMembers map[string]*MemDetail
 // EnsureTCPLoadBalancerDeleted is an implementation of TCPLoadBalancer.EnsureTCPLoadBalancerDeleted.
 func (elb *ELBCloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
 	klog.Infof("Begin to delete loadbalancer configuration of service(%s/%s)", service.Namespace, service.Name)
-	elbProvider, err := elb.ELBClient(service.Namespace)
+	elbProvider, err := elb.ELBClient()
 	if err != nil {
 		return err
 	}
@@ -482,7 +482,7 @@ func (elb *ELBCloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName 
 }
 
 func (elb *ELBCloud) getListenersByService(service *v1.Service) ([]*ListenerDetail, error) {
-	elbProvider, err := elb.ELBClient(service.Namespace)
+	elbProvider, err := elb.ELBClient()
 	if err != nil {
 		return nil, err
 	}

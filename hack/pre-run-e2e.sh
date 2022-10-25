@@ -15,13 +15,8 @@
 # limitations under the License.
 
 set -o errexit
-set -o pipefail
-
-if [[ "${HC_ACCESS_KEY}" = "" ]] || [[ "${HC_SECRET_KEY}" = "" ]]; then
-  echo "HC_ACCESS_KEY and HC_SECRET_KEY can not be empty, please set it"
-  exit 1
-fi
 set -o nounset
+set -o pipefail
 
 export REGISTRY_SERVER_ADDRESS=swr.ap-southeast-1.myhuaweicloud.com
 export VERSION=`echo $RANDOM`
@@ -33,7 +28,7 @@ make image-huawei-cloud-controller-manager
 echo -e "\nCheck cloud-config secret"
 count=`kubectl get -n kube-system secret cloud-config | grep cloud-config | wc -l`
 if [[ "$count" -ne 1 ]]; then
-  echo "Please create a secret with the name: cloud-config."
+  echo "Please create the cloud-config secret."
   exit 1
 fi
 

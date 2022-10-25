@@ -19,7 +19,6 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/onsi/ginkgo"
 	"github.com/onsi/gomega"
@@ -37,21 +36,15 @@ import (
 var _ = ginkgo.Describe("loadbalancer service testing", func() {
 	var deployment *appsv1.Deployment
 	var service *corev1.Service
-	var secret *corev1.Secret
 
 	ginkgo.BeforeEach(func() {
 		deploymentName := deploymentNamePrefix + rand.String(RandomStrLength)
 		deployment = helper2.NewDeployment(testNamespace, deploymentName)
 		framework.CreateDeployment(kubeClient, deployment)
-
-		// todo(chengxiangdong): This is a temporary solution, I will optimize it later.
-		secret = newSecret(testNamespace)
-		framework.CreateSecret(kubeClient, secret)
 	})
 
 	ginkgo.AfterEach(func() {
 		framework.RemoveDeployment(kubeClient, deployment.Namespace, deployment.Name)
-		framework.RemoveSecret(kubeClient, secret.Namespace, secret.Name)
 		if service != nil {
 			framework.RemoveService(kubeClient, service.Namespace, service.Name)
 			ginkgo.By(fmt.Sprintf("Wait for the Service(%s/%s) to be deleted", testNamespace, service.Name), func() {
@@ -133,24 +126,6 @@ func newLoadbalancerAutoService(namespace, name, sessionAffinity string) *corev1
 				},
 			},
 			Selector: map[string]string{"app": "nginx"},
-		},
-	}
-}
-
-func newSecret(namespace string) *corev1.Secret {
-	return &corev1.Secret{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "v1",
-			Kind:       "Secret",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      "example.secret",
-		},
-		Type: corev1.SecretTypeOpaque,
-		StringData: map[string]string{
-			"access": os.Getenv("HC_ACCESS_KEY"),
-			"secret": os.Getenv("HC_SECRET_KEY"),
 		},
 	}
 }
