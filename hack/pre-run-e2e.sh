@@ -18,8 +18,8 @@ set -o errexit
 set -o nounset
 set -o pipefail
 
-if [[ "${HC_ACCESS_KEY}" = "" ]] || [[ "${HC_ACCESS_KEY}" = "" ]]; then
-  echo "HC_ACCESS_KEY and HC_ACCESS_KEY can not be empty, please set it"
+if [[ "${HC_ACCESS_KEY}" = "" ]] || [[ "${HC_SECRET_KEY}" = "" ]]; then
+  echo "HC_ACCESS_KEY and HC_SECRET_KEY can not be empty, please set it"
   exit 1
 fi
 
