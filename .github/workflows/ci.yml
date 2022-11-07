@@ -51,3 +51,28 @@ jobs:
           go-version: 1.15.x
       - name: make test
         run: make test
+  e2e:
+    name: e2e test
+    needs: build
+    runs-on: self-hosted
+    strategy:
+      max-parallel: 1
+    steps:
+      - name: checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      - name: install Go
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.15.x
+      - name: run e2e
+        run: |
+          export ARTIFACTS_PATH=${{ github.workspace }}/e2e-logs
+          sh hack/run-e2e.sh
+      - name: upload logs
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: e2e_log
+          path: ${{ github.workspace }}/e2e-logs/
