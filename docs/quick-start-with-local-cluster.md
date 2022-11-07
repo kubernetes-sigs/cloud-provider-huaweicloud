@@ -33,7 +33,7 @@ And then, copy the binary to your workspace, like `/root/provider/`:
 ``` 
 
 #### Prepare configuration
-You should prepare a appropriate configuration as per [Cloud Controller Manager Configuration](./config/CloudControllerManagerConfiguration.md).
+You should prepare an appropriate configuration as per [Cloud Controller Manager Configuration](./config/CloudControllerManagerConfiguration.md).
 
 You can put your configuration to your workspace, e.g. `/root/provider/provider.conf`.
 
