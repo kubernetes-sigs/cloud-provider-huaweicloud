@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-# Copyright 2020 The Kubernetes Authors.
+# Copyright 2022 The Kubernetes Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,10 +14,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-KUBE_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
+set -o errexit
+set -o nounset
+set -o pipefail
 
-${KUBE_ROOT}/hack/verify-staticcheck.sh
-${KUBE_ROOT}/hack/verify-gofmt.sh
-if [ $? -ne 0 ]; then
+GO111MODULE=on go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.49.0
+GOPATH=$(go env GOPATH | awk -F ':' '{print $1}')
+export PATH=$PATH:$GOPATH/bin
+
+if golangci-lint run; then
+  echo 'Congratulations!  All Go source files have passed staticcheck.'
+else
+  echo # print one empty line, separate from warning messages.
+  echo 'Please review the above warnings.'
+  echo 'If the above warnings do not make sense, feel free to file an issue.'
   exit 1
 fi
