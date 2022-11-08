@@ -15,16 +15,16 @@
 # limitations under the License.
 
 set -o errexit
-set -o nounset
 set -o pipefail
 
 if [[ "${HC_ACCESS_KEY}" = "" ]] || [[ "${HC_SECRET_KEY}" = "" ]]; then
   echo "HC_ACCESS_KEY and HC_SECRET_KEY can not be empty, please set it"
   exit 1
 fi
+set -o nounset
 
 export REGISTRY_SERVER_ADDRESS=swr.ap-southeast-1.myhuaweicloud.com
-export VERSION=`git rev-parse --short HEAD`
+export VERSION=`echo $RANDOM`
 
 echo -e "\nBuild images"
 # todo: Maybe we need load the image to target cluster node.
