@@ -52,6 +52,8 @@ jobs:
       - name: make test
         run: make test
   e2e:
+    # This job does not run on forked repositories because there is no self-runner.
+    if: ${{ github.repository == 'kubernetes-sigs/cloud-provider-huaweicloud' }}
     name: e2e test
     needs: build
     runs-on: self-hosted
