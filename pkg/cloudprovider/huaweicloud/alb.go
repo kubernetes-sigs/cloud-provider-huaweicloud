@@ -545,10 +545,10 @@ func (alb *ALBCloud) ensureCreateLoadbalancer(albProvider *ALBClient, elbAC ElbA
 		Description:  Attention,
 	}
 	if alb.config.EnterpriseEnable == "true" {
-		if service.Annotations[ELBEnterpriseAnnotationKey] == "" {
-			albInstanceConf.EnterpriseProjectId = DefaultEnterpriseProjectID
+		albInstanceConf.EnterpriseProjectId = DefaultEnterpriseProjectID
+		if service.Annotations[ELBEnterpriseAnnotationKey] != "" {
+			albInstanceConf.EnterpriseProjectId = service.Annotations[ELBEnterpriseAnnotationKey]
 		}
-		albInstanceConf.EnterpriseProjectId = service.Annotations[ELBEnterpriseAnnotationKey]
 	}
 	albInstanceInfo, err := albProvider.CreateLoadBalancer(albInstanceConf)
 	if err != nil {
