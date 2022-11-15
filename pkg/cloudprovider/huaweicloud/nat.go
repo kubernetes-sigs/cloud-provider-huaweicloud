@@ -218,7 +218,7 @@ func (nat *NATCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 
 		klog.V(4).Infof("rule:%v port not exist,start delete dnat rule", dnatRule)
 
-		err := nat.ensureDeleteDNATRule(natProvider, &dnatRule)
+		err := nat.ensureDeleteDNATRule(natProvider, &dnatRule, natGatewayId)
 		if err != nil {
 			errs = append(errs, fmt.Errorf("EnsureDeleteDNATRule Failed: %v", err))
 			continue
@@ -334,7 +334,7 @@ func (nat *NATCloud) UpdateLoadBalancer(ctx context.Context, clusterName string,
 		for _, servicePort := range service.Spec.Ports {
 			dnatRule := nat.getDNATRule(dnatRuleList, &servicePort)
 			if dnatRule != nil {
-				if err = nat.ensureDeleteDNATRule(natProvider, dnatRule); err != nil {
+				if err = nat.ensureDeleteDNATRule(natProvider, dnatRule, natGatewayId); err != nil {
 					errs = append(errs, fmt.Errorf("UpdateDNATRule Failed: %v", err))
 					continue
 				}
@@ -371,7 +371,7 @@ func (nat *NATCloud) UpdateLoadBalancer(ctx context.Context, clusterName string,
 			status, err := CheckNodeHealth(node)
 			if !status || err != nil {
 				klog.Warningf("The node %v is not ready. %v", node.Name, err)
-				if err = nat.ensureDeleteDNATRule(natProvider, dnatRule); err != nil {
+				if err = nat.ensureDeleteDNATRule(natProvider, dnatRule, natGatewayId); err != nil {
 					errs = append(errs, fmt.Errorf("UpdateDNATRule Failed: %v", err))
 					continue
 				}
@@ -415,7 +415,7 @@ func (nat *NATCloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName 
 	for _, servicePort := range service.Spec.Ports {
 		dnatRule := nat.getDNATRule(dnatRuleList, &servicePort)
 		if dnatRule != nil {
-			err := nat.ensureDeleteDNATRule(natProvider, dnatRule)
+			err := nat.ensureDeleteDNATRule(natProvider, dnatRule, natGatewayId)
 			if err != nil {
 				errs = append(errs, err)
 				continue
@@ -558,9 +558,9 @@ func (nat *NATCloud) ensureCreateDNATRule(natProvider *NATClient, port *v1.Servi
 //1.delete the old dnatRule
 //2.get the new port id
 //3.create a new dnatRule
-func (nat *NATCloud) ensureDeleteDNATRule(natProvider *NATClient, dnatRule *DNATRule) error {
+func (nat *NATCloud) ensureDeleteDNATRule(natProvider *NATClient, dnatRule *DNATRule, natGatewayId string) error {
 	klog.V(4).Infoln("Delete the DNAT Rule when the node is not ready", dnatRule.FloatingIpAddress+":"+fmt.Sprint(dnatRule.ExternalServicePort))
-	err := natProvider.DeleteDNATRule(dnatRule.Id)
+	err := natProvider.DeleteDNATRule(dnatRule.Id, natGatewayId)
 	if err != nil {
 		return err
 	}
