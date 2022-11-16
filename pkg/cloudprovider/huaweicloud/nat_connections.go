@@ -225,7 +225,7 @@ func NewNATClient(natEndpoint, vpcEndpoint, id, accessKey, secretKey, securityTo
  *    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
  */
 func (nat *NATClient) GetNATGateway(natGatewayId string) (*NATGateway, error) {
-	url := "/v2.0/nat_gateways/" + natGatewayId
+	url := "/v2/" + nat.natClient.TenantId + "/nat_gateways/" + natGatewayId
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
 	resp, err := DoRequest(nat.natClient, nat.throttler.GetThrottleByKey(NAT_GATEWAY_GET), req)
@@ -247,7 +247,7 @@ func (nat *NATClient) GetNATGateway(natGatewayId string) (*NATGateway, error) {
 }
 
 func (nat *NATClient) ListNATGateways(params map[string]string) (*NATGatewayList, error) {
-	url := "/v2.0/nat_gateways"
+	url := "/v2/" + nat.natClient.TenantId + "/nat_gateways"
 	var query string
 	if len(params) != 0 {
 		query += "?"
@@ -280,7 +280,7 @@ func (nat *NATClient) CreateDNATRule(dnatRuleConf *DNATRule) (*DNATRule, error) 
 	var dnatRule DNATRuleArr
 	dnatRule.DNATRule = *dnatRuleConf
 
-	url := "/v2.0/dnat_rules"
+	url := "/v2/" + nat.natClient.TenantId + "/dnat_rules"
 	req := NewRequest(http.MethodPost, url, nil, &dnatRule)
 
 	resp, err := DoRequest(nat.natClient, nat.throttler.GetThrottleByKey(NAT_RULE_CREATE), req)
@@ -296,8 +296,8 @@ func (nat *NATClient) CreateDNATRule(dnatRuleConf *DNATRule) (*DNATRule, error) 
 	return &(dnatRuleResp.DNATRule), nil
 }
 
-func (nat *NATClient) DeleteDNATRule(dnatRuleId string) error {
-	url := "/v2.0/dnat_rules/" + dnatRuleId
+func (nat *NATClient) DeleteDNATRule(dnatRuleId string, natGatewayId string) error {
+	url := "/v2/" + nat.natClient.TenantId + "/nat_gateways/" + natGatewayId + "/dnat_rules/" + dnatRuleId
 	req := NewRequest(http.MethodDelete, url, nil, nil)
 
 	resp, err := DoRequest(nat.natClient, nat.throttler.GetThrottleByKey(NAT_RULE_DELETE), req)
@@ -315,7 +315,7 @@ func (nat *NATClient) DeleteDNATRule(dnatRuleId string) error {
 }
 
 func (nat *NATClient) GetDNATRule(dnatRuleId string) (*DNATRule, error) {
-	url := "/v2.0/dnat_rules/" + dnatRuleId
+	url := "/v2/" + nat.natClient.TenantId + "/dnat_rules" + dnatRuleId
 	req := NewRequest(http.MethodGet, url, nil, nil)
 
 	resp, err := DoRequest(nat.natClient, nat.throttler.GetThrottleByKey(NAT_RULE_GET), req)
@@ -337,7 +337,7 @@ func (nat *NATClient) GetDNATRule(dnatRuleId string) (*DNATRule, error) {
 }
 
 func (nat *NATClient) ListDNATRules(params map[string]string) (*DNATRuleList, error) {
-	url := "/v2.0/dnat_rules"
+	url := "/v2/" + nat.natClient.TenantId + "/dnat_rules"
 	var query string
 	if len(params) != 0 {
 		query += "?"
