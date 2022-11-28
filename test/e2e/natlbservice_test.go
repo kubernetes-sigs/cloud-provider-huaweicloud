@@ -36,20 +36,15 @@ var _ = ginkgo.Describe("DNAT loadbalancer service testing", func() {
 	natIP := os.Getenv("HC_NAT_IP")
 	var deployment *appsv1.Deployment
 	var service *corev1.Service
-	var secret *corev1.Secret
 
 	ginkgo.BeforeEach(func() {
 		deploymentName := deploymentNamePrefix + rand.String(RandomStrLength)
 		deployment = helper2.NewDeployment(testNamespace, deploymentName)
 		framework.CreateDeployment(kubeClient, deployment)
-
-		secret = newSecret(testNamespace)
-		framework.CreateSecret(kubeClient, secret)
 	})
 
 	ginkgo.AfterEach(func() {
 		framework.RemoveDeployment(kubeClient, deployment.Namespace, deployment.Name)
-		framework.RemoveSecret(kubeClient, secret.Namespace, secret.Name)
 		if service != nil {
 			framework.RemoveService(kubeClient, service.Namespace, service.Name)
 			ginkgo.By(fmt.Sprintf("Wait for the Service(%s/%s) to be deleted", testNamespace, service.Name), func() {
