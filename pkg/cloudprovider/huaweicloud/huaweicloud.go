@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/golang-lru"
+	"k8s.io/client-go/rest"
 
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -38,7 +39,6 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/cloud-provider"
 	"k8s.io/klog"
@@ -192,6 +192,7 @@ type ELBSessionPersistence struct {
 }
 
 type LBConfig struct {
+	// Deprecated: no longer in use
 	Apiserver    string       `json:"apiserver"`
 	SecretName   string       `json:"secretName"`
 	SignerType   string       `json:"signerType"`
@@ -423,12 +424,13 @@ func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 	}
 	LogConf(globalConfig)
 
-	clientConfig, err := clientcmd.BuildConfigFromFlags(globalConfig.LoadBalancer.Apiserver, "")
+	clusterCfg, err := rest.InClusterConfig()
 	if err != nil {
+		klog.Errorf("Initial cluster configuration failed with error: %v", err)
 		return nil, err
 	}
 
-	kubeClient, err := corev1.NewForConfig(clientConfig)
+	kubeClient, err := corev1.NewForConfig(clusterCfg)
 	if err != nil {
 		return nil, err
 	}
