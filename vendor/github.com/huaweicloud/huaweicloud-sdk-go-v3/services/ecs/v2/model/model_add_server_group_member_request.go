@@ -1,25 +1,25 @@
-/*
- * ecs
- *
- * ECS Open API
- *
- */
-
 package model
 
 import (
-	"encoding/json"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
 
 	"strings"
 )
 
 // Request Object
 type AddServerGroupMemberRequest struct {
-	ServerGroupId string                           `json:"server_group_id"`
-	Body          *AddServerGroupMemberRequestBody `json:"body,omitempty"`
+
+	// 云服务器组ID。
+	ServerGroupId string `json:"server_group_id"`
+
+	Body *AddServerGroupMemberRequestBody `json:"body,omitempty"`
 }
 
 func (o AddServerGroupMemberRequest) String() string {
-	data, _ := json.Marshal(o)
+	data, err := utils.Marshal(o)
+	if err != nil {
+		return "AddServerGroupMemberRequest struct{}"
+	}
+
 	return strings.Join([]string{"AddServerGroupMemberRequest", string(data)}, " ")
 }

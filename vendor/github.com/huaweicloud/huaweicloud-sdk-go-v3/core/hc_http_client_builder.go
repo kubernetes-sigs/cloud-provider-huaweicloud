@@ -22,35 +22,47 @@ package core
 import (
 	"fmt"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/basic"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/global"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/auth/provider"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/config"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/impl"
-	"os"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/region"
 	"reflect"
+	"strings"
 )
 
 type HcHttpClientBuilder struct {
-	credentialsType string
-	credentials     auth.ICredential
-	endpoint        string
-	httpConfig      *config.HttpConfig
+	CredentialsType        []string
+	derivedAuthServiceName string
+	credentials            auth.ICredential
+	endpoint               string
+	httpConfig             *config.HttpConfig
+	region                 *region.Region
 }
 
 func NewHcHttpClientBuilder() *HcHttpClientBuilder {
 	hcHttpClientBuilder := &HcHttpClientBuilder{
-		credentialsType: "basic.Credentials",
+		CredentialsType: []string{"basic.Credentials"},
 	}
 	return hcHttpClientBuilder
 }
 
 func (builder *HcHttpClientBuilder) WithCredentialsType(credentialsType string) *HcHttpClientBuilder {
-	builder.credentialsType = credentialsType
+	builder.CredentialsType = strings.Split(credentialsType, ",")
+	return builder
+}
+
+func (builder *HcHttpClientBuilder) WithDerivedAuthServiceName(derivedAuthServiceName string) *HcHttpClientBuilder {
+	builder.derivedAuthServiceName = derivedAuthServiceName
 	return builder
 }
 
 func (builder *HcHttpClientBuilder) WithEndpoint(endpoint string) *HcHttpClientBuilder {
 	builder.endpoint = endpoint
+	return builder
+}
+
+func (builder *HcHttpClientBuilder) WithRegion(region *region.Region) *HcHttpClientBuilder {
+	builder.region = region
 	return builder
 }
 
@@ -69,37 +81,46 @@ func (builder *HcHttpClientBuilder) Build() *HcHttpClient {
 		builder.httpConfig = config.DefaultHttpConfig()
 	}
 
-	if builder.credentials == nil {
-		builder.LoadCredentialFromEnv()
-	}
-
-	if reflect.TypeOf(builder.credentials).String() != builder.credentialsType {
-		panic(fmt.Sprintf("Need credential type is %s, actually is %s", builder.credentialsType, reflect.TypeOf(builder.credentials).String()))
-	}
-
 	defaultHttpClient := impl.NewDefaultHttpClient(builder.httpConfig)
+
+	if builder.credentials == nil {
+		p := provider.DefaultCredentialProviderChain(builder.CredentialsType[0])
+		credentials, err := p.GetCredentials()
+		if err != nil {
+			panic(err)
+		}
+		builder.credentials = credentials
+	}
+
+	t := reflect.TypeOf(builder.credentials)
+	if t.Kind() == reflect.Ptr {
+		t = t.Elem()
+	}
+	givenCredentialsType := t.String()
+	match := false
+	for _, credentialsType := range builder.CredentialsType {
+		if credentialsType == givenCredentialsType {
+			match = true
+			break
+		}
+	}
+	if !match {
+		panic(fmt.Sprintf("Need credential type is %s, actually is %s", builder.CredentialsType, givenCredentialsType))
+	}
+
+	if builder.region != nil {
+		builder.endpoint = builder.region.Endpoint
+		builder.credentials.ProcessAuthParams(defaultHttpClient, builder.region.Id)
+
+		if credential, ok := builder.credentials.(auth.IDerivedCredential); ok {
+			credential.ProcessDerivedAuthParams(builder.derivedAuthServiceName, builder.region.Id)
+		}
+	}
+
+	if !strings.HasPrefix(builder.endpoint, "http") {
+		builder.endpoint = "https://" + builder.endpoint
+	}
 
 	hcHttpClient := NewHcHttpClient(defaultHttpClient).WithEndpoint(builder.endpoint).WithCredential(builder.credentials)
 	return hcHttpClient
-}
-
-func (builder *HcHttpClientBuilder) LoadCredentialFromEnv() {
-	ak := os.Getenv("HUAWEICLOUD_SDK_AK")
-	sk := os.Getenv("HUAWEICLOUD_SDK_SK")
-	projectId := os.Getenv("HUAWEICLOUD_SDK_PROJECT_ID")
-	domainId := os.Getenv("HUAWEICLOUD_SDK_DOMAIN_ID")
-	if builder.credentialsType == "basic.Credentials" {
-		builder.credentials = basic.NewCredentialsBuilder().
-			WithAk(ak).
-			WithSk(sk).
-			WithProjectId(projectId).
-			Build()
-	}
-	if builder.credentialsType == "global.Credentials" {
-		builder.credentials = global.NewCredentialsBuilder().
-			WithAk(ak).
-			WithSk(sk).
-			WithDomainId(domainId).
-			Build()
-	}
 }

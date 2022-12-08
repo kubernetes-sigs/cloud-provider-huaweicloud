@@ -1,23 +1,21 @@
-/*
- * ecs
- *
- * ECS Open API
- *
- */
-
 package model
 
 import (
-	"encoding/json"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
 
 	"strings"
 )
 
 // Response Object
 type NovaDeleteKeypairResponse struct {
+	HttpStatusCode int `json:"-"`
 }
 
 func (o NovaDeleteKeypairResponse) String() string {
-	data, _ := json.Marshal(o)
+	data, err := utils.Marshal(o)
+	if err != nil {
+		return "NovaDeleteKeypairResponse struct{}"
+	}
+
 	return strings.Join([]string{"NovaDeleteKeypairResponse", string(data)}, " ")
 }

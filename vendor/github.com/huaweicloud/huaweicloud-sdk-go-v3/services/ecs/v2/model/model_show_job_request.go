@@ -1,24 +1,23 @@
-/*
- * ecs
- *
- * ECS Open API
- *
- */
-
 package model
 
 import (
-	"encoding/json"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
 
 	"strings"
 )
 
 // Request Object
 type ShowJobRequest struct {
+
+	// 异步请求的任务ID。
 	JobId string `json:"job_id"`
 }
 
 func (o ShowJobRequest) String() string {
-	data, _ := json.Marshal(o)
+	data, err := utils.Marshal(o)
+	if err != nil {
+		return "ShowJobRequest struct{}"
+	}
+
 	return strings.Join([]string{"ShowJobRequest", string(data)}, " ")
 }

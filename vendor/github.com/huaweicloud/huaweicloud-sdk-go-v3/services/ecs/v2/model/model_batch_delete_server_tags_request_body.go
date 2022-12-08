@@ -1,29 +1,30 @@
-/*
- * ecs
- *
- * ECS Open API
- *
- */
-
 package model
 
 import (
-	"encoding/json"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
+
 	"errors"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/converter"
+
 	"strings"
 )
 
 // This is a auto create Body Object
 type BatchDeleteServerTagsRequestBody struct {
+
 	// 操作标识（仅支持小写）：delete（删除）。
 	Action BatchDeleteServerTagsRequestBodyAction `json:"action"`
+
 	// 标签列表。
 	Tags []ServerTag `json:"tags"`
 }
 
 func (o BatchDeleteServerTagsRequestBody) String() string {
-	data, _ := json.Marshal(o)
+	data, err := utils.Marshal(o)
+	if err != nil {
+		return "BatchDeleteServerTagsRequestBody struct{}"
+	}
+
 	return strings.Join([]string{"BatchDeleteServerTagsRequestBody", string(data)}, " ")
 }
 
@@ -43,8 +44,12 @@ func GetBatchDeleteServerTagsRequestBodyActionEnum() BatchDeleteServerTagsReques
 	}
 }
 
+func (c BatchDeleteServerTagsRequestBodyAction) Value() string {
+	return c.value
+}
+
 func (c BatchDeleteServerTagsRequestBodyAction) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c.value)
+	return utils.Marshal(c.value)
 }
 
 func (c *BatchDeleteServerTagsRequestBodyAction) UnmarshalJSON(b []byte) error {

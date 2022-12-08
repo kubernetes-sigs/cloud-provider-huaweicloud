@@ -1,14 +1,7 @@
-/*
- * ecs
- *
- * ECS Open API
- *
- */
-
 package model
 
 import (
-	"encoding/json"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
 
 	"strings"
 )
@@ -18,6 +11,10 @@ type NovaListAvailabilityZonesRequest struct {
 }
 
 func (o NovaListAvailabilityZonesRequest) String() string {
-	data, _ := json.Marshal(o)
+	data, err := utils.Marshal(o)
+	if err != nil {
+		return "NovaListAvailabilityZonesRequest struct{}"
+	}
+
 	return strings.Join([]string{"NovaListAvailabilityZonesRequest", string(data)}, " ")
 }

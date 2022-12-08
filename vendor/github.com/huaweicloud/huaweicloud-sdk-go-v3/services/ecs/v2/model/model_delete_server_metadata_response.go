@@ -1,23 +1,21 @@
-/*
- * ecs
- *
- * ECS Open API
- *
- */
-
 package model
 
 import (
-	"encoding/json"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
 
 	"strings"
 )
 
 // Response Object
 type DeleteServerMetadataResponse struct {
+	HttpStatusCode int `json:"-"`
 }
 
 func (o DeleteServerMetadataResponse) String() string {
-	data, _ := json.Marshal(o)
+	data, err := utils.Marshal(o)
+	if err != nil {
+		return "DeleteServerMetadataResponse struct{}"
+	}
+
 	return strings.Join([]string{"DeleteServerMetadataResponse", string(data)}, " ")
 }
