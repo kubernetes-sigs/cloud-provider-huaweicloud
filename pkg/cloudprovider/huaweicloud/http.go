@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/url"
@@ -32,6 +31,7 @@ import (
 
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/klog"
+
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/apigw/core"
 )
 
@@ -106,7 +106,7 @@ func NewRequest(method, url string, headersIn map[string]string, obj interface{}
 // decodeBody is used to JSON decode a body
 func DecodeBody(resp *http.Response, out interface{}) error {
 	defer resp.Body.Close()
-	resBody, err := ioutil.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}

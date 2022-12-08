@@ -20,7 +20,7 @@ package huaweicloud
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"os"
 	"time"
@@ -246,7 +246,7 @@ func (a *ALBClient) DeleteLoadBalancer(loadbalancerID string) (int, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
-		resBody, _ := ioutil.ReadAll(resp.Body)
+		resBody, _ := io.ReadAll(resp.Body)
 		return resp.StatusCode, fmt.Errorf("Failed to DeleteLoadBalancer : %s, status code: %d", string(resBody), resp.StatusCode)
 	}
 
@@ -350,7 +350,7 @@ func (a *ALBClient) DeleteListener(listenerID string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent {
-		resBody, _ := ioutil.ReadAll(resp.Body)
+		resBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("Failed to DeleteListener : %s, status code: %d", string(resBody), resp.StatusCode)
 	}
 
@@ -410,8 +410,10 @@ func (a *ALBClient) ListListeners(params map[string]string) (*ListenerList, erro
 // UpdateListener updates listener.
 // l connection_limit is allowed to be set by admin only
 // 2 default_pool_id is supportted in the following ways:
-//        (1) from specific default_pool_id to nil
-//        (2) from nil to specific default_pool_id
+//
+//	(1) from specific default_pool_id to nil
+//	(2) from nil to specific default_pool_id
+//
 // 3 default_pool_id cannot be a pool used by another listener
 // !!!!! ONLY SUPPORT UPDATE: name, connection_limit, description, default_pool_id, default_tls_container_id !!!!!
 func (a *ALBClient) UpdateListener(listenerMod *ALBListener, listenerID string) (*ALBListener, error) {
@@ -478,7 +480,7 @@ func (a *ALBClient) DeleteHealthMonitor(healthMonitorID string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent {
-		resBody, _ := ioutil.ReadAll(resp.Body)
+		resBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("failed to delete HealthMonitor : %s, status code: %d", string(resBody), resp.StatusCode)
 	}
 
@@ -579,7 +581,7 @@ func (a *ALBClient) DeletePool(poolID string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent {
-		resBody, _ := ioutil.ReadAll(resp.Body)
+		resBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("Failed to delete pool : %s, status code: %d", string(resBody), resp.StatusCode)
 	}
 
@@ -654,8 +656,10 @@ func (a *ALBClient) listPools() (*PoolList, error) {
 
 // AddMember adds a member.
 // 1 differs from elb, which register a host to a listener directly
-//         (see.RegisterInstancesWithListener() in file elb.go)
-//         alb add a host to a pool, rather than to a listener
+//
+//	(see.RegisterInstancesWithListener() in file elb.go)
+//	alb add a host to a pool, rather than to a listener
+//
 // 2 each pool belongs to a specific listener
 // 3 in a 4-level load balancer, one listener has one  pool only
 // 4 only one host is allowed to be added in each request
@@ -696,7 +700,7 @@ func (a *ALBClient) DeleteMember(poolId string, memberID string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent {
-		resBody, _ := ioutil.ReadAll(resp.Body)
+		resBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("Failed to delete member : %s, status code: %d", string(resBody), resp.StatusCode)
 	}
 
@@ -878,7 +882,7 @@ func (a *ALBClient) DeleteEip(ID string) (int, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent && resp.StatusCode != http.StatusNotFound {
-		resBody, _ := ioutil.ReadAll(resp.Body)
+		resBody, _ := io.ReadAll(resp.Body)
 		return resp.StatusCode, fmt.Errorf("Failed to Delete EIP : %s, status code: %d", string(resBody), resp.StatusCode)
 	}
 

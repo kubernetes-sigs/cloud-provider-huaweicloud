@@ -19,7 +19,6 @@ package huaweicloud
 import (
 	"encoding/json"
 	"io"
-	"io/ioutil"
 
 	"k8s.io/klog"
 )
@@ -70,7 +69,7 @@ type AuthOpts struct {
 
 // ReadConf reads and parse configuration.
 func ReadConf(config io.Reader) (*CloudConfig, error) {
-	configBytes, err := ioutil.ReadAll(config)
+	configBytes, err := io.ReadAll(config)
 	if err != nil {
 		klog.Errorf("Read config failed with error: %v", err)
 		return nil, err

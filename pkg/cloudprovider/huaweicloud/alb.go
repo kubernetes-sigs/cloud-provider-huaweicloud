@@ -157,10 +157,11 @@ func (alb *ALBCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 }
 
 // update members in the service
-//        (1) find out new members for the service according to service pods and the health status
-//        (2) find out the pool
-//        (3) get previous members under the pool
-//        (4) compare the equality of two member sets, if not equal, update the pool members
+//
+//	(1) find out new members for the service according to service pods and the health status
+//	(2) find out the pool
+//	(3) get previous members under the pool
+//	(4) compare the equality of two member sets, if not equal, update the pool members
 func (alb *ALBCloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
 	klog.Infof("Begin to update loadbalancer configuration of service(%s/%s)", service.Namespace, service.Name)
 	albProvider, err := alb.getALBClient()
@@ -299,11 +300,12 @@ func (alb *ALBCloud) UpdateLoadBalancer(ctx context.Context, clusterName string,
 }
 
 // delete all resources under a service, including listener, pool, healthMonitor and member
-//        (1) find out the listener of the service
-//        (2) find out the pool of the listener
-//        (3) get all members & healthMonitor under this pool
-//        (4) delete these members & healthMonitors in the pool
-//        (5) delete the pool & listener
+//
+//	(1) find out the listener of the service
+//	(2) find out the pool of the listener
+//	(3) get all members & healthMonitor under this pool
+//	(4) delete these members & healthMonitors in the pool
+//	(5) delete the pool & listener
 func (alb *ALBCloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
 	klog.Infof("Begin to delete loadbalancer configuration of service(%s/%s)", service.Namespace, service.Name)
 	albProvider, err := alb.getALBClient()
@@ -1467,7 +1469,7 @@ func (alb *ALBCloud) updateLoadBalancer(
 	return utilerrors.NewAggregate(errs)
 }
 
-//help function for rollback resource, not care statusCode
+// help function for rollback resource, not care statusCode
 func (alb *ALBCloud) deleteElb(albProvider *ALBClient, id string, service *v1.Service) {
 	_, err := albProvider.DeleteLoadBalancer(id)
 	if err != nil {
@@ -1476,7 +1478,7 @@ func (alb *ALBCloud) deleteElb(albProvider *ALBClient, id string, service *v1.Se
 	}
 }
 
-//help function for rollback resource, not care statusCode
+// help function for rollback resource, not care statusCode
 func (alb *ALBCloud) deleteEip(albProvider *ALBClient, id string, service *v1.Service) {
 	_, err := albProvider.DeleteEip(id)
 	if err != nil {
@@ -1485,7 +1487,7 @@ func (alb *ALBCloud) deleteEip(albProvider *ALBClient, id string, service *v1.Se
 	}
 }
 
-//if error, then return origin service
+// if error, then return origin service
 func (alb *ALBCloud) updateService(service *v1.Service) (*v1.Service, error) {
 	var err error
 	serviceCopy := service.DeepCopy()

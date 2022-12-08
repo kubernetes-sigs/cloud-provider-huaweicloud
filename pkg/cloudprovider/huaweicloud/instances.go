@@ -216,12 +216,13 @@ func (i *Instances) parseAddressesFromServer(server *huaweicloudsdkecsmodel.Serv
 
 // isNonExistError tells if an error means server not exit, particularly in case of retrieve an server.
 // The error looks like as follows:
-// {
-//    "status_code": 404,
-//    "request_id": "bb0361f3e5893add5b6810eef1123b41",
-//    "error_code": "Ecs.0114",
-//    "error_message": "Instance[a44af098-7548-4519-8243-a88ba3e5de4fnoexist] could not be found."
-// }
+//
+//	{
+//	   "status_code": 404,
+//	   "request_id": "bb0361f3e5893add5b6810eef1123b41",
+//	   "error_code": "Ecs.0114",
+//	   "error_message": "Instance[a44af098-7548-4519-8243-a88ba3e5de4fnoexist] could not be found."
+//	}
 func (i *Instances) isNonExistError(originErr error) bool {
 	sre := huaweicloudsdkerr.ServiceResponseError{}
 

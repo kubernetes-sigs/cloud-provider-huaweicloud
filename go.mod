@@ -97,6 +97,8 @@ require (
 )
 
 replace (
+	github.com/go-task/slim-sprig => github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0
+	golang.org/x/tools => golang.org/x/tools v0.0.0-20210106214847-113979e3529a
 	k8s.io/api => k8s.io/api v0.19.14
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.19.14
 	k8s.io/apimachinery => k8s.io/apimachinery v0.19.14

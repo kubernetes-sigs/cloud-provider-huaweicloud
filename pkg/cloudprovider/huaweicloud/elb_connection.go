@@ -20,7 +20,7 @@ package huaweicloud
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -428,8 +428,8 @@ func (e *ELBClient) Quota() (*Quota, error) {
 	return &quota, nil
 }
 
-//Create an ELB instance
-//因为这个是通过portal创建的，所以无需API创建
+// Create an ELB instance
+// 因为这个是通过portal创建的，所以无需API创建
 func (e *ELBClient) CreateLoadBalancer(elbConf *ELB) (string, error) {
 	if !IsValidBandwidth(elbConf.Bandwidth) ||
 		!IsValidName(elbConf.Name) ||
@@ -550,7 +550,7 @@ func (e *ELBClient) ListLoadBalancers(params map[string]string) (*ElbList, error
 	// TODO: expect: {"loadbalancers":[],"instance_num":"0"}
 	// but return: {"loadbalancers":{},"instance_num":"0"}. If there no ELB
 	defer resp.Body.Close()
-	resBody, err := ioutil.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -587,7 +587,7 @@ func (e *ELBClient) CreateListener(listenerConf *Listener) (*ListenerRsp, *Error
 	}
 
 	defer resp.Body.Close()
-	resBody, _ := ioutil.ReadAll(resp.Body)
+	resBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		var errRsp *ErrorRsp
 		err = json.Unmarshal(resBody, &errRsp)
@@ -618,7 +618,7 @@ func (e *ELBClient) DeleteListener(listenerID string) error {
 	}
 
 	defer resp.Body.Close()
-	resBody, _ := ioutil.ReadAll(resp.Body)
+	resBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("Failed to delete listener : %s, status code: %d", string(resBody), resp.StatusCode)
 	}
@@ -715,7 +715,7 @@ func (e *ELBClient) DeleteHealthCheck(healthcheckID string) error {
 
 	defer resp.Body.Close()
 
-	resBody, _ := ioutil.ReadAll(resp.Body)
+	resBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusNoContent {
 		return fmt.Errorf("Failed to delete HealthCheck : %s, status code: %d", string(resBody), resp.StatusCode)
 	}
@@ -734,7 +734,7 @@ func (e *ELBClient) GetHealthCheck(healthcheckID string) (*HealthCheckDetail, *E
 	}
 
 	defer resp.Body.Close()
-	resBody, _ := ioutil.ReadAll(resp.Body)
+	resBody, _ := io.ReadAll(resp.Body)
 	if resp.StatusCode != http.StatusOK {
 		var errRsp ErrorRsp
 		err = json.Unmarshal(resBody, &errRsp)
@@ -809,7 +809,7 @@ func (e *ELBClient) ListMembers(listenerID string) ([]*MemDetail, error) {
 
 	// TODO: expect return body: [], but return: {}.
 	defer resp.Body.Close()
-	resBody, err := ioutil.ReadAll(resp.Body)
+	resBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

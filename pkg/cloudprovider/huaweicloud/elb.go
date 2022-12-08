@@ -86,7 +86,7 @@ func (elb *ELBCloud) getSecret(secretName string) (*Secret, error) {
 	return &secret, nil
 }
 
-//getELBClient
+// getELBClient
 func (elb *ELBCloud) ELBClient() (*ELBClient, error) {
 	secret, err := elb.getSecret(elb.config.SecretName)
 	if err != nil {
