@@ -22,6 +22,8 @@ GO111MODULE=on go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1
 GOPATH=$(go env GOPATH | awk -F ':' '{print $1}')
 export PATH=$PATH:$GOPATH/bin
 
+golangci-lint cache clean && go clean -modcache -cache -i
+
 if golangci-lint run; then
   echo 'Congratulations!  All Go source files have passed staticcheck.'
 else

@@ -23,11 +23,11 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"time"
 
 	"k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
+
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
 )
 
 // ALBList represents a list of ALB.
@@ -767,7 +767,7 @@ func (a *ALBClient) DeleteMembers(poolId string) error {
 
 // WaitMemberComplete waits member complete.
 func (a *ALBClient) WaitMemberComplete(poolID, memberID string) error {
-	err := wait.Poll(time.Second*2, time.Minute*3, func() (bool, error) {
+	err := common.WaitForCompleted(func() (bool, error) {
 		m, err := a.GetMember(poolID, memberID)
 		if err != nil {
 			klog.Errorf("Get member(%s/%s) status error: %v", poolID, memberID, err)

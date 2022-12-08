@@ -26,8 +26,9 @@ import (
 	"strings"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog"
+
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
 )
 
 const tryJobStatusTimes = 100
@@ -344,7 +345,7 @@ func (e *ELBClient) waitJobEnd(jobID string) (*AsyncJobResp, error) {
 }
 
 func (e *ELBClient) WaitJobComplete(jobID string) error {
-	err := wait.Poll(time.Second*2, time.Minute*5, func() (bool, error) {
+	err := common.WaitForCompleted(func() (bool, error) {
 		job, err := e.GetJobStatus(jobID)
 		if err != nil {
 			klog.Errorf("Get job(%s) status error: %v", jobID, err)
@@ -366,7 +367,7 @@ func (e *ELBClient) WaitJobComplete(jobID string) error {
 }
 
 func (e *ELBClient) WaitMemberComplete(listenerID string, newMembers []*Member) error {
-	err := wait.Poll(time.Second*2, time.Minute*3, func() (bool, error) {
+	err := common.WaitForCompleted(func() (bool, error) {
 		members, err := e.ListMembers(listenerID)
 		if err != nil {
 			klog.Errorf("List members(%s) error: %v", listenerID, err)
