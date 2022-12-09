@@ -6,8 +6,8 @@ require (
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.0.6-beta
-	github.com/onsi/ginkgo v1.16.4
-	github.com/onsi/gomega v1.18.1
+	github.com/onsi/ginkgo/v2 v2.1.4
+	github.com/onsi/gomega v1.19.0
 	k8s.io/api v0.19.14
 	k8s.io/apimachinery v0.19.14
 	k8s.io/client-go v0.19.14
@@ -56,7 +56,6 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
-	github.com/nxadm/tail v1.4.8 // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/prometheus/client_golang v1.7.1 // indirect
@@ -85,7 +84,6 @@ require (
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/square/go-jose.v2 v2.2.2 // indirect
-	gopkg.in/tomb.v1 v1.0.0-20141024135613-dd632973f1e7 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/apiserver v0.19.14 // indirect
 	k8s.io/klog/v2 v2.2.0 // indirect
@@ -97,8 +95,6 @@ require (
 )
 
 replace (
-	github.com/go-task/slim-sprig => github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0
-	golang.org/x/tools => golang.org/x/tools v0.0.0-20210106214847-113979e3529a
 	k8s.io/api => k8s.io/api v0.19.14
 	k8s.io/apiextensions-apiserver => k8s.io/apiextensions-apiserver v0.19.14
 	k8s.io/apimachinery => k8s.io/apimachinery v0.19.14
