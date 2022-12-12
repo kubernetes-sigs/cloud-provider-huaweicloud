@@ -19,7 +19,7 @@ package huaweicloud
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 )
 
@@ -307,7 +307,7 @@ func (nat *NATClient) DeleteDNATRule(dnatRuleId string, natGatewayId string) err
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusNoContent {
-		resBody, _ := ioutil.ReadAll(resp.Body)
+		resBody, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("Failed to DeleteDNATRule : %s, status code: %d", string(resBody), resp.StatusCode)
 	}
 

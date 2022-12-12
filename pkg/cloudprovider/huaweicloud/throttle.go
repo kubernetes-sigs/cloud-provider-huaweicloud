@@ -20,7 +20,6 @@ package huaweicloud
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"path"
 	"strconv"
@@ -302,7 +301,7 @@ func (t *Throttler) syncThrottleFromConfig() {
 }
 
 func (t *Throttler) resetThrottles(conf string) {
-	b, err := ioutil.ReadFile(path.Join(conf, "throttle.json"))
+	b, err := os.ReadFile(path.Join(conf, "throttle.json"))
 	if err != nil {
 		klog.Errorf("Read throttle config file error: %v", err)
 		return

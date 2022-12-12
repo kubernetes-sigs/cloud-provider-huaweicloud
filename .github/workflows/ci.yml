@@ -9,19 +9,18 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - name: install Go
+      - name: Install Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.15.x
-      - uses: actions/checkout@v3
-      - name: golangci-lint
-        uses: golangci/golangci-lint-action@v3
-        with:
-          # the version of golangci-lint.
-          version: v1.32.2
-
-          # show only new issues if it's a pull request.
-          only-new-issues: false
+          go-version: 1.19.x
+      - name: Checkout code
+        uses: actions/checkout@v3
+      - name: Check vendors
+        run: hack/verify-vendor.sh
+      - name: Check gofmt
+        run: hack/verify-gofmt.sh
+      - name: Check static code
+        run: hack/verify-staticcheck.sh
   build:
     name: compile
     runs-on: ubuntu-latest
@@ -35,7 +34,7 @@ jobs:
       - name: install Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.15.x
+          go-version: 1.19.x
       - name: compile
         run: make all
   test:
@@ -48,7 +47,7 @@ jobs:
       - name: install Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.15.x
+          go-version: 1.19.x
       - name: make test
         run: make test
   e2e:
@@ -67,7 +66,7 @@ jobs:
       - name: install Go
         uses: actions/setup-go@v3
         with:
-          go-version: 1.15.x
+          go-version: 1.19.x
       - name: run e2e
         run: |
           export ARTIFACTS_PATH=${{ github.workspace }}/e2e-logs

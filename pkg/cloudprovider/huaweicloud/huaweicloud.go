@@ -707,7 +707,7 @@ func GetListenerName(service *v1.Service) string {
 	return string(service.UID)
 }
 
-//k8s-TCP/UDP-8080
+// k8s-TCP/UDP-8080
 func GetListenerNameV1(port *v1.ServicePort) string {
 	return fmt.Sprintf("k8s_%s_%d", port.Protocol, port.Port)
 }

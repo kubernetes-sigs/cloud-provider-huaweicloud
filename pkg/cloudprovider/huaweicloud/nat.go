@@ -274,9 +274,10 @@ func listAllDnatRuleByFloatIP(natProvider *NATClient, floatIP string) (*DNATRule
 }
 
 // update members in the service
-//        (1) find the previous DNATRule
-//        (2) check whether the node whose port set in the rule is health
-//        (3) if not health delete the previous and create a new one
+//
+//	(1) find the previous DNATRule
+//	(2) check whether the node whose port set in the rule is health
+//	(3) if not health delete the previous and create a new one
 func (nat *NATCloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
 	natProvider, err := nat.getNATClient()
 	if err != nil {
@@ -396,8 +397,9 @@ func (nat *NATCloud) UpdateLoadBalancer(ctx context.Context, clusterName string,
 }
 
 // delete all DNATRules under a service
-//        (1) find the DNAT rules of the service
-//        (2) delete the DNAT rule
+//
+//	(1) find the DNAT rules of the service
+//	(2) delete the DNAT rule
 func (nat *NATCloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
 	natProvider, err := nat.getNATClient()
 	if err != nil {
@@ -555,9 +557,9 @@ func (nat *NATCloud) ensureCreateDNATRule(natProvider *NATClient, port *v1.Servi
 	return nil
 }
 
-//1.delete the old dnatRule
-//2.get the new port id
-//3.create a new dnatRule
+// 1.delete the old dnatRule
+// 2.get the new port id
+// 3.create a new dnatRule
 func (nat *NATCloud) ensureDeleteDNATRule(natProvider *NATClient, dnatRule *DNATRule, natGatewayId string) error {
 	klog.V(4).Infoln("Delete the DNAT Rule when the node is not ready", dnatRule.FloatingIpAddress+":"+fmt.Sprint(dnatRule.ExternalServicePort))
 	err := natProvider.DeleteDNATRule(dnatRule.Id, natGatewayId)

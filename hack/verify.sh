@@ -14,10 +14,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-KUBE_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
+REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 
-${KUBE_ROOT}/hack/verify-staticcheck.sh
-${KUBE_ROOT}/hack/verify-gofmt.sh
-if [ $? -ne 0 ]; then
-  exit 1
-fi
+$REPO_ROOT/hack/verify-gofmt.sh
+$REPO_ROOT/hack/verify-vendor.sh
+$REPO_ROOT/hack/verify-staticcheck.sh
