@@ -8,6 +8,7 @@ require (
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.1.15
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
+	google.golang.org/grpc v1.27.0
 	gopkg.in/gcfg.v1 v1.2.3
 	k8s.io/api v0.19.14
 	k8s.io/apimachinery v0.19.14
@@ -81,7 +82,6 @@ require (
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0 // indirect
 	google.golang.org/appengine v1.6.5 // indirect
 	google.golang.org/genproto v0.0.0-20200526211855-cb27e3aa2013 // indirect
-	google.golang.org/grpc v1.27.0 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/ini.v1 v1.66.6 // indirect
