@@ -1,28 +1,33 @@
-/*
- * ecs
- *
- * ECS Open API
- *
- */
-
 package model
 
 import (
-	"encoding/json"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
+
 	"errors"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/converter"
+
 	"strings"
 )
 
 // Request Object
 type DetachServerVolumeRequest struct {
-	ServerId   string                              `json:"server_id"`
-	VolumeId   string                              `json:"volume_id"`
-	DeleteFlag DetachServerVolumeRequestDeleteFlag `json:"delete_flag,omitempty"`
+
+	// 云服务器ID。
+	ServerId string `json:"server_id"`
+
+	// 磁盘ID。
+	VolumeId string `json:"volume_id"`
+
+	// 是否强制卸载数据盘。  - 是，值为“1”。  - 否，值为“0”。  默认值为0。
+	DeleteFlag *DetachServerVolumeRequestDeleteFlag `json:"delete_flag,omitempty"`
 }
 
 func (o DetachServerVolumeRequest) String() string {
-	data, _ := json.Marshal(o)
+	data, err := utils.Marshal(o)
+	if err != nil {
+		return "DetachServerVolumeRequest struct{}"
+	}
+
 	return strings.Join([]string{"DetachServerVolumeRequest", string(data)}, " ")
 }
 
@@ -31,23 +36,27 @@ type DetachServerVolumeRequestDeleteFlag struct {
 }
 
 type DetachServerVolumeRequestDeleteFlagEnum struct {
-	_0 DetachServerVolumeRequestDeleteFlag
-	_1 DetachServerVolumeRequestDeleteFlag
+	E_0 DetachServerVolumeRequestDeleteFlag
+	E_1 DetachServerVolumeRequestDeleteFlag
 }
 
 func GetDetachServerVolumeRequestDeleteFlagEnum() DetachServerVolumeRequestDeleteFlagEnum {
 	return DetachServerVolumeRequestDeleteFlagEnum{
-		_0: DetachServerVolumeRequestDeleteFlag{
+		E_0: DetachServerVolumeRequestDeleteFlag{
 			value: "0",
 		},
-		_1: DetachServerVolumeRequestDeleteFlag{
+		E_1: DetachServerVolumeRequestDeleteFlag{
 			value: "1",
 		},
 	}
 }
 
+func (c DetachServerVolumeRequestDeleteFlag) Value() string {
+	return c.value
+}
+
 func (c DetachServerVolumeRequestDeleteFlag) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c.value)
+	return utils.Marshal(c.value)
 }
 
 func (c *DetachServerVolumeRequestDeleteFlag) UnmarshalJSON(b []byte) error {

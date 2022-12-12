@@ -1,25 +1,23 @@
-/*
- * ecs
- *
- * ECS Open API
- *
- */
-
 package model
 
 import (
-	"encoding/json"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
 
 	"strings"
 )
 
 //
 type ServerNicSecurityGroup struct {
+
 	// 安全组ID。
 	Id string `json:"id"`
 }
 
 func (o ServerNicSecurityGroup) String() string {
-	data, _ := json.Marshal(o)
+	data, err := utils.Marshal(o)
+	if err != nil {
+		return "ServerNicSecurityGroup struct{}"
+	}
+
 	return strings.Join([]string{"ServerNicSecurityGroup", string(data)}, " ")
 }

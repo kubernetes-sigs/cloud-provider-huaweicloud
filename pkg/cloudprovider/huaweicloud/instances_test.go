@@ -24,15 +24,17 @@ import (
 )
 
 func TestAddressesFromServer(t *testing.T) {
+	fixed := huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FIXED
 	var addr1 = huaweicloudsdkecsmodel.ServerAddress{
 		Version:      "4",
 		Addr:         "192.168.1.122",
-		OSEXTIPStype: huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FIXED,
+		OSEXTIPStype: &fixed,
 	}
+	floating := huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FLOATING
 	var addr2 = huaweicloudsdkecsmodel.ServerAddress{
 		Version:      "4",
 		Addr:         "159.138.131.176",
-		OSEXTIPStype: huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FLOATING,
+		OSEXTIPStype: &floating,
 	}
 
 	var server = &huaweicloudsdkecsmodel.ServerDetail{

@@ -198,16 +198,18 @@ func (i *Instances) parseAddressesFromServer(server *huaweicloudsdkecsmodel.Serv
 
 	for _, addrs := range server.Addresses {
 		var addressType v1.NodeAddressType
-		for i := range addrs {
-			if addrs[i].OSEXTIPStype == huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FIXED {
+		for _, ins := range addrs {
+			fixed := huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FIXED
+			floating := huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FLOATING
+			if ins.OSEXTIPStype != nil && *ins.OSEXTIPStype == fixed {
 				addressType = v1.NodeInternalIP
-			} else if addrs[i].OSEXTIPStype == huaweicloudsdkecsmodel.GetServerAddressOSEXTIPStypeEnum().FLOATING {
+			} else if ins.OSEXTIPStype != nil && *ins.OSEXTIPStype == floating {
 				addressType = v1.NodeExternalIP
 			} else {
 				continue
 			}
-			klog.V(4).Infof("get a node address, type: %s, address: %s", addressType, addrs[i].Addr)
-			nodeAddresses = append(nodeAddresses, v1.NodeAddress{Type: addressType, Address: addrs[i].Addr})
+			klog.V(4).Infof("get a node address, type: %s, address: %s", addressType, ins.Addr)
+			nodeAddresses = append(nodeAddresses, v1.NodeAddress{Type: addressType, Address: ins.Addr})
 		}
 	}
 
@@ -299,7 +301,8 @@ func (i *Instances) getECSByName(name string) (*huaweicloudsdkecsmodel.ServerDet
 		return nil, fmt.Errorf("found more than one server with same name: %s, which is not allowed", name)
 	}
 
-	return &rsp.Servers[0], nil
+	servers := *rsp.Servers
+	return &servers[0], nil
 }
 
 // getECSClient initializes a ECS(Elastic Cloud Server) client which will be used to operate ECS.

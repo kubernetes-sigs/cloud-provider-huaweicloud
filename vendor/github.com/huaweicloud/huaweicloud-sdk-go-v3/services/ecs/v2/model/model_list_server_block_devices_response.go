@@ -1,14 +1,7 @@
-/*
- * ecs
- *
- * ECS Open API
- *
- */
-
 package model
 
 import (
-	"encoding/json"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
 
 	"strings"
 )
@@ -16,11 +9,17 @@ import (
 // Response Object
 type ListServerBlockDevicesResponse struct {
 	AttachableQuantity *BlockDeviceAttachableQuantity `json:"attachableQuantity,omitempty"`
+
 	// 云服务器挂载信息列表。
-	VolumeAttachments []ServerBlockDevice `json:"volumeAttachments,omitempty"`
+	VolumeAttachments *[]ServerBlockDevice `json:"volumeAttachments,omitempty"`
+	HttpStatusCode    int                  `json:"-"`
 }
 
 func (o ListServerBlockDevicesResponse) String() string {
-	data, _ := json.Marshal(o)
+	data, err := utils.Marshal(o)
+	if err != nil {
+		return "ListServerBlockDevicesResponse struct{}"
+	}
+
 	return strings.Join([]string{"ListServerBlockDevicesResponse", string(data)}, " ")
 }

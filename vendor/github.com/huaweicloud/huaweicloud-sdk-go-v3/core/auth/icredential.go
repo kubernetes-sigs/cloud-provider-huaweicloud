@@ -19,8 +19,12 @@
 
 package auth
 
-import "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/request"
+import (
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/impl"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/request"
+)
 
 type ICredential interface {
-	ProcessAuthRequest(httpRequest *request.DefaultHttpRequest) (*request.DefaultHttpRequest, error)
+	ProcessAuthParams(httpClient *impl.DefaultHttpClient, region string) ICredential
+	ProcessAuthRequest(httpClient *impl.DefaultHttpClient, httpRequest *request.DefaultHttpRequest) (*request.DefaultHttpRequest, error)
 }

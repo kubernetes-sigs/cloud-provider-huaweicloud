@@ -1,14 +1,7 @@
-/*
- * ecs
- *
- * ECS Open API
- *
- */
-
 package model
 
 import (
-	"encoding/json"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
 
 	"strings"
 )
@@ -19,6 +12,10 @@ type BatchStopServersRequestBody struct {
 }
 
 func (o BatchStopServersRequestBody) String() string {
-	data, _ := json.Marshal(o)
+	data, err := utils.Marshal(o)
+	if err != nil {
+		return "BatchStopServersRequestBody struct{}"
+	}
+
 	return strings.Join([]string{"BatchStopServersRequestBody", string(data)}, " ")
 }
