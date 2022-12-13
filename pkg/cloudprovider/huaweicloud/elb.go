@@ -561,7 +561,7 @@ func (elb *ELBCloud) generateMembers(service *v1.Service) ([]*Member, error) {
 			continue
 		}
 
-		if !IsPodActive(&item) {
+		if !IsPodActive(item) {
 			klog.Errorf("pod(%s/%s) is not active", item.Namespace, item.Name)
 			continue
 		}

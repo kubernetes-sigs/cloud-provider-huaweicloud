@@ -198,7 +198,7 @@ func (nat *NATCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 	lbServers, _ := nat.kubeClient.Services("").List(context.TODO(), metav1.ListOptions{})
 	var lbPorts []v1.ServicePort
 	for _, svc := range lbServers.Items {
-		lbType := svc.Annotations[ELBClassAnnotation]
+		lbType := svc.Annotations[ElbClass]
 		if lbType != "dnat" || svc.Spec.LoadBalancerIP != service.Spec.LoadBalancerIP {
 			continue
 		}

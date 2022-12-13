@@ -129,6 +129,10 @@ github.com/huaweicloud/huaweicloud-sdk-go-v3/core/sdktime
 github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils
 github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2
 github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model
+github.com/huaweicloud/huaweicloud-sdk-go-v3/services/eip/v2
+github.com/huaweicloud/huaweicloud-sdk-go-v3/services/eip/v2/model
+github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v2
+github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v2/model
 # github.com/imdario/mergo v0.3.5
 ## explicit
 github.com/imdario/mergo
