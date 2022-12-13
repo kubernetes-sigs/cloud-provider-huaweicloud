@@ -6,6 +6,7 @@ require (
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.1.15
+	github.com/mitchellh/mapstructure v1.1.2
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0
 	google.golang.org/grpc v1.27.0

@@ -42,6 +42,9 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/cloud-provider"
 	"k8s.io/klog"
+
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
 )
 
 // Cloud provider name: PaaS Web Services.
@@ -372,8 +375,9 @@ type SecurityCredential struct {
 }
 
 type HWSCloud struct {
-	config    *CloudConfig
-	providers map[LoadBalanceVersion]cloudprovider.LoadBalancer
+	huaweiCloud *HuaweiCloud
+	config      *CloudConfig
+	providers   map[LoadBalanceVersion]cloudprovider.LoadBalancer
 }
 
 type ELBPoolDescription struct {
@@ -402,6 +406,17 @@ const (
 	VersionNAT                                 // network address translation
 )
 
+type HuaweiCloud struct {
+	globalConfig *config.Config
+	kubeClient   *corev1.CoreV1Client
+
+	loadbalancerOpts *config.LoadBalancerOptions
+	networkingOpts   *config.NetworkingOptions
+	metadataOpts     *config.MetadataOptions
+
+	ecsClient wrapper.EcsClient
+}
+
 func init() {
 	cloudprovider.RegisterCloudProvider(ProviderName, func(config io.Reader) (cloudprovider.Interface, error) {
 		hwsCloud, err := NewHWSCloud(config)
@@ -412,28 +427,80 @@ func init() {
 	})
 }
 
-func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
-	if config == nil {
+func parseOlderCloudConfig(globalConfig *config.Config) *CloudConfig {
+	gConfig := &CloudConfig{
+		Auth: AuthOpts{
+			SecretName:  "",
+			AccessKey:   globalConfig.Global.AccessKey,
+			SecretKey:   globalConfig.Global.SecretKey,
+			IAMEndpoint: fmt.Sprintf("https://iam.%s:443/v3", globalConfig.Global.Cloud),
+			ECSEndpoint: fmt.Sprintf("https://ecs.%s.%s", globalConfig.Global.Region, globalConfig.Global.Cloud),
+			ProjectID:   globalConfig.Global.ProjectID,
+			Region:      globalConfig.Global.Region,
+			Cloud:       globalConfig.Global.Cloud,
+			DomainID:    "",
+		},
+		LoadBalancer: LBConfig{
+			Apiserver:        "",
+			SecretName:       "huaweicloud-auth-credentials",
+			SignerType:       "ec2",
+			ELBAlgorithm:     "ROUND_ROBIN",
+			TenantId:         globalConfig.Global.ProjectID,
+			Region:           globalConfig.Global.Region,
+			VPCId:            "0b876fcb-6a0b-47a3-8067-80fe9245a3da",
+			SubnetId:         "82e61d5f-674f-4ef4-a665-d5785a0733e0",
+			ECSEndpoint:      fmt.Sprintf("https://ecs.%s.%s", globalConfig.Global.Region, globalConfig.Global.Cloud),
+			ELBEndpoint:      fmt.Sprintf("https://elb.%s.%s", globalConfig.Global.Region, globalConfig.Global.Cloud),
+			ALBEndpoint:      fmt.Sprintf("https://elb.%s.%s", globalConfig.Global.Region, globalConfig.Global.Cloud),
+			GLBEndpoint:      "",
+			NATEndpoint:      fmt.Sprintf("https://nat.%s.%s", globalConfig.Global.Region, globalConfig.Global.Cloud),
+			VPCEndpoint:      fmt.Sprintf("https://vpc.%s.%s", globalConfig.Global.Region, globalConfig.Global.Cloud),
+			EnterpriseEnable: "",
+		},
+	}
+
+	return gConfig
+}
+
+func NewHWSCloud(cfg io.Reader) (*HWSCloud, error) {
+	if cfg == nil {
 		return nil, fmt.Errorf("huaweicloud provider config is nil")
 	}
 
-	globalConfig, err := ReadConf(config)
+	globalConfig, err := config.ReadConfig(cfg)
 	if err != nil {
-		klog.Errorf("Read configuration failed with error: %v", err)
-		return nil, err
-	}
-	LogConf(globalConfig)
-
-	clusterCfg, err := rest.InClusterConfig()
-	if err != nil {
-		klog.Errorf("Initial cluster configuration failed with error: %v", err)
+		klog.Fatalf("failed to read Global Config: %v", err)
 		return nil, err
 	}
 
-	kubeClient, err := corev1.NewForConfig(clusterCfg)
+	elbCfg, err := config.LoadElbConfigFromCM()
+	if err != nil {
+		klog.Errorf("failed to read loadbalancer config: %v", err)
+	}
+
+	klog.Infof("get loadbalancer config: %#v", elbCfg)
+	if elbCfg == nil {
+		elbCfg = config.NewDefaultELBConfig()
+	}
+
+	kubeClient, err := newKubeClient()
 	if err != nil {
 		return nil, err
 	}
+
+	cloud := HuaweiCloud{
+		globalConfig: globalConfig,
+		kubeClient:   kubeClient,
+
+		loadbalancerOpts: &elbCfg.LoadBalancerOpts,
+		networkingOpts:   &elbCfg.NetworkingOpts,
+		metadataOpts:     &elbCfg.MetadataOpts,
+
+		ecsClient: wrapper.EcsClient{AuthOpts: &globalConfig.Global},
+	}
+
+	gConfig := parseOlderCloudConfig(globalConfig)
+	LogConf(gConfig)
 
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(kubeClient.RESTClient()).Events("")})
@@ -460,7 +527,7 @@ func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 	secretInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			kubeSecret := obj.(*v1.Secret)
-			if kubeSecret.Name == globalConfig.LoadBalancer.SecretName {
+			if kubeSecret.Name == gConfig.LoadBalancer.SecretName {
 				key := kubeSecret.Namespace + "/" + kubeSecret.Name
 				lrucache.Add(key, kubeSecret)
 			}
@@ -468,7 +535,7 @@ func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 		UpdateFunc: func(oldObj, newObj interface{}) {
 			oldSecret := oldObj.(*v1.Secret)
 			newSecret := newObj.(*v1.Secret)
-			if newSecret.Name == globalConfig.LoadBalancer.SecretName {
+			if newSecret.Name == gConfig.LoadBalancer.SecretName {
 				if reflect.DeepEqual(oldSecret.Data, newSecret.Data) {
 					return
 				}
@@ -477,7 +544,7 @@ func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 			}
 		},
 		DeleteFunc: func(obj interface{}) {
-			deleteSecret(obj, lrucache, globalConfig.LoadBalancer.SecretName)
+			deleteSecret(obj, lrucache, gConfig.LoadBalancer.SecretName)
 		},
 	}, 30*time.Second)
 
@@ -488,17 +555,31 @@ func NewHWSCloud(config io.Reader) (*HWSCloud, error) {
 	}
 
 	hws := &HWSCloud{
-		config:    globalConfig,
-		providers: map[LoadBalanceVersion]cloudprovider.LoadBalancer{},
+		huaweiCloud: &cloud,
+		config:      gConfig,
+		providers:   map[LoadBalanceVersion]cloudprovider.LoadBalancer{},
 	}
 
-	hws.providers[VersionELB] = &ELBCloud{lrucache: lrucache, config: &globalConfig.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder}
-	hws.providers[VersionALB] = &ALBCloud{lrucache: lrucache, config: &globalConfig.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder, subnetMap: map[string]string{}}
+	hws.providers[VersionELB] = &ELBCloud{lrucache: lrucache, config: &gConfig.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder}
+	hws.providers[VersionALB] = &ALBCloud{lrucache: lrucache, config: &gConfig.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder, subnetMap: map[string]string{}}
 	// TODO(RainbowMango): Support PLB later.
-	// hws.providers[VersionPLB] = &PLBCloud{lrucache: lrucache, config: &globalConfig.LoadBalancer, kubeClient: kubeClient, clientPool: deprecateddynamic.NewDynamicClientPool(clientConfig), eventRecorder: recorder, subnetMap: map[string]string{}}
-	hws.providers[VersionNAT] = &NATCloud{lrucache: lrucache, config: &globalConfig.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder}
+	// hws.providers[VersionPLB] = &PLBCloud{lrucache: lrucache, config: &gConfig.LoadBalancer, kubeClient: kubeClient, clientPool: deprecateddynamic.NewDynamicClientPool(clientConfig), eventRecorder: recorder, subnetMap: map[string]string{}}
+	hws.providers[VersionNAT] = &NATCloud{lrucache: lrucache, config: &gConfig.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder}
 
 	return hws, nil
+}
+
+func newKubeClient() (*corev1.CoreV1Client, error) {
+	clusterCfg, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("initial cluster configuration failed with error: %v", err)
+	}
+
+	kubeClient, err := corev1.NewForConfig(clusterCfg)
+	if err != nil {
+		return nil, fmt.Errorf("create kubeClient failed with error: %v", err)
+	}
+	return kubeClient, nil
 }
 
 func (h *HWSCloud) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
@@ -645,7 +726,7 @@ func (h *HWSCloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 // Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.
 func (h *HWSCloud) Instances() (cloudprovider.Instances, bool) {
 	instance := &Instances{
-		GetECSClientFunc: h.config.Auth.getECSClient,
+		HuaweiCloud: h.huaweiCloud,
 	}
 
 	return instance, true
@@ -674,7 +755,11 @@ func (h *HWSCloud) ProviderName() string {
 // InstancesV2 is an implementation for instances and should only be implemented by external cloud providers.
 // Don't support this feature for now.
 func (h *HWSCloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
-	return nil, false
+	instance := &Instances{
+		HuaweiCloud: h.huaweiCloud,
+	}
+
+	return instance, true
 }
 
 // Session Affinity Type string

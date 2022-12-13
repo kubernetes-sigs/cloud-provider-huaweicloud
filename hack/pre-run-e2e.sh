@@ -205,7 +205,7 @@ spec:
           args:
             - /bin/huawei-cloud-controller-manager
             - --v=5
-            - --cloud-config=/etc/config/cloud.conf
+            - --cloud-config=/etc/config/cloud-config
             - --cloud-provider=huaweicloud
             - --use-service-account-credentials=true
             - --bind-address=127.0.0.1

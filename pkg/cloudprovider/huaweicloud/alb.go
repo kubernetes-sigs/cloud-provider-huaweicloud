@@ -1575,7 +1575,7 @@ func (alb *ALBCloud) getElbNeutronSubnetIdFromElbIp(elbIp string) (string, error
 func (alb *ALBCloud) getPrivateIpFromLoadbalancerIp(ipStr string) (string, error) {
 	ip := net.ParseIP(ipStr)
 	if ip == nil {
-		return "", fmt.Errorf("service loadbalancer IP is invalid")
+		return "", fmt.Errorf("service loadbalancer IP is invalid: %s", ipStr)
 	}
 
 	albProvider, err := alb.getALBClient()
