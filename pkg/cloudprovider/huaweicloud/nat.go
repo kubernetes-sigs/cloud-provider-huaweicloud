@@ -32,8 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/wait"
-	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
 	podutil "k8s.io/kubernetes/pkg/api/v1/pod"
 )
@@ -47,10 +45,9 @@ const (
 )
 
 type NATCloud struct {
-	config        *LBConfig
-	kubeClient    corev1.CoreV1Interface
-	lrucache      *lru.Cache
-	eventRecorder record.EventRecorder
+	Basic
+	config   *LBConfig
+	lrucache *lru.Cache
 }
 
 /*

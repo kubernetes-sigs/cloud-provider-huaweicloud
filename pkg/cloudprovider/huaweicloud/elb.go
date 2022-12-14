@@ -36,10 +36,9 @@ import (
 )
 
 type ELBCloud struct {
-	config        *LBConfig
-	kubeClient    corev1.CoreV1Interface
-	lrucache      *lru.Cache
-	eventRecorder record.EventRecorder
+	Basic
+	config   *LBConfig
+	lrucache *lru.Cache
 }
 
 // temp async job info
