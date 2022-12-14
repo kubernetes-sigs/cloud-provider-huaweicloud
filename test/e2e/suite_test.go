@@ -17,6 +17,8 @@ limitations under the License.
 package e2e
 
 import (
+	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"testing"
@@ -31,6 +33,7 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
 	"sigs.k8s.io/cloud-provider-huaweicloud/test/e2e/framework"
 )
 
@@ -55,6 +58,7 @@ var (
 	restConfig    *rest.Config
 	kubeClient    kubernetes.Interface
 	testNamespace string
+	authOpts      *config.AuthOpts
 )
 
 func init() {
@@ -86,6 +90,8 @@ var _ = ginkgo.SynchronizedBeforeSuite(func() []byte {
 	testNamespace = fmt.Sprintf("ccmtest-%s", rand.String(RandomStrLength))
 	err = setupTestNamespace(testNamespace, kubeClient)
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+
+	initAuthConfig()
 })
 
 var _ = ginkgo.AfterSuite(func() {
@@ -117,4 +123,16 @@ func setupTestNamespace(namespace string, kubeClient kubernetes.Interface) error
 		return err
 	}
 	return nil
+}
+
+func initAuthConfig() {
+	secret, err := kubeClient.CoreV1().
+		Secrets("kube-system").
+		Get(context.TODO(), "cloud-config", metav1.GetOptions{})
+	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+
+	cfg, err := config.ReadConfig(bytes.NewReader(secret.Data["cloud-config"]))
+	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+
+	authOpts = &cfg.Global
 }

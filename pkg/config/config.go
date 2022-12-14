@@ -38,7 +38,8 @@ type Config struct {
 }
 
 type VpcOpts struct {
-	ID string `gcfg:"id"`
+	ID       string `gcfg:"id"`
+	SubnetID string `gcfg:"subnet-id"`
 }
 
 type AuthOpts struct {

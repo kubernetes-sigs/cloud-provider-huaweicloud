@@ -19,6 +19,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -29,6 +30,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/apimachinery/pkg/util/rand"
 
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud"
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
+	"sigs.k8s.io/cloud-provider-huaweicloud/test/e2e/clients"
 	"sigs.k8s.io/cloud-provider-huaweicloud/test/e2e/framework"
 	helper2 "sigs.k8s.io/cloud-provider-huaweicloud/test/e2e/helper"
 )
@@ -63,9 +67,18 @@ var _ = ginkgo.Describe("loadbalancer service testing", func() {
 	})
 
 	ginkgo.It("service enhanced auto testing", func() {
-		sessionAffinity := "SOURCE_IP"
 		serviceName := serviceNamePrefix + rand.String(RandomStrLength)
-		service = newLoadbalancerAutoService(testNamespace, serviceName, sessionAffinity)
+
+		annotations := map[string]string{}
+		annotations[huaweicloud.ElbClass] = "union"
+		annotations[huaweicloud.ElbAlgorithm] = "ROUND_ROBIN"
+		annotations[huaweicloud.ElbSessionAffinityMode] = "SOURCE_IP"
+		annotations[huaweicloud.ElbSessionAffinityOption] = `{"persistence_timeout": 1}`
+		annotations[huaweicloud.ElbHealthCheck] = "on"
+		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 3, "timeout": 15, "max_retries": 3}`
+		annotations[huaweicloud.ElbXForwardedFor] = "true"
+
+		service = newLoadbalancerAutoService(testNamespace, serviceName, 80, annotations)
 		framework.CreateService(kubeClient, service)
 
 		var ingress string
@@ -94,34 +107,126 @@ var _ = ginkgo.Describe("loadbalancer service testing", func() {
 	})
 })
 
-// newLoadbalancerAutoService new a loadbalancer type service
-func newLoadbalancerAutoService(namespace, name, sessionAffinity string) *corev1.Service {
-	autoCreate := fmt.Sprintf(`{"type":"public","bandwidth_name":"cce-bandwidth-%s","bandwidth_chargemode":"bandwidth","bandwidth_size":5,"bandwidth_sharetype":"PER","eip_type":"5_bgp","name":"cce-eip-%s"}`,
-		rand.String(RandomStrLength), rand.String(RandomStrLength))
+var _ = ginkgo.Describe("load balancing service test with the specified ID", func() {
+	subnetID := os.Getenv("HC_SUBNET_ID")
+	var deployment *appsv1.Deployment
+	var service1 *corev1.Service
+	var service2 *corev1.Service
+	var elbID *string
+	var eipID *string
 
+	ginkgo.BeforeEach(func() {
+		if subnetID == "" {
+			return
+		}
+		name := fmt.Sprintf("e2e_test_%s", rand.String(RandomStrLength))
+		instanceID := clients.CreateSharedELBInstance(authOpts, subnetID, name)
+		elbID = &instanceID
+		eip := clients.CreateEip(authOpts)
+		eipID = eip.Id
+
+		deploymentName := deploymentNamePrefix + rand.String(RandomStrLength)
+		deployment = helper2.NewDeployment(testNamespace, deploymentName)
+		framework.CreateDeployment(kubeClient, deployment)
+
+	})
+
+	ginkgo.AfterEach(func() {
+		if subnetID == "" {
+			return
+		}
+		framework.RemoveDeployment(kubeClient, deployment.Namespace, deployment.Name)
+		if service1 != nil {
+			framework.RemoveService(kubeClient, service1.Namespace, service1.Name)
+			framework.WaitServiceDisappearOnCluster(kubeClient, service1.Namespace, service1.Name)
+		}
+		if service2 != nil {
+			framework.RemoveService(kubeClient, service2.Namespace, service2.Name)
+			framework.WaitServiceDisappearOnCluster(kubeClient, service2.Namespace, service2.Name)
+		}
+
+		sharedElbClient := wrapper.SharedLoadBalanceClient{AuthOpts: authOpts}
+		_, err := sharedElbClient.GetInstance(*elbID)
+		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		clients.DeleteSharedELBInstance(authOpts, *elbID)
+
+		eipClient := wrapper.EIpClient{AuthOpts: authOpts}
+		_, err = eipClient.Get(*eipID)
+		gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+		clients.DeleteEip(authOpts, *eipID)
+	})
+
+	ginkgo.It("service1 enhanced auto testing", func() {
+		if subnetID == "" {
+			ginkgo.Skip("not found HC_SUBNET_ID env, skip testing")
+			return
+		}
+
+		serviceName := serviceNamePrefix + rand.String(RandomStrLength)
+		annotations := map[string]string{}
+		annotations[huaweicloud.ElbClass] = "union"
+		annotations[huaweicloud.ElbAlgorithm] = "ROUND_ROBIN"
+		annotations[huaweicloud.ElbSessionAffinityMode] = "SOURCE_IP"
+		annotations[huaweicloud.ElbSessionAffinityOption] = `{"persistence_timeout": 1}`
+		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 3, "timeout": 15, "max_retries": 3}`
+		annotations[huaweicloud.ElbXForwardedFor] = "true"
+		annotations[huaweicloud.ElbID] = *elbID
+		annotations[huaweicloud.ElbEipID] = *eipID
+		annotations[huaweicloud.ELBKeepEip] = "true"
+
+		service1 = newLoadbalancerAutoService(testNamespace, serviceName, 80, annotations)
+		framework.CreateService(kubeClient, service1)
+		serviceName2 := serviceNamePrefix + rand.String(RandomStrLength)
+		service2 = newLoadbalancerAutoService(testNamespace, serviceName2, 82, annotations)
+		framework.CreateService(kubeClient, service2)
+
+		var ingress string
+		ginkgo.By("Check service1 status", func() {
+			gomega.Eventually(func(g gomega.Gomega) bool {
+				svc, err := kubeClient.CoreV1().Services(testNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
+				g.Expect(err).ShouldNot(gomega.HaveOccurred())
+
+				if len(svc.Status.LoadBalancer.Ingress) > 0 {
+					ingress = svc.Status.LoadBalancer.Ingress[0].IP
+					g.Expect(ingress).ShouldNot(gomega.BeEmpty())
+					return true
+				}
+
+				return false
+			}, pollTimeout, pollInterval).Should(gomega.Equal(true))
+		})
+
+		ginkgo.By("Check if ELB listener is available", func() {
+			url := fmt.Sprintf("http://%s", ingress)
+			statusCode, err := helper2.DoRequest(url)
+			gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+
+			gomega.Expect(statusCode).Should(gomega.Equal(200))
+		})
+	})
+})
+
+// newLoadbalancerAutoService new a loadbalancer type service
+func newLoadbalancerAutoService(namespace, name string, port int32, annotations map[string]string) *corev1.Service {
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: "v1",
 			Kind:       "Service",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: namespace,
-			Name:      name,
-			Annotations: map[string]string{
-				"kubernetes.io/elb.class":             "union",
-				"kubernetes.io/session-affinity-mode": sessionAffinity,
-				"kubernetes.io/elb.autocreate":        autoCreate,
-			},
-			Labels: map[string]string{"app": "nginx"},
+			Namespace:   namespace,
+			Name:        name,
+			Annotations: annotations,
+			Labels:      map[string]string{"app": "nginx"},
 		},
 		Spec: corev1.ServiceSpec{
-			ExternalTrafficPolicy: corev1.ServiceExternalTrafficPolicyTypeLocal,
+			ExternalTrafficPolicy: corev1.ServiceExternalTrafficPolicyTypeCluster,
 			Type:                  corev1.ServiceTypeLoadBalancer,
 			Ports: []corev1.ServicePort{
 				{
 					Name:       "http",
 					Protocol:   corev1.ProtocolTCP,
-					Port:       80,
+					Port:       port,
 					TargetPort: intstr.IntOrString{IntVal: 80},
 				},
 			},

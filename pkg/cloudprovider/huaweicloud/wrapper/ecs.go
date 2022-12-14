@@ -221,7 +221,7 @@ func (e *EcsClient) wrapper(handler func(*ecs.EcsClient) (interface{}, error), a
 func commonWrapper(handler func() (interface{}, error), okCodes []int, args ...interface{}) error {
 	response, err := handler()
 	if err != nil {
-		klog.Errorf("Error in wrapper, args: %#v", args)
+		klog.ErrorDepth(2, fmt.Sprintf("Error in wrapper handler(), args: %#v, error: %s", args, err))
 		return err
 	}
 	if err = checkStatusCode(response, okCodes); err != nil {
@@ -234,6 +234,7 @@ func commonWrapper(handler func() (interface{}, error), okCodes []int, args ...i
 	}
 	// Check return parameters
 	if len(args) > 2 {
+		klog.ErrorDepth(2, fmt.Sprintf("`args` length is wrong, expected 2, got: %d, args: %#v", len(args), args))
 		return fmt.Errorf("`args` length is wrong, expected 2, got: %d, args: %#v", len(args), args)
 	}
 
@@ -259,7 +260,8 @@ func setResultValue(result interface{}, val *reflect.Value) error {
 	refVal := *val
 	rstVal := reflect.ValueOf(result)
 	if rstVal.Kind() != reflect.Pointer {
-		return fmt.Errorf("`result` must be a pointer type, otherwise the data cannot be setted")
+		klog.ErrorDepth(3, "`result` must be a pointer type, otherwise the data cannot be set")
+		return fmt.Errorf("`result` must be a pointer type, otherwise the data cannot be set")
 	}
 
 	rstVal = rstVal.Elem()
@@ -267,6 +269,7 @@ func setResultValue(result interface{}, val *reflect.Value) error {
 		refVal = refVal.Elem()
 	}
 	if !rstVal.CanConvert(refVal.Type()) {
+		klog.ErrorDepth(3, fmt.Sprintf("error, cannot convert %s to %s", refVal.Type(), rstVal.Type()))
 		return fmt.Errorf("error, cannot convert %s to %s", refVal.Type(), rstVal.Type())
 	}
 	rstVal.Set(refVal)
