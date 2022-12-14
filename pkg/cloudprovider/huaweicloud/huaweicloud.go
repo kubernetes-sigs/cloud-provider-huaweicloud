@@ -21,10 +21,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"net/http"
 	"reflect"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/hashicorp/golang-lru"
@@ -32,7 +29,6 @@ import (
 	"k8s.io/client-go/rest"
 
 	"k8s.io/api/core/v1"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -112,13 +108,6 @@ type LBConfig struct {
 	EnterpriseEnable string `json:"enterpriseEnable"`
 }
 
-type ServiceClient struct {
-	Client   *http.Client
-	Endpoint string
-	Access   *AccessInfo
-	TenantId string // nolint:golint // struct field `TenantId` should be `TenantID`
-}
-
 /*
 type Secret struct {
 	Data struct {
@@ -170,12 +159,6 @@ func (s *Secret) DecodeBase64() error {
 	return nil
 }
 
-// PermanentSecurityCredentials represents 'Permanent Security Credentials'.
-type PermanentSecurityCredentials struct {
-	AccessKey string `json:"access"`
-	SecretKey string `json:"secret"`
-}
-
 // SecurityCredential represents 'Temporary Security Credentials'.
 type SecurityCredential struct {
 	AccessKey     string    `json:"access"`
@@ -188,17 +171,6 @@ type HWSCloud struct {
 	huaweiCloud *HuaweiCloud
 	config      *CloudConfig
 	providers   map[LoadBalanceVersion]cloudprovider.LoadBalancer
-}
-
-type ELBPoolDescription struct {
-	ClusterID string `json:"cluster_id,omitempty"`
-	ServiceID string `json:"service_id,omitempty"`
-	Port      int32  `json:"port,omitempty"`
-	Attention string `json:"attention,omitempty"`
-}
-
-type Ipv6Bandwidth struct {
-	ID string `json:"id"`
 }
 
 type LoadBalanceVersion int
@@ -588,11 +560,6 @@ func (h *HWSCloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
 	return instance, true
 }
 
-// Session Affinity Type string
-type HWSAffinityType string
-
-// type Clusters interface {}
-
 // ListClusters is an implementation of Clusters.ListClusters
 func (h *HWSCloud) ListClusters(ctx context.Context) ([]string, error) {
 	return nil, nil
@@ -604,58 +571,6 @@ func (h *HWSCloud) Master(ctx context.Context, clusterName string) (string, erro
 }
 
 //util functions
-
-func GetListenerName(service *v1.Service) string {
-	return string(service.UID)
-}
-
-// to suit for old version
-// if the elb has been created with the old version
-// its listener name is service.name+service.uid
-func GetOldListenerName(service *v1.Service) string {
-	return strings.Replace(service.Name+"_"+string(service.UID), ".", "_", -1)
-}
-
-// if the node not health, it will not be added to ELB
-func CheckNodeHealth(node *v1.Node) (bool, error) {
-	conditionMap := make(map[v1.NodeConditionType]*v1.NodeCondition)
-	for i := range node.Status.Conditions {
-		cond := node.Status.Conditions[i]
-		conditionMap[cond.Type] = &cond
-	}
-
-	status := false
-	if condition, ok := conditionMap[v1.NodeReady]; ok {
-		if condition.Status == v1.ConditionTrue {
-			status = true
-		} else {
-			status = false
-		}
-	}
-
-	if node.Spec.Unschedulable {
-		status = false
-	}
-
-	return status, nil
-}
-
-func GetHealthCheckPort(service *v1.Service) *v1.ServicePort {
-	for _, port := range service.Spec.Ports {
-		if port.Name == HealthzCCE {
-			return &port
-		}
-	}
-	return nil
-}
-
-func GetSessionAffinityType(service *v1.Service) string {
-	return service.Annotations[ElbSessionAffinityMode]
-}
-
-func GetSessionAffinityOptions(service *v1.Service) string {
-	return service.Annotations[ElbHealthCheckOptions]
-}
 
 func deleteSecret(obj interface{}, lrucache *lru.Cache, secretName string) {
 	kubeSecret, ok := obj.(*v1.Secret)
@@ -689,102 +604,6 @@ func IsPodActive(p v1.Pod) bool {
 		}
 	}
 	return false
-}
-
-func updateServiceStatus(
-	kubeClient corev1.CoreV1Interface,
-	eventRecorder record.EventRecorder,
-	service *v1.Service) {
-	for i := 0; i < MaxRetry; i++ {
-		toUpdate := service.DeepCopy()
-		mark, ok := toUpdate.Annotations[ELBMarkAnnotation]
-		if !ok {
-			mark = "1"
-			if toUpdate.Annotations == nil {
-				toUpdate.Annotations = map[string]string{}
-			}
-		} else {
-			retry, err := strconv.Atoi(mark)
-			if err != nil {
-				mark = "1"
-			} else {
-				// always retry will send too many requests to apigateway, this maybe case ddos
-				if retry >= MaxRetry {
-					sendEvent(eventRecorder, "CreateLoadBalancerFailed", "Retry LoadBalancer configuration too many times", service)
-					return
-				}
-				retry++
-				mark = fmt.Sprintf("%d", retry)
-			}
-		}
-		toUpdate.Annotations[ELBMarkAnnotation] = mark
-		_, err := kubeClient.Services(service.Namespace).Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
-		if err == nil {
-			return
-		}
-		// If the object no longer exists, we don't want to recreate it. Just bail
-		// out so that we can process the delete, which we should soon be receiving
-		// if we haven't already.
-		if apierrors.IsNotFound(err) {
-			klog.Infof("Not persisting update to service '%s/%s' that no longer exists: %v",
-				service.Namespace, service.Name, err)
-			return
-		}
-
-		if apierrors.IsConflict(err) {
-			service, err = kubeClient.Services(service.Namespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
-			if err != nil {
-				klog.Warningf("Get service(%s/%s) error: %v", service.Namespace, service.Name, err)
-				continue
-			}
-		}
-	}
-}
-
-// if async job is success, need to init mark again
-func updateServiceMarkIfNeeded(
-	kubeClient corev1.CoreV1Interface,
-	service *v1.Service,
-	tryAgain bool) {
-	for i := 0; i < MaxRetry; i++ {
-		toUpdate := service.DeepCopy()
-		_, ok := toUpdate.Annotations[ELBMarkAnnotation]
-		if !ok {
-			if !tryAgain {
-				return
-			}
-
-			if toUpdate.Annotations == nil {
-				toUpdate.Annotations = map[string]string{}
-			}
-			toUpdate.Annotations[ELBMarkAnnotation] = "0"
-		} else {
-			delete(toUpdate.Annotations, ELBMarkAnnotation)
-		}
-
-		_, err := kubeClient.Services(service.Namespace).Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
-		if err == nil {
-			return
-		}
-
-		// If the object no longer exists, we don't want to recreate it. Just bail
-		// out so that we can process the delete, which we should soon be receiving
-		// if we haven't already.
-		if apierrors.IsNotFound(err) {
-			klog.Infof("Not persisting update to service '%s/%s' that no longer exists: %v",
-				service.Namespace, service.Name, err)
-			return
-		}
-
-		if apierrors.IsConflict(err) {
-			service, err = kubeClient.Services(service.Namespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
-			if err != nil {
-				klog.Warningf("Get service(%s/%s) error: %v", service.Namespace, service.Name, err)
-				continue
-			}
-		}
-	}
-
 }
 
 func sendEvent(eventRecorder record.EventRecorder, title, msg string, service *v1.Service) {

@@ -656,3 +656,44 @@ func (nat *NATCloud) getSubnetIdForPod(pod v1.Pod, nodes []*v1.Node) string {
 
 	return subnetId
 }
+
+// if the node not health, it will not be added to ELB
+func CheckNodeHealth(node *v1.Node) (bool, error) {
+	conditionMap := make(map[v1.NodeConditionType]*v1.NodeCondition)
+	for i := range node.Status.Conditions {
+		cond := node.Status.Conditions[i]
+		conditionMap[cond.Type] = &cond
+	}
+
+	status := false
+	if condition, ok := conditionMap[v1.NodeReady]; ok {
+		if condition.Status == v1.ConditionTrue {
+			status = true
+		} else {
+			status = false
+		}
+	}
+
+	if node.Spec.Unschedulable {
+		status = false
+	}
+
+	return status, nil
+}
+
+func GetHealthCheckPort(service *v1.Service) *v1.ServicePort {
+	for _, port := range service.Spec.Ports {
+		if port.Name == HealthzCCE {
+			return &port
+		}
+	}
+	return nil
+}
+
+func GetSessionAffinityType(service *v1.Service) string {
+	return service.Annotations[ElbSessionAffinityMode]
+}
+
+func GetSessionAffinityOptions(service *v1.Service) string {
+	return service.Annotations[ElbHealthCheckOptions]
+}
