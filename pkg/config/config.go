@@ -18,6 +18,7 @@ package config
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -26,23 +27,24 @@ import (
 	sdkconfig "github.com/huaweicloud/huaweicloud-sdk-go-v3/core/config"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/httphandler"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/region"
+	"gopkg.in/gcfg.v1"
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/utils"
 )
 
-// Config define
-type Config struct {
-	Global AuthOpts
-	Vpc    VpcOpts
+// CloudConfig define
+type CloudConfig struct {
+	AuthOpts AuthOptions `gcfg:"Global"`
+	VpcOpts  VpcOptions  `gcfg:"Vpc"`
 }
 
-type VpcOpts struct {
+type VpcOptions struct {
 	ID       string `gcfg:"id"`
 	SubnetID string `gcfg:"subnet-id"`
 }
 
-type AuthOpts struct {
+type AuthOptions struct {
 	Cloud     string `gcfg:"cloud"`
 	AuthURL   string `gcfg:"auth-url"`
 	Region    string `gcfg:"region"`
@@ -51,7 +53,7 @@ type AuthOpts struct {
 	ProjectID string `gcfg:"project-id"`
 }
 
-func (a *AuthOpts) GetCredentials() *basic.Credentials {
+func (a *AuthOptions) GetCredentials() *basic.Credentials {
 	return basic.NewCredentialsBuilder().
 		WithAk(a.AccessKey).
 		WithSk(a.SecretKey).
@@ -59,7 +61,7 @@ func (a *AuthOpts) GetCredentials() *basic.Credentials {
 		Build()
 }
 
-func (a *AuthOpts) GetHcClient(catalogName string) *core.HcHttpClient {
+func (a *AuthOptions) GetHcClient(catalogName string) *core.HcHttpClient {
 	cloud := "myhuaweicloud.com"
 	if strings.TrimSpace(a.Cloud) != "" {
 		cloud = strings.TrimSpace(a.Cloud)
@@ -111,4 +113,28 @@ func newHTTPConfig() *sdkconfig.HttpConfig {
 	})
 
 	return defConfig
+}
+
+func ReadConfig(cfg io.Reader) (*CloudConfig, error) {
+	if cfg == nil {
+		return nil, fmt.Errorf("Must provide a config file")
+	}
+	cc := &CloudConfig{}
+	// Read configuration
+	err := gcfg.FatalOnly(gcfg.ReadInto(cc, cfg))
+	if err != nil {
+		return nil, err
+	}
+	// Set default value
+	setDefaultConfig(cc)
+	return cc, nil
+}
+
+func setDefaultConfig(cc *CloudConfig) {
+	if cc.AuthOpts.Cloud == "" {
+		cc.AuthOpts.Cloud = "myhuaweicloud.com"
+	}
+	if cc.AuthOpts.AuthURL == "" {
+		cc.AuthOpts.AuthURL = fmt.Sprintf("https://iam.%s:443/v3/", cc.AuthOpts.Cloud)
+	}
 }

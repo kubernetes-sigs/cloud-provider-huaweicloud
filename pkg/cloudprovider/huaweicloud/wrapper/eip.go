@@ -24,7 +24,7 @@ import (
 )
 
 type EIpClient struct {
-	AuthOpts *config.AuthOpts
+	AuthOpts *config.AuthOptions
 }
 
 func (e *EIpClient) Create(req *model.CreatePublicipRequestBody) (*model.PublicipCreateResp, error) {

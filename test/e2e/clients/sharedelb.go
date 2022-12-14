@@ -8,7 +8,7 @@ import (
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
 )
 
-func CreateSharedELBInstance(authOpts *config.AuthOpts, subnetID, name string) string {
+func CreateSharedELBInstance(authOpts *config.AuthOptions, subnetID, name string) string {
 	sharedElbClient := wrapper.SharedLoadBalanceClient{AuthOpts: authOpts}
 
 	instance, err := sharedElbClient.CreateInstance(&model.CreateLoadbalancerReq{
@@ -19,7 +19,7 @@ func CreateSharedELBInstance(authOpts *config.AuthOpts, subnetID, name string) s
 	return instance.Id
 }
 
-func DeleteSharedELBInstance(authOpts *config.AuthOpts, id string) {
+func DeleteSharedELBInstance(authOpts *config.AuthOptions, id string) {
 	sharedElbClient := wrapper.SharedLoadBalanceClient{AuthOpts: authOpts}
 	err := sharedElbClient.DeleteInstance(id)
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())

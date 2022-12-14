@@ -32,7 +32,7 @@ import (
 )
 
 type SharedLoadBalanceClient struct {
-	AuthOpts *config.AuthOpts
+	AuthOpts *config.AuthOptions
 }
 
 /** ELB Instances **/

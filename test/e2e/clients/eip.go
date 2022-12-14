@@ -11,7 +11,7 @@ import (
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
 )
 
-func CreateEip(authOpts *config.AuthOpts) *model.PublicipCreateResp {
+func CreateEip(authOpts *config.AuthOptions) *model.PublicipCreateResp {
 	eipClient := wrapper.EIpClient{AuthOpts: authOpts}
 
 	name := fmt.Sprintf("e2e_test_%s", rand.String(5))
@@ -29,7 +29,7 @@ func CreateEip(authOpts *config.AuthOpts) *model.PublicipCreateResp {
 	return eip
 }
 
-func DeleteEip(authOpts *config.AuthOpts, id string) {
+func DeleteEip(authOpts *config.AuthOptions, id string) {
 	eipClient := wrapper.EIpClient{AuthOpts: authOpts}
 	err := eipClient.Delete(id)
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())

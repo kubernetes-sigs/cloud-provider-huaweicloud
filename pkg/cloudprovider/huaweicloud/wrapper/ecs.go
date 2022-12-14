@@ -39,7 +39,7 @@ import (
 var OKCodes = []int{200, 201, 204}
 
 type EcsClient struct {
-	AuthOpts *config.AuthOpts
+	AuthOpts *config.AuthOptions
 }
 
 func (e *EcsClient) Get(id string) (*model.ServerDetail, error) {
@@ -137,7 +137,7 @@ func (e *EcsClient) BuildAddresses(server *model.ServerDetail, interfaces []mode
 			} else if utils.IsStrSliceContains(networkingOpts.PublicNetworkName, network) {
 				addressType = v1.NodeExternalIP
 				// removing already added address to avoid listing it as both ExternalIP and InternalIP
-				// may happen due to listing "private" network as "public" in CCM's Config
+				// may happen due to listing "private" network as "public" in CCM's CloudConfig
 				removeFromNodeAddresses(&addrs,
 					v1.NodeAddress{
 						Address: props.Addr,

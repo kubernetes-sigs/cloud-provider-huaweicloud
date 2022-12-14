@@ -58,7 +58,7 @@ var (
 	restConfig    *rest.Config
 	kubeClient    kubernetes.Interface
 	testNamespace string
-	authOpts      *config.AuthOpts
+	authOpts      *config.AuthOptions
 )
 
 func init() {
@@ -134,5 +134,5 @@ func initAuthConfig() {
 	cfg, err := config.ReadConfig(bytes.NewReader(secret.Data["cloud-config"]))
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 
-	authOpts = &cfg.Global
+	authOpts = &cfg.AuthOpts
 }

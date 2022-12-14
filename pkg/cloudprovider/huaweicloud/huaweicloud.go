@@ -212,7 +212,7 @@ const (
 )
 
 type HuaweiCloud struct {
-	globalConfig *config.Config
+	globalConfig *config.CloudConfig
 	kubeClient   *corev1.CoreV1Client
 
 	loadbalancerOpts *config.LoadBalancerOptions
@@ -241,17 +241,17 @@ func init() {
 	})
 }
 
-func parseOlderCloudConfig(globalConfig *config.Config) *CloudConfig {
+func parseOlderCloudConfig(globalConfig *config.CloudConfig) *CloudConfig {
 	gConfig := &CloudConfig{
 		Auth: AuthOpts{
 			SecretName:  "",
-			AccessKey:   globalConfig.Global.AccessKey,
-			SecretKey:   globalConfig.Global.SecretKey,
-			IAMEndpoint: fmt.Sprintf("https://iam.%s:443/v3", globalConfig.Global.Cloud),
-			ECSEndpoint: fmt.Sprintf("https://ecs.%s.%s", globalConfig.Global.Region, globalConfig.Global.Cloud),
-			ProjectID:   globalConfig.Global.ProjectID,
-			Region:      globalConfig.Global.Region,
-			Cloud:       globalConfig.Global.Cloud,
+			AccessKey:   globalConfig.AuthOpts.AccessKey,
+			SecretKey:   globalConfig.AuthOpts.SecretKey,
+			IAMEndpoint: fmt.Sprintf("https://iam.%s:443/v3", globalConfig.AuthOpts.Cloud),
+			ECSEndpoint: fmt.Sprintf("https://ecs.%s.%s", globalConfig.AuthOpts.Region, globalConfig.AuthOpts.Cloud),
+			ProjectID:   globalConfig.AuthOpts.ProjectID,
+			Region:      globalConfig.AuthOpts.Region,
+			Cloud:       globalConfig.AuthOpts.Cloud,
 			DomainID:    "",
 		},
 		LoadBalancer: LBConfig{
@@ -259,16 +259,16 @@ func parseOlderCloudConfig(globalConfig *config.Config) *CloudConfig {
 			SecretName:       "huaweicloud-auth-credentials",
 			SignerType:       "ec2",
 			ELBAlgorithm:     "ROUND_ROBIN",
-			TenantId:         globalConfig.Global.ProjectID,
-			Region:           globalConfig.Global.Region,
-			VPCId:            globalConfig.Vpc.ID,
-			SubnetId:         globalConfig.Vpc.SubnetID,
-			ECSEndpoint:      fmt.Sprintf("https://ecs.%s.%s", globalConfig.Global.Region, globalConfig.Global.Cloud),
-			ELBEndpoint:      fmt.Sprintf("https://elb.%s.%s", globalConfig.Global.Region, globalConfig.Global.Cloud),
-			ALBEndpoint:      fmt.Sprintf("https://elb.%s.%s", globalConfig.Global.Region, globalConfig.Global.Cloud),
+			TenantId:         globalConfig.AuthOpts.ProjectID,
+			Region:           globalConfig.AuthOpts.Region,
+			VPCId:            globalConfig.VpcOpts.ID,
+			SubnetId:         globalConfig.VpcOpts.SubnetID,
+			ECSEndpoint:      fmt.Sprintf("https://ecs.%s.%s", globalConfig.AuthOpts.Region, globalConfig.AuthOpts.Cloud),
+			ELBEndpoint:      fmt.Sprintf("https://elb.%s.%s", globalConfig.AuthOpts.Region, globalConfig.AuthOpts.Cloud),
+			ALBEndpoint:      fmt.Sprintf("https://elb.%s.%s", globalConfig.AuthOpts.Region, globalConfig.AuthOpts.Cloud),
 			GLBEndpoint:      "",
-			NATEndpoint:      fmt.Sprintf("https://nat.%s.%s", globalConfig.Global.Region, globalConfig.Global.Cloud),
-			VPCEndpoint:      fmt.Sprintf("https://vpc.%s.%s", globalConfig.Global.Region, globalConfig.Global.Cloud),
+			NATEndpoint:      fmt.Sprintf("https://nat.%s.%s", globalConfig.AuthOpts.Region, globalConfig.AuthOpts.Cloud),
+			VPCEndpoint:      fmt.Sprintf("https://vpc.%s.%s", globalConfig.AuthOpts.Region, globalConfig.AuthOpts.Cloud),
 			EnterpriseEnable: "",
 		},
 	}
@@ -283,7 +283,7 @@ func NewHWSCloud(cfg io.Reader) (*HWSCloud, error) {
 
 	globalConfig, err := config.ReadConfig(cfg)
 	if err != nil {
-		klog.Fatalf("failed to read Global Config: %v", err)
+		klog.Fatalf("failed to read AuthOpts CloudConfig: %v", err)
 		return nil, err
 	}
 
@@ -310,9 +310,9 @@ func NewHWSCloud(cfg io.Reader) (*HWSCloud, error) {
 		networkingOpts:   &elbCfg.NetworkingOpts,
 		metadataOpts:     &elbCfg.MetadataOpts,
 
-		sharedELBClient: wrapper.SharedLoadBalanceClient{AuthOpts: &globalConfig.Global},
-		eipClient:       wrapper.EIpClient{AuthOpts: &globalConfig.Global},
-		ecsClient:       wrapper.EcsClient{AuthOpts: &globalConfig.Global},
+		sharedELBClient: wrapper.SharedLoadBalanceClient{AuthOpts: &globalConfig.AuthOpts},
+		eipClient:       wrapper.EIpClient{AuthOpts: &globalConfig.AuthOpts},
+		ecsClient:       wrapper.EcsClient{AuthOpts: &globalConfig.AuthOpts},
 	}
 
 	gConfig := parseOlderCloudConfig(globalConfig)
