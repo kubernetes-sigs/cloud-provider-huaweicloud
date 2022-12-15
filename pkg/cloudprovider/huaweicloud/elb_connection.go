@@ -272,26 +272,28 @@ type EcsServers struct {
 	Servers []Server `json:"servers,omitempty"`
 }
 
-func NewELBClient(ecsEndpoint, elbEndpoint, id, accessKey, secretKey, securityToken, region, serviceType string) *ELBClient {
+func NewELBClient(cloud, region, projectID, accessKey, secretKey string) *ELBClient {
+	elbEndpoint := fmt.Sprintf("https://ecs.%s.%s", region, cloud)
+	ecsEndpoint := fmt.Sprintf("https://ecs.%s.%s", region, cloud)
 
 	access := &AccessInfo{AccessKey: accessKey,
-		SecretKey:     secretKey,
-		SecurityToken: securityToken,
-		Region:        region,
-		ServiceType:   serviceType}
+		SecretKey:   secretKey,
+		Region:      region,
+		ServiceType: "ec2",
+	}
 
 	ecsClient := &ServiceClient{
 		Client:   httpClient,
 		Endpoint: ecsEndpoint,
 		Access:   access,
-		TenantId: id,
+		TenantId: projectID,
 	}
 
 	elbClient := &ServiceClient{
 		Client:   httpClient,
 		Endpoint: elbEndpoint,
 		Access:   access,
-		TenantId: id,
+		TenantId: projectID,
 	}
 
 	return &ELBClient{

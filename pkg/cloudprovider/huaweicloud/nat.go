@@ -25,7 +25,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hashicorp/golang-lru"
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -46,8 +45,6 @@ const (
 
 type NATCloud struct {
 	Basic
-	config   *LBConfig
-	lrucache *lru.Cache
 }
 
 /*
@@ -127,7 +124,7 @@ func (nat *NATCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 		return nil, err
 	}
 
-	if natGateway.RouterId != nat.config.VPCId {
+	if natGateway.RouterId != nat.cloudConfig.VpcOpts.ID {
 		return nil, fmt.Errorf("The natGateway is not in the same VPC with cluster. ")
 	}
 
@@ -291,7 +288,7 @@ func (nat *NATCloud) UpdateLoadBalancer(ctx context.Context, clusterName string,
 		return err
 	}
 
-	if natGateway.RouterId != nat.config.VPCId {
+	if natGateway.RouterId != nat.cloudConfig.VpcOpts.ID {
 		return fmt.Errorf("The natGateway is not in the same VPC with cluster. ")
 	}
 
@@ -433,72 +430,8 @@ func (nat *NATCloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName 
  *    >>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>
  */
 func (nat *NATCloud) getNATClient() (*NATClient, error) {
-	secret, err := nat.getSecret(nat.config.SecretName)
-	if err != nil {
-		return nil, err
-	}
-
-	var accessKey, secretKey, securityToken string
-	if len(secret.Credential) > 0 { // 'Temporary Security Credentials'
-		klog.Infof("Using temporary security credentials.")
-		var sc SecurityCredential
-		err = json.Unmarshal([]byte(secret.Credential), &sc)
-		if err != nil {
-			return nil, fmt.Errorf("unmarshal security credential failed, error: %v", err)
-		}
-		accessKey = sc.AccessKey
-		secretKey = sc.SecretKey
-		securityToken = sc.SecurityToken
-	} else { // 'Permanent Security Credentials'
-		klog.Infof("Using permanent security credentials.")
-		accessKey = secret.AccessKey
-		secretKey = secret.SecretKey
-	}
-
-	return NewNATClient(
-		nat.config.NATEndpoint,
-		nat.config.VPCEndpoint,
-		nat.config.TenantId,
-		accessKey,
-		secretKey,
-		securityToken,
-		nat.config.Region,
-		nat.config.SignerType,
-	), nil
-}
-
-func (nat *NATCloud) getSecret(secretName string) (*Secret, error) {
-	var kubeSecret *v1.Secret
-
-	key := providerNamespace + "/" + secretName
-	obj, ok := nat.lrucache.Get(key)
-	if ok {
-		kubeSecret = obj.(*v1.Secret)
-	} else {
-		secret, err := nat.kubeClient.Secrets(providerNamespace).Get(context.TODO(), secretName, metav1.GetOptions{})
-		if err != nil {
-			return nil, err
-		}
-		kubeSecret = secret
-	}
-
-	bytes, err := json.Marshal(kubeSecret.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	var secret Secret
-	err = json.Unmarshal(bytes, &secret)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := secret.DecodeBase64(); err != nil {
-		klog.Errorf("Decode secret failed with error: %v", err)
-		return nil, err
-	}
-
-	return &secret, nil
+	authOpts := nat.cloudConfig.AuthOpts
+	return NewNATClient(authOpts.Cloud, authOpts.Region, authOpts.ProjectID, authOpts.AccessKey, authOpts.SecretKey), nil
 }
 
 func (nat *NATCloud) getPods(name, namespace string) (*v1.PodList, error) {
@@ -643,7 +576,7 @@ func (nat *NATCloud) getSubnetIdForPod(pod v1.Pod, nodes []*v1.Node) string {
 		}
 	}
 
-	subnetId = nat.config.SubnetId
+	subnetId = nat.cloudConfig.VpcOpts.SubnetID
 	if nodeRunningPod != nil {
 		nodeSubnetId, ok := nodeRunningPod.Labels[NodeSubnetIDLabelKey]
 		if ok {
