@@ -52,6 +52,13 @@ type AccessInfo struct {
 	ServiceType   string
 }
 
+type ServiceClient struct {
+	Client   *http.Client
+	Endpoint string
+	Access   *AccessInfo
+	TenantId string // nolint:golint // struct field `TenantId` should be `TenantID`
+}
+
 // request is used to help build up a request
 type request struct {
 	method  string

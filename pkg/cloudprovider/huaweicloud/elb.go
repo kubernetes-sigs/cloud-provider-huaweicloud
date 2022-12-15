@@ -22,9 +22,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/golang-lru"
 	"k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
@@ -941,4 +943,111 @@ func (elb *ELBCloud) getSessionAffinityOptions(service *v1.Service) (map[string]
 		}
 	}
 	return sessionAffinityOptions, nil
+}
+
+func GetListenerName(service *v1.Service) string {
+	return string(service.UID)
+}
+
+// to suit for old version
+// if the elb has been created with the old version
+// its listener name is service.name+service.uid
+func GetOldListenerName(service *v1.Service) string {
+	return strings.Replace(service.Name+"_"+string(service.UID), ".", "_", -1)
+}
+
+func updateServiceStatus(
+	kubeClient corev1.CoreV1Interface,
+	eventRecorder record.EventRecorder,
+	service *v1.Service) {
+	for i := 0; i < MaxRetry; i++ {
+		toUpdate := service.DeepCopy()
+		mark, ok := toUpdate.Annotations[ELBMarkAnnotation]
+		if !ok {
+			mark = "1"
+			if toUpdate.Annotations == nil {
+				toUpdate.Annotations = map[string]string{}
+			}
+		} else {
+			retry, err := strconv.Atoi(mark)
+			if err != nil {
+				mark = "1"
+			} else {
+				// always retry will send too many requests to apigateway, this maybe case ddos
+				if retry >= MaxRetry {
+					sendEvent(eventRecorder, "CreateLoadBalancerFailed", "Retry LoadBalancer configuration too many times", service)
+					return
+				}
+				retry++
+				mark = fmt.Sprintf("%d", retry)
+			}
+		}
+		toUpdate.Annotations[ELBMarkAnnotation] = mark
+		_, err := kubeClient.Services(service.Namespace).Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
+		if err == nil {
+			return
+		}
+		// If the object no longer exists, we don't want to recreate it. Just bail
+		// out so that we can process the delete, which we should soon be receiving
+		// if we haven't already.
+		if apierrors.IsNotFound(err) {
+			klog.Infof("Not persisting update to service '%s/%s' that no longer exists: %v",
+				service.Namespace, service.Name, err)
+			return
+		}
+
+		if apierrors.IsConflict(err) {
+			service, err = kubeClient.Services(service.Namespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
+			if err != nil {
+				klog.Warningf("Get service(%s/%s) error: %v", service.Namespace, service.Name, err)
+				continue
+			}
+		}
+	}
+}
+
+// if async job succeed, need to init mark again
+func updateServiceMarkIfNeeded(
+	kubeClient corev1.CoreV1Interface,
+	service *v1.Service,
+	tryAgain bool) {
+	for i := 0; i < MaxRetry; i++ {
+		toUpdate := service.DeepCopy()
+		_, ok := toUpdate.Annotations[ELBMarkAnnotation]
+		if !ok {
+			if !tryAgain {
+				return
+			}
+
+			if toUpdate.Annotations == nil {
+				toUpdate.Annotations = map[string]string{}
+			}
+			toUpdate.Annotations[ELBMarkAnnotation] = "0"
+		} else {
+			delete(toUpdate.Annotations, ELBMarkAnnotation)
+		}
+
+		_, err := kubeClient.Services(service.Namespace).Update(context.TODO(), toUpdate, metav1.UpdateOptions{})
+		if err == nil {
+			return
+		}
+
+		// If the object no longer exists, we don't want to recreate it. Just bail
+		// out so that we can process the delete, which we should soon be receiving
+		// if we haven't already.
+		if apierrors.IsNotFound(err) {
+			klog.Infof("Not persisting update to service '%s/%s' that no longer exists: %v",
+				service.Namespace, service.Name, err)
+			return
+		}
+
+		if apierrors.IsConflict(err) {
+			service, err = kubeClient.Services(service.Namespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
+			if err != nil {
+				klog.Warningf("Get service(%s/%s) error: %v", service.Namespace, service.Name, err)
+				continue
+			}
+		}
+	}
+
 }
