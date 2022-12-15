@@ -944,7 +944,7 @@ func getHealthCheckOptionFromAnnotation(service *v1.Service, opts *config.LoadBa
 }
 
 func (l *SharedLoadBalancer) getSubnetID(service *v1.Service, node *v1.Node) (string, error) {
-	subnetID := getStringFromSvsAnnotation(service, ElbSubnetID, l.globalConfig.Vpc.SubnetID)
+	subnetID := getStringFromSvsAnnotation(service, ElbSubnetID, l.globalConfig.VpcOpts.SubnetID)
 	if subnetID != "" {
 		return subnetID, nil
 	}
