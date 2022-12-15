@@ -19,7 +19,6 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"os"
 
 	"github.com/onsi/ginkgo/v2"
 	"github.com/onsi/gomega"
@@ -108,7 +107,6 @@ var _ = ginkgo.Describe("loadbalancer service testing", func() {
 })
 
 var _ = ginkgo.Describe("load balancing service test with the specified ID", func() {
-	subnetID := os.Getenv("HC_SUBNET_ID")
 	var deployment *appsv1.Deployment
 	var service1 *corev1.Service
 	var service2 *corev1.Service
@@ -116,11 +114,11 @@ var _ = ginkgo.Describe("load balancing service test with the specified ID", fun
 	var eipID *string
 
 	ginkgo.BeforeEach(func() {
-		if subnetID == "" {
+		if vpcOpts.SubnetID == "" {
 			return
 		}
 		name := fmt.Sprintf("e2e_test_%s", rand.String(RandomStrLength))
-		instanceID := clients.CreateSharedELBInstance(authOpts, subnetID, name)
+		instanceID := clients.CreateSharedELBInstance(authOpts, vpcOpts.SubnetID, name)
 		elbID = &instanceID
 		eip := clients.CreateEip(authOpts)
 		eipID = eip.Id
@@ -132,7 +130,7 @@ var _ = ginkgo.Describe("load balancing service test with the specified ID", fun
 	})
 
 	ginkgo.AfterEach(func() {
-		if subnetID == "" {
+		if vpcOpts.SubnetID == "" {
 			return
 		}
 		framework.RemoveDeployment(kubeClient, deployment.Namespace, deployment.Name)
@@ -157,7 +155,7 @@ var _ = ginkgo.Describe("load balancing service test with the specified ID", fun
 	})
 
 	ginkgo.It("service1 enhanced auto testing", func() {
-		if subnetID == "" {
+		if vpcOpts.SubnetID == "" {
 			ginkgo.Skip("not found HC_SUBNET_ID env, skip testing")
 			return
 		}
