@@ -59,6 +59,7 @@ var (
 	kubeClient    kubernetes.Interface
 	testNamespace string
 	authOpts      *config.AuthOptions
+	vpcOpts       *config.VpcOptions
 )
 
 func init() {
@@ -135,4 +136,5 @@ func initAuthConfig() {
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 
 	authOpts = &cfg.AuthOpts
+	vpcOpts = &cfg.VpcOpts
 }
