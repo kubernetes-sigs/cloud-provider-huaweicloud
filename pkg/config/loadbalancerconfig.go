@@ -34,7 +34,7 @@ const (
 	loadbalancerConfigMap = "loadbalancer-config"
 )
 
-type ElbConfig struct {
+type LoadbalancerConfig struct {
 	LoadBalancerOpts LoadBalancerOptions `gcfg:"LoadBalancerOptions"`
 	NetworkingOpts   NetworkingOptions   `gcfg:"NetworkingOptions"`
 	MetadataOpts     MetadataOptions     `gcfg:"MetadataOptions"`
@@ -67,14 +67,14 @@ type MetadataOptions struct {
 	SearchOrder string `gcfg:"search-order"`
 }
 
-func NewDefaultELBConfig() *ElbConfig {
-	cfg := &ElbConfig{}
+func NewDefaultELBConfig() *LoadbalancerConfig {
+	cfg := &LoadbalancerConfig{}
 	cfg.MetadataOpts.initDefaultValue()
 	cfg.LoadBalancerOpts.initDefaultValue()
 	return cfg
 }
 
-func LoadELBConfig(str string) (*ElbConfig, error) {
+func LoadELBConfig(str string) (*LoadbalancerConfig, error) {
 	cfg := NewDefaultELBConfig()
 	if err := gcfg.ReadStringInto(cfg, str); err != nil {
 		return nil, err
@@ -82,7 +82,7 @@ func LoadELBConfig(str string) (*ElbConfig, error) {
 	return cfg, nil
 }
 
-func LoadElbConfigFromCM() (*ElbConfig, error) {
+func LoadElbConfigFromCM() (*LoadbalancerConfig, error) {
 	kubeClient, err := getKubeClient()
 	if err != nil {
 		return nil, err

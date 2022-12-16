@@ -167,10 +167,31 @@ type SecurityCredential struct {
 	ExpiresAt     time.Time `json:"expires_at"`
 }
 
-type HWSCloud struct {
-	huaweiCloud *HuaweiCloud
-	config      *CloudConfig
-	providers   map[LoadBalanceVersion]cloudprovider.LoadBalancer
+type Basic struct {
+	cloudConfig        *config.CloudConfig
+	loadBalancerConfig *config.LoadbalancerConfig //nolint: unused
+
+	loadbalancerOpts *config.LoadBalancerOptions
+	networkingOpts   *config.NetworkingOptions
+	metadataOpts     *config.MetadataOptions
+
+	sharedELBClient *wrapper.SharedLoadBalanceClient
+	eipClient       *wrapper.EIpClient
+	ecsClient       *wrapper.EcsClient
+
+	kubeClient    *corev1.CoreV1Client
+	eventRecorder record.EventRecorder
+}
+
+func (b Basic) listPodsBySelector(ctx context.Context, namespace string, selectors map[string]string) (*v1.PodList, error) {
+	labelSelector := labels.SelectorFromSet(selectors)
+	opts := metav1.ListOptions{LabelSelector: labelSelector.String()}
+	return b.kubeClient.Pods(namespace).List(ctx, opts)
+}
+
+type CloudProvider struct {
+	Basic
+	providers map[LoadBalanceVersion]cloudprovider.LoadBalancer
 }
 
 type LoadBalanceVersion int
@@ -182,26 +203,6 @@ const (
 	VersionPLB                                 // enhanced load balancer(performance guarantee)
 	VersionNAT                                 // network address translation
 )
-
-type HuaweiCloud struct {
-	globalConfig *config.CloudConfig
-	kubeClient   *corev1.CoreV1Client
-
-	loadbalancerOpts *config.LoadBalancerOptions
-	networkingOpts   *config.NetworkingOptions
-	metadataOpts     *config.MetadataOptions
-
-	sharedELBClient wrapper.SharedLoadBalanceClient
-	eipClient       wrapper.EIpClient
-	ecsClient       wrapper.EcsClient
-}
-
-func (h *HuaweiCloud) listPodsBySelector(ctx context.Context, namespace string, selectors map[string]string) (*v1.PodList,
-	error) {
-	labelSelector := labels.SelectorFromSet(selectors)
-	opts := metav1.ListOptions{LabelSelector: labelSelector.String()}
-	return h.kubeClient.Pods(namespace).List(ctx, opts)
-}
 
 func init() {
 	cloudprovider.RegisterCloudProvider(ProviderName, func(config io.Reader) (cloudprovider.Interface, error) {
@@ -248,12 +249,12 @@ func parseOlderCloudConfig(globalConfig *config.CloudConfig) *CloudConfig {
 	return gConfig
 }
 
-func NewHWSCloud(cfg io.Reader) (*HWSCloud, error) {
+func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("huaweicloud provider config is nil")
 	}
 
-	globalConfig, err := config.ReadConfig(cfg)
+	cloudConfig, err := config.ReadConfig(cfg)
 	if err != nil {
 		klog.Fatalf("failed to read AuthOpts CloudConfig: %v", err)
 		return nil, err
@@ -274,20 +275,7 @@ func NewHWSCloud(cfg io.Reader) (*HWSCloud, error) {
 		return nil, err
 	}
 
-	cloud := HuaweiCloud{
-		globalConfig: globalConfig,
-		kubeClient:   kubeClient,
-
-		loadbalancerOpts: &elbCfg.LoadBalancerOpts,
-		networkingOpts:   &elbCfg.NetworkingOpts,
-		metadataOpts:     &elbCfg.MetadataOpts,
-
-		sharedELBClient: wrapper.SharedLoadBalanceClient{AuthOpts: &globalConfig.AuthOpts},
-		eipClient:       wrapper.EIpClient{AuthOpts: &globalConfig.AuthOpts},
-		ecsClient:       wrapper.EcsClient{AuthOpts: &globalConfig.AuthOpts},
-	}
-
-	gConfig := parseOlderCloudConfig(globalConfig)
+	gConfig := parseOlderCloudConfig(cloudConfig)
 	LogConf(gConfig)
 
 	broadcaster := record.NewBroadcaster()
@@ -339,20 +327,34 @@ func NewHWSCloud(cfg io.Reader) (*HWSCloud, error) {
 	go secretInformer.Run(nil)
 
 	if !cache.WaitForCacheSync(nil, secretInformer.HasSynced) {
-		klog.Errorf("failed to wait for HWSCloud to be synced")
+		klog.Errorf("failed to wait for CloudProvider to be synced")
 	}
 
-	hws := &HWSCloud{
-		huaweiCloud: &cloud,
-		config:      gConfig,
-		providers:   map[LoadBalanceVersion]cloudprovider.LoadBalancer{},
+	basic := Basic{
+		cloudConfig: cloudConfig,
+
+		loadbalancerOpts: &elbCfg.LoadBalancerOpts,
+		networkingOpts:   &elbCfg.NetworkingOpts,
+		metadataOpts:     &elbCfg.MetadataOpts,
+
+		sharedELBClient: &wrapper.SharedLoadBalanceClient{AuthOpts: &cloudConfig.AuthOpts},
+		eipClient:       &wrapper.EIpClient{AuthOpts: &cloudConfig.AuthOpts},
+		ecsClient:       &wrapper.EcsClient{AuthOpts: &cloudConfig.AuthOpts},
+
+		kubeClient:    kubeClient,
+		eventRecorder: recorder,
 	}
 
-	hws.providers[VersionELB] = &ELBCloud{lrucache: lrucache, config: &gConfig.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder}
-	hws.providers[VersionShared] = &SharedLoadBalancer{HuaweiCloud: &cloud}
+	hws := &CloudProvider{
+		Basic:     basic,
+		providers: map[LoadBalanceVersion]cloudprovider.LoadBalancer{},
+	}
+
+	hws.providers[VersionELB] = &ELBCloud{Basic: basic, lrucache: lrucache, config: &gConfig.LoadBalancer}
+	hws.providers[VersionShared] = &SharedLoadBalancer{Basic: basic}
 	// TODO(RainbowMango): Support PLB later.
 	// hws.providers[VersionPLB] = &PLBCloud{lrucache: lrucache, config: &gConfig.LoadBalancer, kubeClient: kubeClient, clientPool: deprecateddynamic.NewDynamicClientPool(clientConfig), eventRecorder: recorder, subnetMap: map[string]string{}}
-	hws.providers[VersionNAT] = &NATCloud{lrucache: lrucache, config: &gConfig.LoadBalancer, kubeClient: kubeClient, eventRecorder: recorder}
+	hws.providers[VersionNAT] = &NATCloud{Basic: basic, lrucache: lrucache, config: &gConfig.LoadBalancer}
 
 	return hws, nil
 }
@@ -370,7 +372,7 @@ func newKubeClient() (*corev1.CoreV1Client, error) {
 	return kubeClient, nil
 }
 
-func (h *HWSCloud) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
+func (h *CloudProvider) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
 	LBVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return nil, false, err
@@ -384,7 +386,7 @@ func (h *HWSCloud) GetLoadBalancer(ctx context.Context, clusterName string, serv
 	return provider.GetLoadBalancer(ctx, clusterName, service)
 }
 
-func (h *HWSCloud) GetLoadBalancerName(ctx context.Context, clusterName string, service *v1.Service) string {
+func (h *CloudProvider) GetLoadBalancerName(ctx context.Context, clusterName string, service *v1.Service) string {
 	LBVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return ""
@@ -398,7 +400,7 @@ func (h *HWSCloud) GetLoadBalancerName(ctx context.Context, clusterName string, 
 	return provider.GetLoadBalancerName(ctx, clusterName, service)
 }
 
-func (h *HWSCloud) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
+func (h *CloudProvider) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
 	LBVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return nil, err
@@ -412,7 +414,7 @@ func (h *HWSCloud) EnsureLoadBalancer(ctx context.Context, clusterName string, s
 	return provider.EnsureLoadBalancer(ctx, clusterName, service, nodes)
 }
 
-func (h *HWSCloud) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
+func (h *CloudProvider) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
 	LBVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return err
@@ -426,7 +428,7 @@ func (h *HWSCloud) UpdateLoadBalancer(ctx context.Context, clusterName string, s
 	return provider.UpdateLoadBalancer(ctx, clusterName, service, nodes)
 }
 
-func (h *HWSCloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
+func (h *CloudProvider) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
 	LBVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return err
@@ -464,109 +466,109 @@ func getLoadBalancerVersion(service *v1.Service) (LoadBalanceVersion, error) {
 // type Instances interface {}
 
 // ExternalID returns the cloud provider ID of the specified instance (deprecated).
-func (h *HWSCloud) ExternalID(ctx context.Context, instance types.NodeName) (string, error) {
+func (h *CloudProvider) ExternalID(ctx context.Context, instance types.NodeName) (string, error) {
 	return "", cloudprovider.NotImplemented
 }
 
 // type Routes interface {}
 
 // ListRoutes is an implementation of Routes.ListRoutes
-func (h *HWSCloud) ListRoutes(ctx context.Context, clusterName string) ([]*cloudprovider.Route, error) {
+func (h *CloudProvider) ListRoutes(ctx context.Context, clusterName string) ([]*cloudprovider.Route, error) {
 	return nil, nil
 }
 
 // CreateRoute is an implementation of Routes.CreateRoute
-func (h *HWSCloud) CreateRoute(ctx context.Context, clusterName string, nameHint string, route *cloudprovider.Route) error {
+func (h *CloudProvider) CreateRoute(ctx context.Context, clusterName string, nameHint string, route *cloudprovider.Route) error {
 	return nil
 }
 
 // DeleteRoute is an implementation of Routes.DeleteRoute
-func (h *HWSCloud) DeleteRoute(ctx context.Context, clusterName string, route *cloudprovider.Route) error {
+func (h *CloudProvider) DeleteRoute(ctx context.Context, clusterName string, route *cloudprovider.Route) error {
 	return nil
 }
 
 // type Zones interface {}
 
 // GetZone is an implementation of Zones.GetZone
-func (h *HWSCloud) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
+func (h *CloudProvider) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
 	return cloudprovider.Zone{}, nil
 }
 
 // GetZoneByProviderID returns the Zone containing the current zone and locality region of the node specified by providerId
 // This method is particularly used in the context of external cloud providers where node initialization must be down
 // outside the kubelets.
-func (h *HWSCloud) GetZoneByProviderID(ctx context.Context, providerID string) (cloudprovider.Zone, error) {
+func (h *CloudProvider) GetZoneByProviderID(ctx context.Context, providerID string) (cloudprovider.Zone, error) {
 	return cloudprovider.Zone{}, nil
 }
 
 // GetZoneByNodeName returns the Zone containing the current zone and locality region of the node specified by node name
 // This method is particularly used in the context of external cloud providers where node initialization must be down
 // outside the kubelets.
-func (h *HWSCloud) GetZoneByNodeName(ctx context.Context, nodeName types.NodeName) (cloudprovider.Zone, error) {
+func (h *CloudProvider) GetZoneByNodeName(ctx context.Context, nodeName types.NodeName) (cloudprovider.Zone, error) {
 	return cloudprovider.Zone{}, nil
 }
 
 // HasClusterID returns true if the cluster has a clusterID
-func (h *HWSCloud) HasClusterID() bool {
+func (h *CloudProvider) HasClusterID() bool {
 	return true
 }
 
 // Initialize provides the cloud with a kubernetes client builder and may spawn goroutines
 // to perform housekeeping activities within the cloud provider.
-func (h *HWSCloud) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, stop <-chan struct{}) {
+func (h *CloudProvider) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, stop <-chan struct{}) {
 }
 
 // TCPLoadBalancer returns an implementation of TCPLoadBalancer for Huawei Web Services.
-func (h *HWSCloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
+func (h *CloudProvider) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 	return h, true
 }
 
 // Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.
-func (h *HWSCloud) Instances() (cloudprovider.Instances, bool) {
+func (h *CloudProvider) Instances() (cloudprovider.Instances, bool) {
 	instance := &Instances{
-		HuaweiCloud: h.huaweiCloud,
+		Basic: h.Basic,
 	}
 
 	return instance, true
 }
 
 // Zones returns an implementation of Zones for Huawei Web Services.
-func (h *HWSCloud) Zones() (cloudprovider.Zones, bool) {
+func (h *CloudProvider) Zones() (cloudprovider.Zones, bool) {
 	return h, true
 }
 
 // Clusters returns an implementation of Clusters for Huawei Web Services.
-func (h *HWSCloud) Clusters() (cloudprovider.Clusters, bool) {
+func (h *CloudProvider) Clusters() (cloudprovider.Clusters, bool) {
 	return h, true
 }
 
 // Routes returns an implementation of Routes for Huawei Web Services.
-func (h *HWSCloud) Routes() (cloudprovider.Routes, bool) {
+func (h *CloudProvider) Routes() (cloudprovider.Routes, bool) {
 	return h, true
 }
 
 // ProviderName returns the cloud provider ID.
-func (h *HWSCloud) ProviderName() string {
+func (h *CloudProvider) ProviderName() string {
 	return ProviderName
 }
 
 // InstancesV2 is an implementation for instances and should only be implemented by external cloud providers.
 // Don't support this feature for now.
-func (h *HWSCloud) InstancesV2() (cloudprovider.InstancesV2, bool) {
+func (h *CloudProvider) InstancesV2() (cloudprovider.InstancesV2, bool) {
 	instance := &Instances{
-		HuaweiCloud: h.huaweiCloud,
+		Basic: h.Basic,
 	}
 
 	return instance, true
 }
 
 // ListClusters is an implementation of Clusters.ListClusters
-func (h *HWSCloud) ListClusters(ctx context.Context) ([]string, error) {
+func (h *CloudProvider) ListClusters(ctx context.Context) ([]string, error) {
 	return nil, nil
 }
 
 // Master is an implementation of Clusters.Master
-func (h *HWSCloud) Master(ctx context.Context, clusterName string) (string, error) {
+func (h *CloudProvider) Master(ctx context.Context, clusterName string) (string, error) {
 	return "", nil
 }
 

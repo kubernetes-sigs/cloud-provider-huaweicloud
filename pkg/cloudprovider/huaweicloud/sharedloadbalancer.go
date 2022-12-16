@@ -46,7 +46,7 @@ var (
 )
 
 type SharedLoadBalancer struct {
-	*HuaweiCloud
+	Basic
 }
 
 func (l *SharedLoadBalancer) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (*v1.LoadBalancerStatus, bool, error) {
@@ -806,7 +806,7 @@ func (l *SharedLoadBalancer) deleteELBInstance(loadBalancer *elbmodel.Loadbalanc
 	return nil
 }
 
-func unbindEIP(eipClient wrapper.EIpClient, loadBalancer *elbmodel.LoadbalancerResp, eipID string, keepEIP bool) error {
+func unbindEIP(eipClient *wrapper.EIpClient, loadBalancer *elbmodel.LoadbalancerResp, eipID string, keepEIP bool) error {
 	if eipID == "" {
 		ips, err := eipClient.List(&eipmodel.ListPublicipsRequest{
 			PortId: &[]string{loadBalancer.VipPortId},
@@ -944,7 +944,7 @@ func getHealthCheckOptionFromAnnotation(service *v1.Service, opts *config.LoadBa
 }
 
 func (l *SharedLoadBalancer) getSubnetID(service *v1.Service, node *v1.Node) (string, error) {
-	subnetID := getStringFromSvsAnnotation(service, ElbSubnetID, l.globalConfig.VpcOpts.SubnetID)
+	subnetID := getStringFromSvsAnnotation(service, ElbSubnetID, l.cloudConfig.VpcOpts.SubnetID)
 	if subnetID != "" {
 		return subnetID, nil
 	}

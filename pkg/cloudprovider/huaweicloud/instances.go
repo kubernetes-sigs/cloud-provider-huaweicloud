@@ -39,7 +39,7 @@ const (
 var providerIDRegexp = regexp.MustCompile(`^` + ProviderName + `://([^/]+)$`)
 
 type Instances struct {
-	*HuaweiCloud
+	Basic
 }
 
 // NodeAddresses returns the addresses of the specified instance.
