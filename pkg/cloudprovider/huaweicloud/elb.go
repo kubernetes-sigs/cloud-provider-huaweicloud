@@ -31,7 +31,6 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	utilerrors "k8s.io/apimachinery/pkg/util/errors"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/tools/record"
 	"k8s.io/klog"
 )
 
@@ -156,7 +155,7 @@ func (elb *ELBCloud) asyncWaitJobs(
 			if err != nil {
 				errs = append(errs, err)
 				msg := fmt.Sprintf("Job(%s) is abnormal: %v", job.detail, err)
-				sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
+				elb.sendEvent("CreateLoadBalancerFailed", msg, service)
 				continue
 			}
 			klog.Infof("Job(%s) is success.", job.detail)
@@ -164,7 +163,7 @@ func (elb *ELBCloud) asyncWaitJobs(
 
 		if len(errs) != 0 {
 			klog.Warning("There have some abnormal jobs, needs to try again")
-			updateServiceStatus(elb.kubeClient, elb.eventRecorder, service)
+			elb.updateServiceStatus(elb.kubeClient, service)
 		} else {
 			if len(newMembers) != 0 {
 				err := elbProvider.WaitMemberComplete(listenerID, newMembers)
@@ -399,7 +398,7 @@ func (elb *ELBCloud) updateListenerMembers(
 		addJob, err := elbProvider.AsyncCreateMembers(listenerID, addMembers)
 		if err != nil {
 			msg := fmt.Sprintf("Add members of listener(%s) error: %v", listenerID, err)
-			sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
+			elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
 			return fmt.Errorf(msg)
 		}
 		jobs = append(jobs, tempJobInfo{
@@ -415,7 +414,7 @@ func (elb *ELBCloud) updateListenerMembers(
 			delJob, err := elbProvider.AsyncDeleteMembers(listenerID, membersDel)
 			if err != nil {
 				msg := fmt.Sprintf("Delete members of listener(%s) error: %v", listenerID, err)
-				sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
+				elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
 				return fmt.Errorf(msg)
 			}
 			jobs = append(jobs, tempJobInfo{
@@ -472,7 +471,7 @@ func (elb *ELBCloud) EnsureLoadBalancerDeleted(ctx context.Context, clusterName 
 		if err = deleteListener(elbProvider, listener.ID, listener.HealthcheckID); err != nil {
 			errs = append(errs, err)
 			msg := fmt.Sprintf("Delete listener(%s) error: %v", listener.ID, err)
-			sendEvent(elb.eventRecorder, "DeleteLoadBalancerFailed", msg, service)
+			elb.sendEvent("DeleteLoadBalancerFailed", msg, service)
 		}
 	}
 
@@ -606,13 +605,13 @@ func (elb *ELBCloud) createLoadBalancer(
 	sessionAffinity, err := elb.getSessionAffinityType(service)
 	if err != nil {
 		msg := fmt.Sprintf("Create loadbalancer(%s) error: %v", service.Spec.LoadBalancerIP, err)
-		sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
+		elb.sendEvent("CreateLoadBalancerFailed", msg, service)
 		return err
 	}
 	sessionAffinityOptions, err := elb.getSessionAffinityOptions(service)
 	if err != nil {
 		msg := fmt.Sprintf("Create loadbalancer(%s) error: %v", service.Spec.LoadBalancerIP, err)
-		sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
+		elb.sendEvent("CreateLoadBalancerFailed", msg, service)
 		return err
 	}
 
@@ -630,13 +629,13 @@ func (elb *ELBCloud) createLoadBalancer(
 		if err != nil {
 			errs = append(errs, err)
 			msg := fmt.Sprintf("Create listener(%d) error: %v", port.Port, err)
-			sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
+			elb.sendEvent("CreateLoadBalancerFailed", msg, service)
 			continue
 		}
 
 		if listenerID == "" {
 			msg := fmt.Sprintf("The listener(%d) has already exist", port.Port)
-			sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
+			elb.sendEvent("CreateLoadBalancerFailed", msg, service)
 			continue
 		}
 
@@ -661,7 +660,7 @@ func (elb *ELBCloud) createLoadBalancer(
 		if err != nil {
 			errs = append(errs, err)
 			msg := fmt.Sprintf("Create healthcheck of listener(%s) error: %v", listenerID, err)
-			sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
+			elb.sendEvent("CreateLoadBalancerFailed", msg, service)
 			continue
 		}
 
@@ -672,7 +671,7 @@ func (elb *ELBCloud) createLoadBalancer(
 		if err != nil {
 			errs = append(errs, err)
 			msg := fmt.Sprintf("Create members of listener(%s) error: %v", listenerID, err)
-			sendEvent(elb.eventRecorder, "CreateLoadBalancerFailed", msg, service)
+			elb.sendEvent("CreateLoadBalancerFailed", msg, service)
 			continue
 		}
 		klog.Infof("Create members of listener(%s) success.", listenerID)
@@ -702,20 +701,20 @@ func (elb *ELBCloud) updateLoadBalancer(
 	sessionAffinity, err := elb.getSessionAffinityType(service)
 	if err != nil {
 		msg := fmt.Sprintf("Update loadbalancer(%s) error: %v", service.Spec.LoadBalancerIP, err)
-		sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
+		elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
 		return err
 	}
 	sessionAffinityOptions, err := elb.getSessionAffinityOptions(service)
 	if err != nil {
 		msg := fmt.Sprintf("Update loadbalancer(%s) error: %v", service.Spec.LoadBalancerIP, err)
-		sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
+		elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
 		return err
 	}
 
 	for _, tempPort := range needsUpdate {
 		if ELBProtocol(tempPort.servicePort.Protocol) != tempPort.listener.Protocol {
 			msg := fmt.Sprintf("The protocol of listener(%s) can not be modified", tempPort.listener.ID)
-			sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
+			elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
 			continue
 		}
 
@@ -743,7 +742,7 @@ func (elb *ELBCloud) updateLoadBalancer(
 			if err != nil {
 				errs = append(errs, err)
 				msg := fmt.Sprintf("Update listener(%s) error: %v", tempPort.listener.ID, err)
-				sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
+				elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
 				continue
 			}
 		}
@@ -786,7 +785,7 @@ func (elb *ELBCloud) deleteLoadBalancer(
 	for _, listener := range needsDelete {
 		if err := deleteListener(elbProvider, listener.ID, listener.HealthcheckID); err != nil {
 			errs = append(errs, err)
-			sendEvent(elb.eventRecorder, "DeleteLoadBalancerFailed", err.Error(), service)
+			elb.sendEvent("DeleteLoadBalancerFailed", err.Error(), service)
 			continue
 		}
 	}
@@ -878,7 +877,7 @@ func (elb *ELBCloud) updateHealthcheckIfNeeded(
 		_, err = elbProvider.CreateHealthCheck(h)
 		if err != nil {
 			msg := fmt.Sprintf("Create healthcheck of listener(%s) error: %v", tempPort.listener.ID, err)
-			sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
+			elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
 			return err
 		}
 		return nil
@@ -901,7 +900,7 @@ func (elb *ELBCloud) updateHealthcheckIfNeeded(
 		_, err = elbProvider.UpdateHealthCheck(h, tempPort.listener.HealthcheckID)
 		if err != nil {
 			msg := fmt.Sprintf("Update healthcheck of listener(%s) error: %v", tempPort.listener.ID, err)
-			sendEvent(elb.eventRecorder, "UpdateLoadBalancerFailed", msg, service)
+			elb.sendEvent("UpdateLoadBalancerFailed", msg, service)
 			return err
 		}
 	}
@@ -955,10 +954,7 @@ func GetOldListenerName(service *v1.Service) string {
 	return strings.Replace(service.Name+"_"+string(service.UID), ".", "_", -1)
 }
 
-func updateServiceStatus(
-	kubeClient corev1.CoreV1Interface,
-	eventRecorder record.EventRecorder,
-	service *v1.Service) {
+func (elb *ELBCloud) updateServiceStatus(kubeClient corev1.CoreV1Interface, service *v1.Service) {
 	for i := 0; i < MaxRetry; i++ {
 		toUpdate := service.DeepCopy()
 		mark, ok := toUpdate.Annotations[ELBMarkAnnotation]
@@ -974,7 +970,7 @@ func updateServiceStatus(
 			} else {
 				// always retry will send too many requests to apigateway, this maybe case ddos
 				if retry >= MaxRetry {
-					sendEvent(eventRecorder, "CreateLoadBalancerFailed", "Retry LoadBalancer configuration too many times", service)
+					elb.sendEvent("CreateLoadBalancerFailed", "Retry LoadBalancer configuration too many times", service)
 					return
 				}
 				retry++

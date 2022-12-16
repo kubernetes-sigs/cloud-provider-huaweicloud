@@ -189,6 +189,11 @@ func (b Basic) listPodsBySelector(ctx context.Context, namespace string, selecto
 	return b.kubeClient.Pods(namespace).List(ctx, opts)
 }
 
+func (b Basic) sendEvent(title, msg string, service *v1.Service) {
+	klog.Errorf("[%s/%s]%s", service.Namespace, service.Name, msg)
+	b.eventRecorder.Event(service, v1.EventTypeWarning, title, fmt.Sprintf("Details: %s", msg))
+}
+
 type CloudProvider struct {
 	Basic
 	providers map[LoadBalanceVersion]cloudprovider.LoadBalancer
@@ -280,7 +285,7 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(kubeClient.RESTClient()).Events("")})
-	recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "hws-cloudprovider"})
+	recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-provider-huaweicloud"})
 	lrucache, err := lru.New(200)
 	if err != nil {
 		return nil, err
@@ -606,9 +611,4 @@ func IsPodActive(p v1.Pod) bool {
 		}
 	}
 	return false
-}
-
-func sendEvent(eventRecorder record.EventRecorder, title, msg string, service *v1.Service) {
-	klog.Errorf("[%s/%s]%s", service.Namespace, service.Name, msg)
-	eventRecorder.Event(service, v1.EventTypeWarning, title, fmt.Sprintf("Details: %s", msg))
 }
