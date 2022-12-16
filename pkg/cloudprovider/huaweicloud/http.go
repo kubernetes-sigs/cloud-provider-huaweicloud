@@ -164,6 +164,8 @@ func DoRequest(service *ServiceClient, throttle flowcontrol.RateLimiter, r *requ
 	url := service.Endpoint + r.url
 	// Create the HTTP request
 	req, err := http.NewRequest(r.method, url, body)
+	req.Header.Set("User-Agent", "huaweicloud-kubernetes-ccm")
+
 	if err != nil {
 		return nil, fmt.Errorf("http new request error")
 	}
