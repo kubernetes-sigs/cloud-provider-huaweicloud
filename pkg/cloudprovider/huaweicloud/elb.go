@@ -24,7 +24,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hashicorp/golang-lru"
 	"k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -36,8 +35,6 @@ import (
 
 type ELBCloud struct {
 	Basic
-	config   *LBConfig
-	lrucache *lru.Cache
 }
 
 // temp async job info
@@ -52,65 +49,10 @@ type tempServicePort struct {
 	listener    *ListenerDetail
 }
 
-func (elb *ELBCloud) getSecret(secretName string) (*Secret, error) {
-	var kubeSecret *v1.Secret
-
-	key := providerNamespace + "/" + secretName
-	obj, ok := elb.lrucache.Get(key)
-	if ok {
-		kubeSecret = obj.(*v1.Secret)
-	} else {
-		secret, err := elb.kubeClient.Secrets(providerNamespace).Get(context.TODO(), secretName, metav1.GetOptions{})
-		if err != nil {
-			return nil, err
-		}
-		kubeSecret = secret
-	}
-
-	bytes, err := json.Marshal(kubeSecret.Data)
-	if err != nil {
-		return nil, err
-	}
-
-	var secret Secret
-	err = json.Unmarshal(bytes, &secret)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := secret.DecodeBase64(); err != nil {
-		klog.Errorf("Decode secret failed with error: %v", err)
-		return nil, err
-	}
-
-	return &secret, nil
-}
-
 // getELBClient
 func (elb *ELBCloud) ELBClient() (*ELBClient, error) {
-	secret, err := elb.getSecret(elb.config.SecretName)
-	if err != nil {
-		return nil, err
-	}
-
-	var accessKey, secretKey, securityToken string
-	if len(secret.Credential) > 0 { // 'Temporary Security Credentials'
-		klog.Infof("Using temporary security credentials.")
-		var sc SecurityCredential
-		err = json.Unmarshal([]byte(secret.Credential), &sc)
-		if err != nil {
-			return nil, fmt.Errorf("unmarshal security credential failed, error: %v", err)
-		}
-		accessKey = sc.AccessKey
-		secretKey = sc.SecretKey
-		securityToken = sc.SecurityToken
-	} else { // 'Permanent Security Credentials'
-		klog.Infof("Using permanent security credentials.")
-		accessKey = secret.AccessKey
-		secretKey = secret.SecretKey
-	}
-
-	return NewELBClient(elb.config.ECSEndpoint, elb.config.ELBEndpoint, elb.config.TenantId, accessKey, secretKey, securityToken, elb.config.Region, elb.config.SignerType), nil
+	authOpts := elb.cloudConfig.AuthOpts
+	return NewELBClient(authOpts.Cloud, authOpts.Region, authOpts.ProjectID, authOpts.AccessKey, authOpts.SecretKey), nil
 }
 
 // GetLoadBalancer gets loadbalancer for service.
@@ -271,8 +213,8 @@ func (elb *ELBCloud) EnsureLoadBalancer(ctx context.Context, clusterName string,
 	}
 
 	params := make(map[string]string)
-	if elb.config.VPCId != "" {
-		params["vpc_id"] = elb.config.VPCId
+	if elb.cloudConfig.VpcOpts.ID != "" {
+		params["vpc_id"] = elb.cloudConfig.VpcOpts.ID
 	}
 	if service.Spec.LoadBalancerIP != "" {
 		params["vip_address"] = service.Spec.LoadBalancerIP
@@ -620,7 +562,7 @@ func (elb *ELBCloud) createLoadBalancer(
 		listenerID, err := elb.ensureCreateListener(
 			elbProvider,
 			lsName,
-			elb.config.ELBAlgorithm, //TODO: we will support other algorithms later
+			"ROUND_ROBIN", //TODO: we will support other algorithms later
 			port,
 			loadBalancerID,
 			sessionAffinity,

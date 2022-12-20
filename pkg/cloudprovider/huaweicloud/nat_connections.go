@@ -191,25 +191,27 @@ type NATClient struct {
 	throttler *Throttler
 }
 
-func NewNATClient(natEndpoint, vpcEndpoint, id, accessKey, secretKey, securityToken, region, serviceType string) *NATClient {
+func NewNATClient(cloud, region, projectID, accessKey, secretKey string) *NATClient {
+	natEndpoint := fmt.Sprintf("https://nat.%s.%s", region, cloud)
+	vpcEndpoint := fmt.Sprintf("https://vpc.%s.%s", region, cloud)
+
 	access := &AccessInfo{
-		AccessKey:     accessKey,
-		SecretKey:     secretKey,
-		SecurityToken: securityToken,
-		Region:        region,
-		ServiceType:   serviceType,
+		AccessKey:   accessKey,
+		SecretKey:   secretKey,
+		Region:      region,
+		ServiceType: "ec2",
 	}
 	natClient := &ServiceClient{
 		Client:   httpClient,
 		Endpoint: natEndpoint,
 		Access:   access,
-		TenantId: id,
+		TenantId: projectID,
 	}
 	vpcClient := &ServiceClient{
 		Client:   httpClient,
 		Endpoint: vpcEndpoint,
 		Access:   access,
-		TenantId: id,
+		TenantId: projectID,
 	}
 
 	return &NATClient{

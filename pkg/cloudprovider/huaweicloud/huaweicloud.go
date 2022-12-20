@@ -18,24 +18,17 @@ package huaweicloud
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 	"io"
-	"reflect"
-	"time"
 
-	"github.com/hashicorp/golang-lru"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/rest"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
-	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/cloud-provider"
 	"k8s.io/klog"
@@ -46,8 +39,7 @@ import (
 
 // Cloud provider name: PaaS Web Services.
 const (
-	ProviderName      = "huaweicloud"
-	providerNamespace = "huawei-cloud-provider"
+	ProviderName = "huaweicloud"
 
 	ElbClass           = "kubernetes.io/elb.class"
 	ElbID              = "kubernetes.io/elb.id"
@@ -86,86 +78,6 @@ const (
 
 type ELBProtocol string
 type ELBAlgorithm string
-
-type LBConfig struct {
-	// Deprecated: no longer in use
-	Apiserver    string       `json:"apiserver"`
-	SecretName   string       `json:"secretName"`
-	SignerType   string       `json:"signerType"`
-	ELBAlgorithm ELBAlgorithm `json:"elbAlgorithm"`
-	TenantId     string       `json:"tenantId"` // nolint:golint // struct field `TenantId` should be `TenantID` (golint)
-	Region       string       `json:"region"`
-	VPCId        string       `json:"vpcId"`
-	SubnetId     string       `json:"subnetId"` // nolint:golint //struct field `SubnetId` should be `SubnetID` (golint)
-	// Deprecated: We are going to move this ECSEndpoint to CloudConfig.Auth.
-	// During the transition, you need to specify the same ECS endpoint both here and CloudConfig.Auth.ECSEndpoint.
-	ECSEndpoint      string `json:"ecsEndpoint"`
-	ELBEndpoint      string `json:"elbEndpoint"`
-	ALBEndpoint      string `json:"albEndpoint"`
-	GLBEndpoint      string `json:"plbEndpoint"`
-	NATEndpoint      string `json:"natEndpoint"`
-	VPCEndpoint      string `json:"vpcEndpoint"`
-	EnterpriseEnable string `json:"enterpriseEnable"`
-}
-
-/*
-type Secret struct {
-	Data struct {
-		Credential string `json:"security.credential"`
-	} `json:"data"`
-}
-*/
-
-// Secret is a temporary solution for both support 'Permanent Security Credentials' and 'Temporary Security Credentials'.
-// TODO(RainbowMango): Refactor later by a graceful way.
-type Secret struct {
-	Credential    string `json:"security.credential,omitempty"`
-	AccessKey     string `json:"access,omitempty"`
-	SecretKey     string `json:"secret,omitempty"`
-	base64Decoded bool   `json:"-"`
-}
-
-// DecodeBase64 will decode all necessary fields with base64.
-// TODO(RainbowMango): If decode partially success means some fields has been decoded and overwritten.
-// Just limit this issue here and deal with it later with refactor actions.
-func (s *Secret) DecodeBase64() error {
-	if s.base64Decoded {
-		panic("secret can not be decod twice")
-	}
-
-	decodedBytes, err := base64.StdEncoding.DecodeString(s.Credential)
-	if err != nil {
-		klog.Errorf("Decode credential failed. error: %v", err)
-		return fmt.Errorf("secret access key format is unexpected, %v", err)
-	}
-	s.Credential = string(decodedBytes)
-
-	decodedBytes, err = base64.StdEncoding.DecodeString(s.AccessKey)
-	if err != nil {
-		klog.Errorf("Decode access key failed. error: %v", err)
-		return fmt.Errorf("secret credential format is unexpected, %v", err)
-	}
-	s.AccessKey = string(decodedBytes)
-
-	decodedBytes, err = base64.StdEncoding.DecodeString(s.SecretKey)
-	if err != nil {
-		klog.Errorf("Decode secret key failed. error: %v", err)
-		return fmt.Errorf("secret secret key format is unexpected, %v", err)
-	}
-	s.SecretKey = string(decodedBytes)
-
-	s.base64Decoded = true
-
-	return nil
-}
-
-// SecurityCredential represents 'Temporary Security Credentials'.
-type SecurityCredential struct {
-	AccessKey     string    `json:"access"`
-	SecretKey     string    `json:"secret"`
-	SecurityToken string    `json:"securitytoken"`
-	ExpiresAt     time.Time `json:"expires_at"`
-}
 
 type Basic struct {
 	cloudConfig        *config.CloudConfig
@@ -219,41 +131,6 @@ func init() {
 	})
 }
 
-func parseOlderCloudConfig(globalConfig *config.CloudConfig) *CloudConfig {
-	gConfig := &CloudConfig{
-		Auth: AuthOpts{
-			SecretName:  "",
-			AccessKey:   globalConfig.AuthOpts.AccessKey,
-			SecretKey:   globalConfig.AuthOpts.SecretKey,
-			IAMEndpoint: fmt.Sprintf("https://iam.%s:443/v3", globalConfig.AuthOpts.Cloud),
-			ECSEndpoint: fmt.Sprintf("https://ecs.%s.%s", globalConfig.AuthOpts.Region, globalConfig.AuthOpts.Cloud),
-			ProjectID:   globalConfig.AuthOpts.ProjectID,
-			Region:      globalConfig.AuthOpts.Region,
-			Cloud:       globalConfig.AuthOpts.Cloud,
-			DomainID:    "",
-		},
-		LoadBalancer: LBConfig{
-			Apiserver:        "",
-			SecretName:       "huaweicloud-auth-credentials",
-			SignerType:       "ec2",
-			ELBAlgorithm:     "ROUND_ROBIN",
-			TenantId:         globalConfig.AuthOpts.ProjectID,
-			Region:           globalConfig.AuthOpts.Region,
-			VPCId:            globalConfig.VpcOpts.ID,
-			SubnetId:         globalConfig.VpcOpts.SubnetID,
-			ECSEndpoint:      fmt.Sprintf("https://ecs.%s.%s", globalConfig.AuthOpts.Region, globalConfig.AuthOpts.Cloud),
-			ELBEndpoint:      fmt.Sprintf("https://elb.%s.%s", globalConfig.AuthOpts.Region, globalConfig.AuthOpts.Cloud),
-			ALBEndpoint:      fmt.Sprintf("https://elb.%s.%s", globalConfig.AuthOpts.Region, globalConfig.AuthOpts.Cloud),
-			GLBEndpoint:      "",
-			NATEndpoint:      fmt.Sprintf("https://nat.%s.%s", globalConfig.AuthOpts.Region, globalConfig.AuthOpts.Cloud),
-			VPCEndpoint:      fmt.Sprintf("https://vpc.%s.%s", globalConfig.AuthOpts.Region, globalConfig.AuthOpts.Cloud),
-			EnterpriseEnable: "",
-		},
-	}
-
-	return gConfig
-}
-
 func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("huaweicloud provider config is nil")
@@ -280,60 +157,9 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 		return nil, err
 	}
 
-	gConfig := parseOlderCloudConfig(cloudConfig)
-	LogConf(gConfig)
-
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(kubeClient.RESTClient()).Events("")})
-	recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-provider-huaweicloud"})
-	lrucache, err := lru.New(200)
-	if err != nil {
-		return nil, err
-	}
-
-	secretInformer := cache.NewSharedIndexInformer(
-		&cache.ListWatch{
-			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return kubeClient.Secrets(metav1.NamespaceAll).List(context.TODO(), options)
-			},
-			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return kubeClient.Secrets(metav1.NamespaceAll).Watch(context.TODO(), options)
-			},
-		},
-		&v1.Secret{},
-		0,
-		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-	)
-
-	secretInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			kubeSecret := obj.(*v1.Secret)
-			if kubeSecret.Name == gConfig.LoadBalancer.SecretName {
-				key := kubeSecret.Namespace + "/" + kubeSecret.Name
-				lrucache.Add(key, kubeSecret)
-			}
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {
-			oldSecret := oldObj.(*v1.Secret)
-			newSecret := newObj.(*v1.Secret)
-			if newSecret.Name == gConfig.LoadBalancer.SecretName {
-				if reflect.DeepEqual(oldSecret.Data, newSecret.Data) {
-					return
-				}
-				key := newSecret.Namespace + "/" + newSecret.Name
-				lrucache.Add(key, newSecret)
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			deleteSecret(obj, lrucache, gConfig.LoadBalancer.SecretName)
-		},
-	}, 30*time.Second)
-
-	go secretInformer.Run(nil)
-
-	if !cache.WaitForCacheSync(nil, secretInformer.HasSynced) {
-		klog.Errorf("failed to wait for CloudProvider to be synced")
-	}
+	recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "hws-cloudprovider"})
 
 	basic := Basic{
 		cloudConfig: cloudConfig,
@@ -355,11 +181,11 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 		providers: map[LoadBalanceVersion]cloudprovider.LoadBalancer{},
 	}
 
-	hws.providers[VersionELB] = &ELBCloud{Basic: basic, lrucache: lrucache, config: &gConfig.LoadBalancer}
+	hws.providers[VersionELB] = &ELBCloud{Basic: basic}
 	hws.providers[VersionShared] = &SharedLoadBalancer{Basic: basic}
 	// TODO(RainbowMango): Support PLB later.
 	// hws.providers[VersionPLB] = &PLBCloud{lrucache: lrucache, config: &gConfig.LoadBalancer, kubeClient: kubeClient, clientPool: deprecateddynamic.NewDynamicClientPool(clientConfig), eventRecorder: recorder, subnetMap: map[string]string{}}
-	hws.providers[VersionNAT] = &NATCloud{Basic: basic, lrucache: lrucache, config: &gConfig.LoadBalancer}
+	hws.providers[VersionNAT] = &NATCloud{Basic: basic}
 
 	return hws, nil
 }
@@ -578,27 +404,6 @@ func (h *CloudProvider) Master(ctx context.Context, clusterName string) (string,
 }
 
 //util functions
-
-func deleteSecret(obj interface{}, lrucache *lru.Cache, secretName string) {
-	kubeSecret, ok := obj.(*v1.Secret)
-	if !ok {
-		tombstone, ok := obj.(cache.DeletedFinalStateUnknown)
-		if !ok {
-			klog.Errorf("Couldn't get object from tombstone %#v", obj)
-			return
-		}
-		kubeSecret, ok = tombstone.Obj.(*v1.Secret)
-		if !ok {
-			klog.Errorf("Tombstone contained object that is not a secret %#v", obj)
-			return
-		}
-	}
-
-	if kubeSecret.Name == secretName {
-		key := kubeSecret.Namespace + "/" + kubeSecret.Name
-		lrucache.Add(key, kubeSecret)
-	}
-}
 
 func IsPodActive(p v1.Pod) bool {
 	if v1.PodSucceeded != p.Status.Phase &&
