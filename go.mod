@@ -4,7 +4,7 @@ go 1.19
 
 require (
 	github.com/fsnotify/fsnotify v1.4.9
-	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.1.15
+	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.1.16
 	github.com/mitchellh/mapstructure v1.1.2
 	github.com/onsi/ginkgo/v2 v2.1.4
 	github.com/onsi/gomega v1.19.0

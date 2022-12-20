@@ -68,11 +68,16 @@ func (a *AuthOptions) GetHcClient(catalogName string) *core.HcHttpClient {
 	}
 	r := region.NewRegion(catalogName, fmt.Sprintf("https://%s.%s.%s", catalogName, a.Region, cloud))
 
-	return core.NewHcHttpClientBuilder().
+	client := core.NewHcHttpClientBuilder().
 		WithRegion(r).
 		WithCredential(a.GetCredentials()).
 		WithHttpConfig(newHTTPConfig()).
 		Build()
+
+	client.PreInvoke(map[string]string{
+		"User-Agent": "huaweicloud-kubernetes-ccm",
+	})
+	return client
 }
 
 func newHTTPConfig() *sdkconfig.HttpConfig {
