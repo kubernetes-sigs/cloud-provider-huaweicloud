@@ -69,7 +69,7 @@ var _ = ginkgo.Describe("loadbalancer service testing", func() {
 		serviceName := serviceNamePrefix + rand.String(RandomStrLength)
 
 		annotations := map[string]string{}
-		annotations[huaweicloud.ElbClass] = "union"
+		annotations[huaweicloud.ElbClass] = "shared"
 		annotations[huaweicloud.ElbAlgorithm] = "ROUND_ROBIN"
 		annotations[huaweicloud.ElbSessionAffinityMode] = "SOURCE_IP"
 		annotations[huaweicloud.ElbSessionAffinityOption] = `{"persistence_timeout": 1}`
@@ -162,7 +162,7 @@ var _ = ginkgo.Describe("load balancing service test with the specified ID", fun
 
 		serviceName := serviceNamePrefix + rand.String(RandomStrLength)
 		annotations := map[string]string{}
-		annotations[huaweicloud.ElbClass] = "union"
+		annotations[huaweicloud.ElbClass] = "shared"
 		annotations[huaweicloud.ElbAlgorithm] = "ROUND_ROBIN"
 		annotations[huaweicloud.ElbSessionAffinityMode] = "SOURCE_IP"
 		annotations[huaweicloud.ElbSessionAffinityOption] = `{"persistence_timeout": 1}`
