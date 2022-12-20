@@ -101,9 +101,8 @@ func (b Basic) listPodsBySelector(ctx context.Context, namespace string, selecto
 	return b.kubeClient.Pods(namespace).List(ctx, opts)
 }
 
-func (b Basic) sendEvent(title, msg string, service *v1.Service) {
-	klog.Errorf("[%s/%s]%s", service.Namespace, service.Name, msg)
-	b.eventRecorder.Event(service, v1.EventTypeWarning, title, fmt.Sprintf("Details: %s", msg))
+func (b Basic) sendEvent(reason, msg string, service *v1.Service) {
+	b.eventRecorder.Event(service, v1.EventTypeNormal, reason, msg)
 }
 
 type CloudProvider struct {
