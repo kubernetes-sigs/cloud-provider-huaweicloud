@@ -20,21 +20,29 @@ import (
 	"context"
 	"fmt"
 	"io"
-
-	"k8s.io/apimachinery/pkg/labels"
-	"k8s.io/client-go/rest"
+	"os"
+	"time"
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/cache"
+	"k8s.io/client-go/tools/leaderelection"
+	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/cloud-provider"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
+	"k8s.io/kubernetes/cmd/cloud-controller-manager/app/options"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/utils/mutexkv"
 )
 
 // Cloud provider name: PaaS Web Services.
@@ -80,8 +88,9 @@ type ELBProtocol string
 type ELBAlgorithm string
 
 type Basic struct {
-	cloudConfig        *config.CloudConfig
-	loadBalancerConfig *config.LoadbalancerConfig //nolint: unused
+	cloudControllerManagerOpts *options.CloudControllerManagerOptions
+	cloudConfig                *config.CloudConfig
+	loadBalancerConfig         *config.LoadbalancerConfig //nolint: unused
 
 	loadbalancerOpts *config.LoadBalancerOptions
 	networkingOpts   *config.NetworkingOptions
@@ -160,8 +169,14 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 	broadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(kubeClient.RESTClient()).Events("")})
 	recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "hws-cloudprovider"})
 
+	ccmOpts, err := options.NewCloudControllerManagerOptions()
+	if err != nil {
+		return nil, fmt.Errorf("failed to init CloudControllerManagerOptions: %s", err)
+	}
+
 	basic := Basic{
-		cloudConfig: cloudConfig,
+		cloudControllerManagerOpts: ccmOpts,
+		cloudConfig:                cloudConfig,
 
 		loadbalancerOpts: &elbCfg.LoadBalancerOpts,
 		networkingOpts:   &elbCfg.NetworkingOpts,
@@ -178,6 +193,10 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 	hws := &CloudProvider{
 		Basic:     basic,
 		providers: map[LoadBalanceVersion]cloudprovider.LoadBalancer{},
+	}
+	err = hws.listenerDeploy()
+	if err != nil {
+		return nil, err
 	}
 
 	hws.providers[VersionELB] = &ELBCloud{Basic: basic}
@@ -199,6 +218,7 @@ func newKubeClient() (*corev1.CoreV1Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("create kubeClient failed with error: %v", err)
 	}
+
 	return kubeClient, nil
 }
 
@@ -415,4 +435,163 @@ func IsPodActive(p v1.Pod) bool {
 		}
 	}
 	return false
+}
+
+type EndpointSliceListener struct {
+	stopChannel chan struct{}
+	kubeClient  *corev1.CoreV1Client
+	mutexLock   *mutexkv.MutexKV
+}
+
+func (e *EndpointSliceListener) stopListenerSlice() {
+	klog.Warningf("Stop listening to Endpoints")
+	close(e.stopChannel)
+}
+
+func (e *EndpointSliceListener) startEndpointListener(handle func(*v1.Service)) {
+	klog.Infof("starting EndpointListener")
+	for {
+		endpointsList, err := e.kubeClient.Endpoints(metav1.NamespaceAll).
+			List(context.TODO(), metav1.ListOptions{Limit: 1})
+
+		if err != nil {
+			klog.Errorf("failed to query a list of Endpoints, try again later, error: %s", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
+		endpointsInformer := cache.NewSharedIndexInformer(
+			&cache.ListWatch{
+				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+					if options.ResourceVersion == "" || options.ResourceVersion == "0" {
+						options.ResourceVersion = endpointsList.ResourceVersion
+					}
+					return e.kubeClient.Endpoints(metav1.NamespaceAll).List(context.TODO(), options)
+				},
+				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+					if options.ResourceVersion == "" || options.ResourceVersion == "0" {
+						options.ResourceVersion = endpointsList.ResourceVersion
+					}
+					return e.kubeClient.Endpoints(metav1.NamespaceAll).Watch(context.TODO(), options)
+				},
+			},
+			&v1.Endpoints{},
+			0,
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		)
+
+		queue := make(chan v1.Service, 50)
+		endpointsInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {},
+			UpdateFunc: func(oldObj, newObj interface{}) {
+				newEndpoint := newObj.(*v1.Endpoints)
+				if newEndpoint.Name == "kube-scheduler" || newEndpoint.Name == "kube-controller-manager" ||
+					newEndpoint.Name == "cloud-controller-manager" {
+					return
+				}
+				klog.V(4).Infof("Update Endpoints, namespace: %s, name: %s", newEndpoint.Namespace, newEndpoint.Name)
+
+				queue <- v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: newEndpoint.Namespace,
+						Name:      newEndpoint.Name,
+					},
+				}
+				go func() {
+					s := <-queue
+					klog.V(4).Infof("process endpoints: %s / %s", s.Namespace, s.Name)
+					e.dispatcher(s.Namespace, s.Name, handle)
+				}()
+			},
+			DeleteFunc: func(obj interface{}) {},
+		}, 5*time.Second)
+		go endpointsInformer.Run(e.stopChannel)
+		break
+	}
+	klog.Infof("EndpointListener started")
+}
+
+func (e *EndpointSliceListener) dispatcher(namespace, name string, handle func(*v1.Service)) {
+	key := fmt.Sprintf("%s/%s", namespace, name)
+	e.mutexLock.Lock(key)
+	defer e.mutexLock.Unlock(key)
+	svc, err := e.kubeClient.Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
+	klog.Infof("Dispatcher service, namespace: %s, name: %s", namespace, name)
+	if err != nil {
+		klog.Errorf("failed to query service, error: %s", err)
+	}
+	handle(svc)
+}
+
+func (h *CloudProvider) listenerDeploy() error {
+	listener := EndpointSliceListener{
+		kubeClient: h.kubeClient,
+		mutexLock:  mutexkv.NewMutexKV(),
+	}
+
+	clusterName := h.cloudControllerManagerOpts.KubeCloudShared.ClusterName
+	id, err := os.Hostname()
+	if err != nil {
+		return fmt.Errorf("failed to elect leader in listener EndpointSlice : %s", err)
+	}
+
+	go leaderElection(id, h.kubeClient, h.eventRecorder, func(ctx context.Context) {
+		listener.startEndpointListener(func(service *v1.Service) {
+			if service.Spec.Type != v1.ServiceTypeLoadBalancer {
+				return
+			}
+			nodeList, err := h.kubeClient.Nodes().List(context.TODO(), metav1.ListOptions{})
+			if err != nil {
+				klog.Errorf("failed to query node list: %s", err)
+			}
+			nodes := make([]*v1.Node, 0, len(nodeList.Items))
+			for _, n := range nodeList.Items {
+				node := n
+				nodes = append(nodes, &node)
+			}
+
+			h.sendEvent("UpdateLoadBalancer", "Endpoints changed, start updating", service)
+
+			err = h.UpdateLoadBalancer(context.TODO(), clusterName, service, nodes)
+			if err != nil {
+				klog.Errorf("failed to synchronization endpoint, service: %s/%s, error: %s",
+					service.Namespace, service.Name, err)
+			}
+		})
+	}, func() {
+		listener.stopListenerSlice()
+	})
+	return nil
+}
+
+func leaderElection(id string, kubeClient *corev1.CoreV1Client, recorder record.EventRecorder, onSuccess func(context.Context), onStop func()) {
+	configmapLock := &resourcelock.ConfigMapLock{
+		ConfigMapMeta: metav1.ObjectMeta{
+			Namespace: "huawei-cloud-provider",
+			Name:      "endpoint-slice-listener",
+		},
+		Client: kubeClient,
+		LockConfig: resourcelock.ResourceLockConfig{
+			Identity:      fmt.Sprintf("lock-id-%s", id),
+			EventRecorder: recorder,
+		},
+	}
+
+	leaderelection.RunOrDie(context.TODO(), leaderelection.LeaderElectionConfig{
+		Lock:          configmapLock,
+		LeaseDuration: 30 * time.Second,
+		RenewDeadline: 20 * time.Second,
+		RetryPeriod:   10 * time.Second,
+		Callbacks: leaderelection.LeaderCallbacks{
+			OnStartedLeading: func(ctx context.Context) {
+				klog.V(4).Infof("[Listener EndpointSlices] leader election got: %s", id)
+				onSuccess(ctx)
+			},
+			OnStoppedLeading: func() {
+				klog.V(4).Infof("[Listener EndpointSlices] leader election lost: %s", id)
+				onStop()
+			},
+		},
+		Name: "endpoint-slice-listener",
+	})
 }
