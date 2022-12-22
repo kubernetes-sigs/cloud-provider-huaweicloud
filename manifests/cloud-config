@@ -1,0 +1,12 @@
+[Global]
+region=<your region>
+access-key=<your access-key>
+secret-key=<your secret-key>
+
+project-id=<optional, your project id>
+cloud==<optional, the cloud API domain name>
+auth-url=<optional, the cloud IAM domain name>
+
+[Vpc]
+id=<your vpc ID>
+subnet-id=<your IPV4 subnet ID>
