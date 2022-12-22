@@ -41,18 +41,14 @@ type LoadbalancerConfig struct {
 }
 
 type LoadBalancerOptions struct {
-	NetworkID string `gcfg:"network-id"`
-	SubnetID  string `gcfg:"subnet-id"`
-
 	LBAlgorithm           string `gcfg:"lb-algorithm"`
 	SessionAffinityMode   string `gcfg:"session-affinity-mode"`
 	SessionAffinityOption string `gcfg:"session-affinity-option"`
 
 	LBProvider string `gcfg:"lb-provider"`
-	FlavorID   string `gcfg:"flavor-id"`
 	KeepEIP    bool   `gcfg:"keep-eip"`
 
-	HealthCheck       string `gcfg:"health-check"`
+	HealthCheck       string `gcfg:"health-check-flag"`
 	HealthCheckOption string `gcfg:"health-check-option"`
 }
 

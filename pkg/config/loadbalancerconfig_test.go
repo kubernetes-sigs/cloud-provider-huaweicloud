@@ -7,8 +7,6 @@ import (
 
 func TestLoadELBConfigBasic(t *testing.T) {
 	const (
-		networkID   = "1234"
-		subnetID    = "5678"
 		keepEip     = true
 		healthCheck = "on"
 
@@ -22,10 +20,8 @@ func TestLoadELBConfigBasic(t *testing.T) {
 	)
 	str := `
 [LoadBalancerOptions]
-network-id=` + networkID + `
-subnet-id=` + subnetID + `
 keep-eip=` + strconv.FormatBool(keepEip) + `
-health-check=` + healthCheck + `
+health-check-flag=` + healthCheck + `
 
 [NetworkingOptions]
 public-network-name=` + publicNetworkName + `1
@@ -38,12 +34,6 @@ internal-network-name=` + internalNetworkName + `2
 		t.Fatalf("error loadbabalancer config: %s", err)
 	}
 
-	if cfg.LoadBalancerOpts.NetworkID != networkID {
-		t.Fatalf("NetworkID, expected: %v, got: %v", networkID, cfg.LoadBalancerOpts.NetworkID)
-	}
-	if cfg.LoadBalancerOpts.SubnetID != subnetID {
-		t.Fatalf("SubnetID, expected: %v, got: %v", subnetID, cfg.LoadBalancerOpts.SubnetID)
-	}
 	if cfg.LoadBalancerOpts.SessionAffinityMode != lbMethod {
 		t.Fatalf("SessionAffinityMode, expected: %v, got: %v", lbMethod, cfg.LoadBalancerOpts.SessionAffinityMode)
 	}
@@ -56,7 +46,7 @@ internal-network-name=` + internalNetworkName + `2
 
 	publicNetworkNames := cfg.NetworkingOpts.PublicNetworkName
 	if publicNetworkNames[0] != publicNetworkName+"1" || publicNetworkNames[1] != publicNetworkName+"2" {
-		t.Fatalf("PublicNetworkName, expected: %v, got: %v", publicNetworkName, cfg.LoadBalancerOpts.NetworkID)
+		t.Fatalf("PublicNetworkName, expected: %v, got: %v", publicNetworkName, publicNetworkNames)
 	}
 
 	internalNetworkNames := cfg.NetworkingOpts.InternalNetworkName
@@ -71,8 +61,6 @@ internal-network-name=` + internalNetworkName + `2
 
 func TestLoadELBConfigAll(t *testing.T) {
 	const (
-		networkID         = "1234"
-		subnetID          = "5678"
 		lbMethod          = "SOURCE_IP"
 		lbProvider        = "vlb"
 		keepEip           = true
@@ -82,17 +70,14 @@ func TestLoadELBConfigAll(t *testing.T) {
 		publicNetworkName   = "public-network-name"
 		internalNetworkName = "internal-network-name"
 
-		searchOrder            = "configDrive,metadataService"
-		metadataRequestTimeout = "10s"
+		searchOrder = "configDrive,metadataService"
 	)
 	str := `
 [LoadBalancerOptions]
-network-id=` + networkID + `
-subnet-id=` + subnetID + `
 session-affinity-mode=` + lbMethod + `
 lb-provider=` + lbProvider + `
 keep-eip=` + strconv.FormatBool(keepEip) + `
-health-check=` + healthCheck + `
+health-check-flag=` + healthCheck + `
 health-check-option=` + HealthCheckOption + `
 
 [NetworkingOptions]
@@ -109,12 +94,6 @@ search-order=` + searchOrder + `
 		t.Fatalf("error loadbabalancer config: %s", err)
 	}
 
-	if cfg.LoadBalancerOpts.NetworkID != networkID {
-		t.Fatalf("NetworkID, expected: %v, got: %v", networkID, cfg.LoadBalancerOpts.NetworkID)
-	}
-	if cfg.LoadBalancerOpts.SubnetID != subnetID {
-		t.Fatalf("SubnetID, expected: %v, got: %v", subnetID, cfg.LoadBalancerOpts.SubnetID)
-	}
 	if cfg.LoadBalancerOpts.SessionAffinityMode != lbMethod {
 		t.Fatalf("SessionAffinityMode, expected: %v, got: %v", lbMethod, cfg.LoadBalancerOpts.SessionAffinityMode)
 	}
