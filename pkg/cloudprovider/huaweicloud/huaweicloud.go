@@ -279,8 +279,8 @@ func getLoadBalancerVersion(service *v1.Service) (LoadBalanceVersion, error) {
 	case "elasticity":
 		klog.Infof("Load balancer Version I for service %v", service.Name)
 		return VersionELB, nil
-	case "union", "":
-		klog.Infof("Load balancer Version II for service %v", service.Name)
+	case "shared", "":
+		klog.Infof("Shared load balancer for service %v", service.Name)
 		return VersionShared, nil
 	case "performance":
 		klog.Infof("Load balancer Version III for service %v", service.Name)
