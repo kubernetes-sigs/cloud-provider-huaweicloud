@@ -75,7 +75,7 @@ var _ = ginkgo.Describe("loadbalancer service testing", func() {
 		annotations[huaweicloud.ElbSessionAffinityOption] = `{"persistence_timeout": 1}`
 		annotations[huaweicloud.ElbHealthCheck] = "on"
 		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 3, "timeout": 15, "max_retries": 3}`
-		annotations[huaweicloud.ElbXForwardedFor] = "true"
+		annotations[huaweicloud.ElbXForwardedHost] = "true"
 
 		service = newLoadbalancerAutoService(testNamespace, serviceName, 80, annotations)
 		framework.CreateService(kubeClient, service)
@@ -167,7 +167,7 @@ var _ = ginkgo.Describe("load balancing service test with the specified ID", fun
 		annotations[huaweicloud.ElbSessionAffinityMode] = "SOURCE_IP"
 		annotations[huaweicloud.ElbSessionAffinityOption] = `{"persistence_timeout": 1}`
 		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 3, "timeout": 15, "max_retries": 3}`
-		annotations[huaweicloud.ElbXForwardedFor] = "true"
+		annotations[huaweicloud.ElbXForwardedHost] = "true"
 		annotations[huaweicloud.ElbID] = *elbID
 		annotations[huaweicloud.ElbEipID] = *eipID
 		annotations[huaweicloud.ELBKeepEip] = "true"

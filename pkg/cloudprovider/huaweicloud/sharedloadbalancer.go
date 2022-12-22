@@ -629,7 +629,7 @@ func (l *SharedLoadBalancer) createListener(loadbalancerID string, service *v1.S
 		return nil, err
 	}
 
-	xForwardFor := getBoolFromSvsAnnotation(service, ElbXForwardedFor, false)
+	xForwardFor := getBoolFromSvsAnnotation(service, ElbXForwardedHost, false)
 	connectLimit := getConnectionLimitFromAnnotation(service)
 	name := cutString(fmt.Sprintf("%s_%s_%v", service.Name, port.Protocol, port.Port))
 	listener, err := l.sharedELBClient.CreateListener(&elbmodel.CreateListenerReq{

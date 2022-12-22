@@ -57,7 +57,7 @@ const (
 	ElbHealthCheck        = "kubernetes.io/elb.health-check-flag"
 	ElbHealthCheckOptions = "kubernetes.io/elb.health-check-options"
 
-	ElbXForwardedFor = "kubernetes.io/elb.x-forwarded-for"
+	ElbXForwardedHost = "kubernetes.io/elb.x-forwarded-host"
 
 	NodeSubnetIDLabelKey = "node.kubernetes.io/subnetid"
 	ELBMarkAnnotation    = "kubernetes.io/elb.mark"
