@@ -36,13 +36,13 @@ func TestIsStrSliceContains(t *testing.T) {
 			expected: true,
 		},
 		{
-			name:     "test1",
+			name:     "test2",
 			data:     data,
 			val:      "abc",
 			expected: true,
 		},
 		{
-			name:     "test1",
+			name:     "test3",
 			data:     data,
 			val:      "ab",
 			expected: false,
