@@ -1,0 +1,38 @@
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: huawei-cloud-provider
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  namespace: kube-system
+  name: cloud-config
+type: Opaque
+data:
+  cloud-config: |-
+    ewogICAgIkxvYWR......The base64 code of the cloud-config.
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: huawei-cloud-provider
+  name: loadbalancer-config
+data:
+  loadBalancerOption: |-
+    {
+       "lb-algorithm": "ROUND_ROBIN",
+       "keep-eip": false,
+       "session-affinity-flag": "on",
+       "session-affinity-option": {
+         "type": "SOURCE_IP",
+         "cookie_name": "session_id",
+         "persistence_timeout": 15
+       },
+       "health-check": "on",
+       "health-check-option": {
+         "delay": 5,
+         "timeout": 15,
+         "max_retries": 5
+       }
+    }

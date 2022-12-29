@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    kubernetes.io/elb.class: shared
+    kubernetes.io/elb.lb-algorithm: ROUND_ROBIN
+  labels:
+    app: nginx-demo
+  name: loadbalance-service-demo-1
+spec:
+  ports:
+    - port: 80
+      protocol: TCP
+      targetPort: 80
+  selector:
+    app: nginx-demo
+  type: LoadBalancer
