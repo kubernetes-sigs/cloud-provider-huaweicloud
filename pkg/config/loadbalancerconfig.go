@@ -18,9 +18,10 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
-	"gopkg.in/gcfg.v1"
+	elbmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v2/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -32,35 +33,48 @@ import (
 const (
 	providerNamespace     = "huawei-cloud-provider"
 	loadbalancerConfigMap = "loadbalancer-config"
+
+	HealthCheckTimeout    = 3
+	HealthCheckMaxRetries = 3
+	HealthCheckDelay      = 5
 )
 
 type LoadbalancerConfig struct {
-	LoadBalancerOpts LoadBalancerOptions `gcfg:"LoadBalancerOptions"`
-	NetworkingOpts   NetworkingOptions   `gcfg:"NetworkingOptions"`
-	MetadataOpts     MetadataOptions     `gcfg:"MetadataOptions"`
+	LoadBalancerOpts LoadBalancerOptions `json:"loadBalancerOption"`
+	NetworkingOpts   NetworkingOptions   `json:"networkingOption"`
+	MetadataOpts     MetadataOptions     `json:"metadataOption"`
 }
 
 type LoadBalancerOptions struct {
-	LBAlgorithm           string `gcfg:"lb-algorithm"`
-	SessionAffinityMode   string `gcfg:"session-affinity-mode"`
-	SessionAffinityOption string `gcfg:"session-affinity-option"`
+	LBAlgorithm string `json:"lb-algorithm"`
+	LBProvider  string `json:"lb-provider"`
+	KeepEIP     bool   `json:"keep-eip"`
 
-	LBProvider string `gcfg:"lb-provider"`
-	KeepEIP    bool   `gcfg:"keep-eip"`
+	SessionAffinityOption elbmodel.SessionPersistence `json:"session-affinity-option"`
+	SessionAffinityFlag   string                      `json:"session-affinity-flag"`
 
-	HealthCheck       string `gcfg:"health-check-flag"`
-	HealthCheckOption string `gcfg:"health-check-option"`
+	HealthCheckFlag   string            `json:"health-check-flag"`
+	HealthCheckOption HealthCheckOption `json:"health-check-option"`
+}
+
+type HealthCheckOption struct {
+	Enable     bool   `json:"enable"`
+	Delay      int32  `json:"delay"`
+	Timeout    int32  `json:"timeout"`
+	MaxRetries int32  `json:"max_retries"`
+	Protocol   string `json:"protocol"`
+	Path       string `json:"path"`
 }
 
 // NetworkingOptions is used for networking settings
 type NetworkingOptions struct {
-	PublicNetworkName   []string `gcfg:"public-network-name"`
-	InternalNetworkName []string `gcfg:"internal-network-name"`
+	PublicNetworkName   []string `json:"public-network-name"`
+	InternalNetworkName []string `json:"internal-network-name"`
 }
 
 // MetadataOptions is used for configuring how to talk to metadata service or authConfig drive
 type MetadataOptions struct {
-	SearchOrder string `gcfg:"search-order"`
+	SearchOrder string `json:"search-order"`
 }
 
 func NewDefaultELBConfig() *LoadbalancerConfig {
@@ -70,27 +84,40 @@ func NewDefaultELBConfig() *LoadbalancerConfig {
 	return cfg
 }
 
-func LoadELBConfig(str string) (*LoadbalancerConfig, error) {
-	cfg := NewDefaultELBConfig()
-	if err := gcfg.ReadStringInto(cfg, str); err != nil {
-		return nil, err
-	}
-	return cfg, nil
-}
-
 func LoadElbConfigFromCM() (*LoadbalancerConfig, error) {
+	defaultCfg := NewDefaultELBConfig()
 	kubeClient, err := getKubeClient()
 	if err != nil {
-		return nil, err
+		return defaultCfg, err
 	}
 
 	configMap, err := kubeClient.ConfigMaps(providerNamespace).
 		Get(context.TODO(), loadbalancerConfigMap, metav1.GetOptions{})
 	if err != nil {
-		return nil, err
+		return defaultCfg, err
 	}
-	klog.Infof("get loadbalancer options: %s", configMap.Data["options"])
-	return LoadELBConfig(configMap.Data["options"])
+
+	klog.Infof("get loadbalancer options: %v", configMap.Data)
+
+	return LoadELBConfig(configMap.Data), nil
+}
+
+func LoadELBConfig(data map[string]string) *LoadbalancerConfig {
+	cfg := NewDefaultELBConfig()
+
+	loadBalancerOptions := []byte(data["loadBalancerOption"])
+	if err := json.Unmarshal(loadBalancerOptions, &cfg.LoadBalancerOpts); err != nil {
+		klog.Errorf("error parsing loadbalancer config: %s", err)
+	}
+	networkingOptions := []byte(data["networkingOption"])
+	if err := json.Unmarshal(networkingOptions, &cfg.NetworkingOpts); err != nil {
+		klog.Errorf("error parsing networkingOption config: %s", err)
+	}
+	metadataOption := []byte(data["metadataOption"])
+	if err := json.Unmarshal(metadataOption, &cfg.MetadataOpts); err != nil {
+		klog.Errorf("error parsing metadataOption config: %s", err)
+	}
+	return cfg
 }
 
 func getKubeClient() (*corev1.CoreV1Client, error) {
@@ -111,8 +138,10 @@ func (l *LoadBalancerOptions) initDefaultValue() {
 	if l.LBProvider == "" {
 		l.LBProvider = "vlb"
 	}
-	if l.SessionAffinityMode == "" {
-		l.SessionAffinityMode = "ROUND_ROBIN"
+	l.HealthCheckOption = HealthCheckOption{
+		Timeout:    HealthCheckTimeout,
+		MaxRetries: HealthCheckMaxRetries,
+		Delay:      HealthCheckDelay,
 	}
 }
 

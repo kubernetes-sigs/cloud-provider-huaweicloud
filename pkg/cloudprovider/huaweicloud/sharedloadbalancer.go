@@ -313,7 +313,7 @@ func (l *SharedLoadBalancer) addOrRemoveHealthMonitor(loadbalancerID string, poo
 	return nil
 }
 
-func (l *SharedLoadBalancer) updateHealthMonitor(id string, protocol corev1.Protocol, opts *HealthCheckOption) error {
+func (l *SharedLoadBalancer) updateHealthMonitor(id string, protocol corev1.Protocol, opts *config.HealthCheckOption) error {
 	monitorProtocol := string(protocol)
 	if protocol == corev1.ProtocolUDP {
 		monitorProtocol = "UDP_CONNECT"
@@ -327,7 +327,7 @@ func (l *SharedLoadBalancer) updateHealthMonitor(id string, protocol corev1.Prot
 	})
 }
 
-func (l *SharedLoadBalancer) createHealthMonitor(loadbalancerID, poolID string, protocol corev1.Protocol, opts *HealthCheckOption) (*elbmodel.HealthmonitorResp, error) {
+func (l *SharedLoadBalancer) createHealthMonitor(loadbalancerID, poolID string, protocol corev1.Protocol, opts *config.HealthCheckOption) (*elbmodel.HealthmonitorResp, error) {
 	monitorProtocol := string(protocol)
 	if protocol == corev1.ProtocolUDP {
 		monitorProtocol = "UDP_CONNECT"
@@ -499,23 +499,20 @@ func (l *SharedLoadBalancer) getPool(elbID, listenerID string) (*elbmodel.PoolRe
 
 func (l *SharedLoadBalancer) getSessionAffinity(service *v1.Service) *elbmodel.SessionPersistence {
 	globalOpts := l.loadbalancerOpts
-	sessionMode := getStringFromSvsAnnotation(service, ElbSessionAffinityMode, globalOpts.SessionAffinityMode)
-	if sessionMode == "" {
-		return nil
-	}
-	sessionType := elbmodel.SessionPersistenceType{}
-	err := sessionType.UnmarshalJSON([]byte(sessionMode))
-	if err != nil {
-		klog.Warningf("\"kubernetes.io/elb.session-affinity-mode\" is invalid, does not enable session affinity")
+	sessionMode := getStringFromSvsAnnotation(service, ElbSessionAffinityFlag, globalOpts.SessionAffinityFlag)
+	if sessionMode == "" || sessionMode == "off" {
 		return nil
 	}
 
-	persistence := elbmodel.SessionPersistence{
-		Type: sessionType,
-	}
-	opts := getStringFromSvsAnnotation(service, ElbSessionAffinityOption, globalOpts.SessionAffinityOption)
+	persistence := globalOpts.SessionAffinityOption
 
-	err = json.Unmarshal([]byte(opts), &persistence)
+	opts := getStringFromSvsAnnotation(service, ElbSessionAffinityOption, "")
+	if opts == "" {
+		klog.V(4).Infof("[DEBUG] SessionAffinityOption is empty, use default: %#v", persistence)
+		return &persistence
+	}
+
+	err := json.Unmarshal([]byte(opts), &persistence)
 	if err != nil {
 		klog.Warningf("error parsing \"kubernetes.io/elb.session-affinity-option\": %s, ignore options: %s",
 			err, opts)
@@ -847,7 +844,7 @@ func getStringFromSvsAnnotation(service *corev1.Service, annotationKey string, d
 		klog.V(4).Infof("Found a Service Annotation: %v = %v", annotationKey, annotationValue)
 		return annotationValue
 	}
-	klog.V(4).Infof("Could not find a Service Annotation; falling back on cloud-authConfig setting: %v = %v",
+	klog.V(4).Infof("Could not find a Service Annotation; falling back on default setting: %v = %v",
 		annotationKey, defaultSetting)
 	return defaultSetting
 }
@@ -914,29 +911,19 @@ func getNodeAddress(node *corev1.Node) (string, error) {
 		node.Name)
 }
 
-type HealthCheckOption struct {
-	Enable     bool   `json:"enable"`
-	Delay      int32  `json:"delay"`
-	Timeout    int32  `json:"timeout"`
-	MaxRetries int32  `json:"max_retries"`
-	Protocol   string `json:"protocol"`
-	Path       string `json:"path"`
-}
+func getHealthCheckOptionFromAnnotation(service *v1.Service, opts *config.LoadBalancerOptions) *config.HealthCheckOption {
+	checkOpts := opts.HealthCheckOption
 
-func getHealthCheckOptionFromAnnotation(service *v1.Service, opts *config.LoadBalancerOptions) *HealthCheckOption {
-	checkOpts := HealthCheckOption{
-		Enable:     true,
-		Timeout:    3,
-		MaxRetries: 3,
-		Delay:      5,
-	}
-
-	healthCheck := getStringFromSvsAnnotation(service, ElbHealthCheck, opts.HealthCheck)
-	if healthCheck == "off" {
+	healthCheckFlag := getStringFromSvsAnnotation(service, ElbHealthCheckFlag, opts.HealthCheckFlag)
+	if healthCheckFlag == "off" || healthCheckFlag == "" {
 		checkOpts.Enable = false
 	}
+	checkOpts.Enable = true
 
-	str := getStringFromSvsAnnotation(service, ElbHealthCheckOptions, opts.HealthCheckOption)
+	str := getStringFromSvsAnnotation(service, ElbHealthCheckOptions, "")
+	if str == "" {
+		return &checkOpts
+	}
 	if err := json.Unmarshal([]byte(str), &checkOpts); err != nil {
 		klog.Errorf("error parsing health check options: %s, using default", err)
 	}
