@@ -1,30 +1,39 @@
-# Kubernetes Cloud Provider for HUAWEI CLOUD
-This repository contains the [Kubernetes cloud-controller-manager](https://kubernetes.io/docs/concepts/architecture/cloud-controller/) for HUAWEICLOUD.
+# Kubernetes Cloud Provider for Huawei Cloud
 
-Successfully running cloud-controller-manager requires some changes to your cluster configuration.
-- `kube-apiserver` and `kube-controller-manager` MUST NOT specify the `--cloud-provider` flag
-(or specify `--cloud-provider=external`). This ensures that it does not run any cloud specific loops that would be run by cloud controller manager. 
-- `kubelet` must run with `--cloud-provider=external`. This is to ensure that the kubelet is aware that it must be initialized by the cloud controller manager before it is scheduled any work.
+The Huawei Cloud Controller Manager provides the interface between a Kubernetes cluster and Huawei Cloud service APIs.
+This project allows a Kubernetes cluster to provision, monitor and remove Huawei Cloud resources necessary for
+operation of the cluster.
+
+See [Cloud Controller Manager Administration](https://kubernetes.io/docs/tasks/administer-cluster/running-cloud-controller/)
+for more about Kubernetes cloud controller manager.
+
+## Implementation Details
+
+Currently `huawei-cloud-controller-manager` implements:
+
+* servicecontroller - responsible for creating LoadBalancers when a service of `Type: LoadBalancer` is created in Kubernetes.
+* nodecontroller - updates nodes with cloud provider specific labels and addresses.
+
+## Compatibility with Kubernetes
+
+| Kubernetes Version | Latest Huawei Cloud Controller Manager Version |
+| ------------------ | ---------------------------------------------- |
+| v1.20              | v0.20.0                                        |
+
+1.21+ support is coming soon.
 
 ## Quick Start
-- [Run with local cluster](./docs/quick-start-with-local-cluster.md)
 
-## Development
+- [Running on an Existing Kubernetes cluster on Huawei Cloud](/docs/getting-started.md)
+- [Huawei Cloud Controller Manager Configurations](/docs/huawei-cloud-controller-manager-configuration.md)
+- [Usage Guide](/docs/usage-guide.md)
 
-#### Dependency management
-Go version should be 1.13+, and the dependencies are managed using [Go modules](https://github.com/golang/go/wiki/Modules).
-To keep it simple, you can use vendor as well.
+## More About Cloud Controller Manager
 
-#### build locally
-```
-$ git clone https://github.com/kubernetes-sigs/cloud-provider-huaweicloud.git 
-$ make huawei-cloud-controller-manager
-```
-
-## More about CCM
 - [Concepts Underlying the Cloud Controller Manager](https://kubernetes.io/docs/concepts/architecture/cloud-controller/)
 - [Running cloud controller manager](https://kubernetes.io/docs/tasks/administer-cluster/running-cloud-controller/#running-cloud-controller-manager)
 - [Developing Cloud Controller Manager](https://kubernetes.io/docs/tasks/administer-cluster/developing-cloud-controller-manager/)
 
 ## Support
-Any questions feel free to [send an issue](https://github.com/kubernetes-sigs/cloud-provider-huaweicloud/issues/new).  
+
+Any questions feel free to [submit an issue](https://github.com/kubernetes-sigs/cloud-provider-huaweicloud/issues/new).
