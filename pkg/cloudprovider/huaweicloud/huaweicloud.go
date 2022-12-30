@@ -37,8 +37,8 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/cloud-provider"
+	"k8s.io/cloud-provider/options"
 	"k8s.io/klog/v2"
-	"k8s.io/kubernetes/cmd/cloud-controller-manager/app/options"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
