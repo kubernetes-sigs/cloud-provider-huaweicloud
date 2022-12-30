@@ -621,7 +621,7 @@ func GetHealthCheckPort(service *v1.Service) *v1.ServicePort {
 }
 
 func GetSessionAffinityType(service *v1.Service) string {
-	return service.Annotations[ElbSessionAffinityMode]
+	return service.Annotations[ElbSessionAffinityFlag]
 }
 
 func GetSessionAffinityOptions(service *v1.Service) string {

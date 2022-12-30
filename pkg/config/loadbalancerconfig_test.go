@@ -7,110 +7,88 @@ import (
 
 func TestLoadELBConfigBasic(t *testing.T) {
 	const (
-		keepEip     = true
-		healthCheck = "on"
-
-		publicNetworkName   = "public-network-name"
-		internalNetworkName = "internal-network-name"
-
 		lbProvider = "vlb"
 		lbMethod   = "ROUND_ROBIN"
 
-		searchOrder = "metadataService,configDrive"
-	)
-	str := `
-[LoadBalancerOptions]
-keep-eip=` + strconv.FormatBool(keepEip) + `
-health-check-flag=` + healthCheck + `
+		keepEip = true
 
-[NetworkingOptions]
-public-network-name=` + publicNetworkName + `1
-public-network-name=` + publicNetworkName + `2
-internal-network-name=` + internalNetworkName + `1
-internal-network-name=` + internalNetworkName + `2
-`
-	cfg, err := LoadELBConfig(str)
-	if err != nil {
-		t.Fatalf("error loadbabalancer config: %s", err)
-	}
+		SessionAffinityFlag               = "on"
+		SessionAffinityType               = "SOURCE_IP"
+		SessionAffinityCookieName         = "session_id"
+		SessionAffinityPersistenceTimeout = 15
 
-	if cfg.LoadBalancerOpts.SessionAffinityMode != lbMethod {
-		t.Fatalf("SessionAffinityMode, expected: %v, got: %v", lbMethod, cfg.LoadBalancerOpts.SessionAffinityMode)
-	}
-	if cfg.LoadBalancerOpts.LBProvider != lbProvider {
-		t.Fatalf("LBProvider, expected: %v, got: %v", lbProvider, cfg.LoadBalancerOpts.LBProvider)
-	}
-	if cfg.LoadBalancerOpts.KeepEIP != keepEip {
-		t.Fatalf("KeepEIP, expected: %v, got: %v", keepEip, cfg.LoadBalancerOpts.KeepEIP)
-	}
-
-	publicNetworkNames := cfg.NetworkingOpts.PublicNetworkName
-	if publicNetworkNames[0] != publicNetworkName+"1" || publicNetworkNames[1] != publicNetworkName+"2" {
-		t.Fatalf("PublicNetworkName, expected: %v, got: %v", publicNetworkName, publicNetworkNames)
-	}
-
-	internalNetworkNames := cfg.NetworkingOpts.InternalNetworkName
-	if internalNetworkNames[0] != internalNetworkName+"1" || internalNetworkNames[1] != internalNetworkName+"2" {
-		t.Fatalf("InternalNetworkName, expected: %v, got: %v", internalNetworkName, internalNetworkNames)
-	}
-
-	if cfg.MetadataOpts.SearchOrder != searchOrder {
-		t.Fatalf("SearchOrder, expected: %v, got: %v", searchOrder, cfg.MetadataOpts.SearchOrder)
-	}
-}
-
-func TestLoadELBConfigAll(t *testing.T) {
-	const (
-		lbMethod          = "SOURCE_IP"
-		lbProvider        = "vlb"
-		keepEip           = true
-		healthCheck       = "off"
-		HealthCheckOption = "{}"
+		HealthCheckFlag       = "on"
+		healthCheckDelay      = 5
+		healthCheckTimeout    = 15
+		healthCheckMaxRetries = 5
 
 		publicNetworkName   = "public-network-name"
 		internalNetworkName = "internal-network-name"
 
-		searchOrder = "configDrive,metadataService"
+		searchOrder = "metadataService,configDrive"
 	)
-	str := `
-[LoadBalancerOptions]
-session-affinity-mode=` + lbMethod + `
-lb-provider=` + lbProvider + `
-keep-eip=` + strconv.FormatBool(keepEip) + `
-health-check-flag=` + healthCheck + `
-health-check-option=` + HealthCheckOption + `
 
-[NetworkingOptions]
-public-network-name=` + publicNetworkName + `1
-public-network-name=` + publicNetworkName + `2
-internal-network-name=` + internalNetworkName + `1
-internal-network-name=` + internalNetworkName + `2
+	data := map[string]string{
+		"loadBalancerOption": `{
+			"lb-algorithm": "` + lbMethod + `",
+			"lb-provider": "` + lbProvider + `",
+			"keep-eip": ` + strconv.FormatBool(keepEip) + `,
 
-[MetadataOptions]
-search-order=` + searchOrder + `
-`
-	cfg, err := LoadELBConfig(str)
-	if err != nil {
-		t.Fatalf("error loadbabalancer config: %s", err)
+			"session-affinity-flag": "` + SessionAffinityFlag + `",
+			"session-affinity-option": {
+				"type": "` + SessionAffinityType + `",
+				"cookie_name": "` + SessionAffinityCookieName + `",
+				"persistence_timeout": ` + strconv.Itoa(SessionAffinityPersistenceTimeout) + `
+			},
+			"health-check-flag": "` + HealthCheckFlag + `",
+			"health-check-option": {
+				"delay": ` + strconv.Itoa(healthCheckDelay) + `,
+				"timeout": ` + strconv.Itoa(healthCheckTimeout) + `,
+				"max_retries": ` + strconv.Itoa(healthCheckMaxRetries) + `
+			}
+		}`,
+		"networkingOption": `{
+			"public-network-name": ["` + publicNetworkName + `"],
+			"internal-network-name": ["` + internalNetworkName + `"]
+		}`,
+		"metadataOption": `{
+			"search-order": "` + searchOrder + `"
+		}`,
 	}
 
-	if cfg.LoadBalancerOpts.SessionAffinityMode != lbMethod {
-		t.Fatalf("SessionAffinityMode, expected: %v, got: %v", lbMethod, cfg.LoadBalancerOpts.SessionAffinityMode)
-	}
+	cfg := LoadELBConfig(data)
+
 	if cfg.LoadBalancerOpts.LBProvider != lbProvider {
 		t.Fatalf("LBProvider, expected: %v, got: %v", lbProvider, cfg.LoadBalancerOpts.LBProvider)
 	}
-	if cfg.LoadBalancerOpts.KeepEIP != keepEip {
-		t.Fatalf("KeepEIP, expected: %v, got: %v", keepEip, cfg.LoadBalancerOpts.KeepEIP)
+	if cfg.LoadBalancerOpts.LBAlgorithm != lbMethod {
+		t.Fatalf("LBAlgorithm, expected: %v, got: %v", lbMethod, cfg.LoadBalancerOpts.LBAlgorithm)
+	}
+	if cfg.LoadBalancerOpts.SessionAffinityFlag != SessionAffinityFlag {
+		t.Fatalf("SessionAffinityFlag, expected: %v, got: %v", SessionAffinityFlag, cfg.LoadBalancerOpts.SessionAffinityFlag)
+	}
+	if cfg.LoadBalancerOpts.SessionAffinityOption.Type.Value() != SessionAffinityType {
+		t.Fatalf("SessionAffinityType, expected: %v, got: %v",
+			SessionAffinityType, cfg.LoadBalancerOpts.SessionAffinityOption.Type.Value())
+	}
+	if *cfg.LoadBalancerOpts.SessionAffinityOption.CookieName != SessionAffinityCookieName {
+		t.Fatalf("SessionAffinityCookieName, expected: %v, got: %v", SessionAffinityCookieName,
+			cfg.LoadBalancerOpts.SessionAffinityOption.CookieName)
+	}
+	if *cfg.LoadBalancerOpts.SessionAffinityOption.PersistenceTimeout != SessionAffinityPersistenceTimeout {
+		t.Fatalf("SessionAffinityPersistenceTimeout, expected: %v, got: %v", SessionAffinityPersistenceTimeout, cfg.LoadBalancerOpts.SessionAffinityOption.PersistenceTimeout)
+	}
+	if cfg.LoadBalancerOpts.HealthCheckFlag != HealthCheckFlag {
+		t.Fatalf("HealthCheckFlag, expected: %v, got: %v", HealthCheckFlag, cfg.LoadBalancerOpts.HealthCheckFlag)
 	}
 
 	publicNetworkNames := cfg.NetworkingOpts.PublicNetworkName
-	if publicNetworkNames[0] != publicNetworkName+"1" || publicNetworkNames[1] != publicNetworkName+"2" {
+	if publicNetworkNames[0] != publicNetworkName {
 		t.Fatalf("PublicNetworkName, expected: %v, got: %v", publicNetworkName, publicNetworkNames)
 	}
 
 	internalNetworkNames := cfg.NetworkingOpts.InternalNetworkName
-	if internalNetworkNames[0] != internalNetworkName+"1" || internalNetworkNames[1] != internalNetworkName+"2" {
+	if internalNetworkNames[0] != internalNetworkName {
 		t.Fatalf("InternalNetworkName, expected: %v, got: %v", internalNetworkName, internalNetworkNames)
 	}
 

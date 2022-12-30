@@ -149,7 +149,7 @@ func (elb *ELBCloud) ensureCreateListener(
 	switch sessionAffinity {
 	case ELBSessionSourceIP:
 		listenerConf.SessionSticky = true
-		listenerConf.TCPTimeout, _ = strconv.Atoi(sessionAffinityOpts[ELBPersistenTimeout])
+		listenerConf.TCPTimeout, _ = strconv.Atoi(sessionAffinityOpts[ELBPersistenceTimeout])
 	case ELBSessionNone:
 		//do nothing
 	}
@@ -665,7 +665,7 @@ func (elb *ELBCloud) updateLoadBalancer(
 		switch sessionAffinity {
 		case ELBSessionSourceIP:
 			sessionSticky = true
-			timeout, _ = strconv.Atoi(sessionAffinityOptions[ELBPersistenTimeout])
+			timeout, _ = strconv.Atoi(sessionAffinityOptions[ELBPersistenceTimeout])
 		case ELBSessionNone:
 			sessionSticky = false
 		}
@@ -871,7 +871,7 @@ func (elb *ELBCloud) getSessionAffinityOptions(service *v1.Service) (map[string]
 	}
 	switch mode := GetSessionAffinityType(service); mode {
 	case ELBSessionSourceIP:
-		if val, ok := sessionAffinityOptions[ELBPersistenTimeout]; ok {
+		if val, ok := sessionAffinityOptions[ELBPersistenceTimeout]; ok {
 			timeout, err := strconv.Atoi(val)
 			if err != nil || timeout > ELBSessionSourceIPMaxTimeout || timeout < ELBSessionSourceIPMinTimeout {
 				return nil, fmt.Errorf("invalid session affinity option ,invalid cookie timeout [%d<timeout<%d]",
@@ -879,7 +879,7 @@ func (elb *ELBCloud) getSessionAffinityOptions(service *v1.Service) (map[string]
 			}
 		} else {
 			//set default persistent timeout to 60 minus
-			sessionAffinityOptions[ELBPersistenTimeout] = fmt.Sprintf("%d", ELBSessionSourceIPDefaultTimeout)
+			sessionAffinityOptions[ELBPersistenceTimeout] = fmt.Sprintf("%d", ELBSessionSourceIPDefaultTimeout)
 		}
 	}
 	return sessionAffinityOptions, nil
