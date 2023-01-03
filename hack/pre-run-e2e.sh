@@ -187,8 +187,16 @@ spec:
       labels:
         k8s-app: huawei-cloud-controller-manager
     spec:
-      nodeSelector:
-        node-role.kubernetes.io/master: ""
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: node-role.kubernetes.io/master
+                  operator: Exists
+              - matchExpressions:
+                - key: node-role.kubernetes.io/control-plane
+                  operator: Exists
       securityContext:
         runAsUser: 1001
       tolerations:
@@ -196,6 +204,8 @@ spec:
           value: "true"
           effect: NoSchedule
         - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
           effect: NoSchedule
       serviceAccountName: cloud-controller-manager
       containers:

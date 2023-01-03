@@ -16,8 +16,16 @@ spec:
       labels:
         k8s-app: huawei-cloud-controller-manager
     spec:
-      nodeSelector:
-        node-role.kubernetes.io/master: ""
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                - key: node-role.kubernetes.io/master
+                  operator: Exists
+              - matchExpressions:
+                - key: node-role.kubernetes.io/control-plane
+                  operator: Exists
       securityContext:
         runAsUser: 1001
       tolerations:
@@ -26,14 +34,16 @@ spec:
           effect: NoSchedule
         - key: node-role.kubernetes.io/master
           effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
       serviceAccountName: cloud-controller-manager
       containers:
         - name: huawei-cloud-controller-manager
-          image: swr.ap-southeast-1.myhuaweicloud.com/k8s-cloudcontrollermanager/huawei-cloud-controller-manager:v0.19.14-alpha
+          image: swr.ap-southeast-1.myhuaweicloud.com/k8s-cloudprovider/huawei-cloud-controller-manager:v0.19.15-alpha
           args:
             - /bin/huawei-cloud-controller-manager
             - --v=6
-            - --cloud-config=/etc/config/cloud.conf
+            - --cloud-config=/etc/config/cloud-config
             - --cloud-provider=huaweicloud
             - --use-service-account-credentials=true
           volumeMounts:
