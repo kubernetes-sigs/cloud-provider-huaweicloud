@@ -21,6 +21,7 @@ rules:
       - services
       - secrets
       - serviceaccounts
+      - serviceaccounts/token
     verbs:
       - get
       - list
