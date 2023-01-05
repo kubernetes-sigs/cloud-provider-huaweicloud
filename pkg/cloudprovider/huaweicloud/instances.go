@@ -86,7 +86,7 @@ func (i *Instances) InstanceID(_ context.Context, name types.NodeName) (string, 
 	if err != nil {
 		return "", err
 	}
-	return "/" + server.Id, nil
+	return server.Id, nil
 }
 
 // InstanceType returns the type of the specified instance.
@@ -192,9 +192,17 @@ func (i *Instances) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, 
 
 // InstanceMetadata returns the instance's metadata. The values returned in InstanceMetadata are
 // translated into specific fields in the Node object on registration.
-func (i *Instances) InstanceMetadata(_ context.Context, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
-	klog.Infof("InstanceMetadata is called with node %s/%s", node.Namespace, node.Name)
+func (i *Instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
+	klog.Infof("InstanceMetadata is called with node %s", node.Name)
 	providerID := node.Spec.ProviderID
+	if providerID == "" {
+		klog.V(4).Infof("node.Spec.ProviderID is empty, query ECS details by hostname")
+		id, err := i.InstanceID(ctx, types.NodeName(node.Name))
+		if err != nil {
+			return nil, err
+		}
+		providerID = id
+	}
 	instanceID, err := parseInstanceID(providerID)
 	if err != nil {
 		return nil, err
