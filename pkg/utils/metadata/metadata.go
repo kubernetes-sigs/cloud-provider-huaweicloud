@@ -49,27 +49,18 @@ const (
 )
 
 // ErrBadMetadata is used to indicate a problem parsing data from metadata server
-var ErrBadMetadata = errors.New("invalid OpenStack metadata, got empty uuid")
+var ErrBadMetadata = errors.New("invalid HuaweiCloud metadata, got empty uuid")
 
 // Metadata is fixed for the current host, so cache the value process-wide
 var metadataCache *Metadata
 
-// DeviceMetadata is a single/simplified data structure for all kinds of device metadata types.
-type DeviceMetadata struct {
-	Type    string `json:"type"`
-	Bus     string `json:"bus,omitempty"`
-	Serial  string `json:"serial,omitempty"`
-	Address string `json:"address,omitempty"`
-	// .. and other fields.
-}
-
-// Metadata has the information fetched from OpenStack metadata service or
+// Metadata has the information fetched from HuaweiCloud metadata service or
 // config drives. Assumes the "latest" meta_data.json format.
 type Metadata struct {
-	UUID             string           `json:"uuid"`
-	Name             string           `json:"name"`
-	AvailabilityZone string           `json:"availability_zone"`
-	Devices          []DeviceMetadata `json:"devices,omitempty"`
+	UUID             string `json:"uuid"`
+	Name             string `json:"name"`
+	AvailabilityZone string `json:"availability_zone"`
+	RegionID         string `json:"region_id"`
 	// .. and other fields we don't care about.  Expand as necessary.
 }
 
@@ -79,7 +70,7 @@ type IMetadata interface {
 	GetAvailabilityZone() (string, error)
 }
 
-// parseMetadata reads JSON from OpenStack metadata server and parses
+// parseMetadata reads JSON from HuaweiCloud metadata server and parses
 // instance ID out of it.
 func parseMetadata(r io.Reader) (*Metadata, error) {
 	var metadata Metadata
