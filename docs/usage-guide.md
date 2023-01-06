@@ -142,7 +142,7 @@ spec:
 EOF
 ````
 
-### Example 1: use an existing shared ELB service
+### Example 1: Use an existing shared ELB service
 
 ```shell
 cat <<EOF | kubectl apply -f -
@@ -189,7 +189,7 @@ $ curl 192.168.0.113
 ```
 
 
-### Example 2: automatically create a new shared ELB service
+### Example 2: Automatically create a new shared ELB service
 
 ```shell
 cat <<EOF | kubectl apply -f -
@@ -234,7 +234,7 @@ $ curl 192.168.0.80
 ...
 ```
 
-### Example 3: automatically create new shared ELB services and an EIP
+### Example 3: Automatically create a new shared ELB service and create an EIP
 
 ```shell
 cat <<EOF | kubectl apply -f -
@@ -282,7 +282,7 @@ $ curl 159.138.37.76
 ...
 ```
 
-### Example 4: enable session affinity for shared ELB service listeners
+### Example 4: Enable session affinity for shared ELB service listeners
 
 ```shell
 cat <<EOF | kubectl apply -f -
