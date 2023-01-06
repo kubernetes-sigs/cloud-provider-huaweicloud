@@ -158,14 +158,14 @@ The following arguments are supported:
 * `keep-eip` Specifies whether to retain the EIP when deleting a ELB service.
   Valid values are `true` and `false`, defaults to `false`.
 
-* `health-check` Specifies whether to enable health check for a backend server group.
-  Valid values are `on` and `off`, defaults to `off`.
+* `health-check-flag` Specifies whether to enable health check for a backend server group.
+  Valid values are `on` and `off`, defaults to `on`.
 
 * `health-check-option` Specifies the health check.
 
   This parameter is mandatory when the `health-check` is `on`.
 
-  This is a json string, such as `{"delay": 3, "timeout": 15, "max_retries": 3}`.
+  This is a json string, defaults to `{"delay": 5, "timeout": 3, "max_retries": 3}`.
 
   For details:
 
