@@ -282,7 +282,7 @@ $ curl 159.138.37.76
 ...
 ```
 
-### Example 4: enable health check of shared ELB service
+### Example 4: enable session affinity for shared ELB service listeners
 
 ```shell
 cat <<EOF | kubectl apply -f -
@@ -291,11 +291,10 @@ kind: Service
 metadata:
   annotations:
     kubernetes.io/elb.class: shared
-    kubernetes.io/elb.id: 5db47460-ebc2-4116-ab52-e854373a0fd5
     kubernetes.io/elb.lb-algorithm: ROUND_ROBIN
-    kubernetes.io/elb.health-check-flag: 'on'
-    kubernetes.io/elb.health-check-options: >-
-      {"delay": 3, "timeout": 15, "max_retries": 3}
+    kubernetes.io/session-affinity-flag: 'on'
+    kubernetes.io/session-affinity-option: >-
+      {"type": "APP_COOKIE", "cookie_name": "sessionID", "persistence_timeout": 15}
   labels:
     app: nginx
   name: loadbalancer-service-demo-04
