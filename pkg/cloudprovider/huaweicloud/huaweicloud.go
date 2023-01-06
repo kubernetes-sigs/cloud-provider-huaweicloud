@@ -317,44 +317,6 @@ func (h *CloudProvider) ExternalID(ctx context.Context, instance types.NodeName)
 	return "", cloudprovider.NotImplemented
 }
 
-// type Routes interface {}
-
-// ListRoutes is an implementation of Routes.ListRoutes
-func (h *CloudProvider) ListRoutes(ctx context.Context, clusterName string) ([]*cloudprovider.Route, error) {
-	return nil, nil
-}
-
-// CreateRoute is an implementation of Routes.CreateRoute
-func (h *CloudProvider) CreateRoute(ctx context.Context, clusterName string, nameHint string, route *cloudprovider.Route) error {
-	return nil
-}
-
-// DeleteRoute is an implementation of Routes.DeleteRoute
-func (h *CloudProvider) DeleteRoute(ctx context.Context, clusterName string, route *cloudprovider.Route) error {
-	return nil
-}
-
-// type Zones interface {}
-
-// GetZone is an implementation of Zones.GetZone
-func (h *CloudProvider) GetZone(ctx context.Context) (cloudprovider.Zone, error) {
-	return cloudprovider.Zone{}, nil
-}
-
-// GetZoneByProviderID returns the Zone containing the current zone and locality region of the node specified by providerId
-// This method is particularly used in the context of external cloud providers where node initialization must be down
-// outside the kubelets.
-func (h *CloudProvider) GetZoneByProviderID(ctx context.Context, providerID string) (cloudprovider.Zone, error) {
-	return cloudprovider.Zone{}, nil
-}
-
-// GetZoneByNodeName returns the Zone containing the current zone and locality region of the node specified by node name
-// This method is particularly used in the context of external cloud providers where node initialization must be down
-// outside the kubelets.
-func (h *CloudProvider) GetZoneByNodeName(ctx context.Context, nodeName types.NodeName) (cloudprovider.Zone, error) {
-	return cloudprovider.Zone{}, nil
-}
-
 // HasClusterID returns true if the cluster has a clusterID
 func (h *CloudProvider) HasClusterID() bool {
 	return true
@@ -381,7 +343,7 @@ func (h *CloudProvider) Instances() (cloudprovider.Instances, bool) {
 
 // Zones returns an implementation of Zones for Huawei Web Services.
 func (h *CloudProvider) Zones() (cloudprovider.Zones, bool) {
-	return h, true
+	return nil, false
 }
 
 // Clusters returns an implementation of Clusters for Huawei Web Services.
@@ -391,7 +353,7 @@ func (h *CloudProvider) Clusters() (cloudprovider.Clusters, bool) {
 
 // Routes returns an implementation of Routes for Huawei Web Services.
 func (h *CloudProvider) Routes() (cloudprovider.Routes, bool) {
-	return h, true
+	return nil, false
 }
 
 // ProviderName returns the cloud provider ID.
