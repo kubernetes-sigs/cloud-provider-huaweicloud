@@ -91,7 +91,7 @@ refer to [Running on an Existing Cluster on Huawei Cloud](/docs/getting-started.
     When the protocol of the backend server group is `HTTP` or `HTTPS`, the value ranges from `1` to `1440`.
 
 * `kubernetes.io/elb.health-check-flag` Optional. Specifies whether to enable health check for a backend server group.
-  Valid values are `on` and `off`, defaults to `off`.
+  Valid values are `on` and `off`, defaults to `on`.
 
 * `kubernetes.io/elb.health-check-options` Optional. Specifies the health check.
   This parameter is mandatory when the `health-check` is `on`.
