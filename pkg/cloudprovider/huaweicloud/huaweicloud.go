@@ -63,7 +63,7 @@ const (
 	ElbSessionAffinityOption = "kubernetes.io/elb.session-affinity-option"
 
 	ElbHealthCheckFlag    = "kubernetes.io/elb.health-check-flag"
-	ElbHealthCheckOptions = "kubernetes.io/elb.health-check-options"
+	ElbHealthCheckOptions = "kubernetes.io/elb.health-check-option"
 
 	ElbXForwardedHost = "kubernetes.io/elb.x-forwarded-host"
 

@@ -142,7 +142,7 @@ spec:
 EOF
 ````
 
-### Example 1: use an existing shared ELB service
+### Example 1: Use an existing shared ELB service
 
 ```shell
 cat <<EOF | kubectl apply -f -
@@ -189,7 +189,7 @@ $ curl 192.168.0.113
 ```
 
 
-### Example 2: automatically create a new shared ELB service
+### Example 2: Automatically create a new shared ELB service
 
 ```shell
 cat <<EOF | kubectl apply -f -
@@ -234,7 +234,7 @@ $ curl 192.168.0.80
 ...
 ```
 
-### Example 3: automatically create new shared ELB services and an EIP
+### Example 3: Automatically create a new shared ELB service and create an EIP
 
 ```shell
 cat <<EOF | kubectl apply -f -
@@ -282,7 +282,7 @@ $ curl 159.138.37.76
 ...
 ```
 
-### Example 4: enable health check of shared ELB service
+### Example 4: Enable session affinity for shared ELB service listeners
 
 ```shell
 cat <<EOF | kubectl apply -f -
@@ -291,11 +291,10 @@ kind: Service
 metadata:
   annotations:
     kubernetes.io/elb.class: shared
-    kubernetes.io/elb.id: 5db47460-ebc2-4116-ab52-e854373a0fd5
     kubernetes.io/elb.lb-algorithm: ROUND_ROBIN
-    kubernetes.io/elb.health-check-flag: 'on'
-    kubernetes.io/elb.health-check-options: >-
-      {"delay": 3, "timeout": 15, "max_retries": 3}
+    kubernetes.io/session-affinity-flag: 'on'
+    kubernetes.io/session-affinity-option: >-
+      {"type": "APP_COOKIE", "cookie_name": "sessionID", "persistence_timeout": 15}
   labels:
     app: nginx
   name: loadbalancer-service-demo-04
