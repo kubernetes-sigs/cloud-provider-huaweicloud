@@ -44,10 +44,10 @@ spec:
       serviceAccountName: cloud-controller-manager
       containers:
         - name: huawei-cloud-controller-manager
-          image: swr.ap-southeast-1.myhuaweicloud.com/k8s-cloudprovider/huawei-cloud-controller-manager:v0.19.15-alpha
+          image: swr.cn-north-4.myhuaweicloud.com/k8s-cloudprovider/huawei-cloud-controller-manager:v0.19.15
           args:
             - /bin/huawei-cloud-controller-manager
-            - --v=6
+            - --v=5
             - --cloud-config=/etc/config/cloud-config
             - --cloud-provider=huaweicloud
             - --use-service-account-credentials=true
