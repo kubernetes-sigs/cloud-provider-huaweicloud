@@ -211,7 +211,7 @@ spec:
       containers:
         - name: huawei-cloud-controller-manager
           imagePullPolicy: Never
-          image: ${REGISTRY_SERVER_ADDRESS}/k8scloudcontrollermanager/huawei-cloud-controller-manager:${VERSION}
+          image: ${REGISTRY_SERVER_ADDRESS}/k8s-cloudprovider/huawei-cloud-controller-manager:${VERSION}
           args:
             - /bin/huawei-cloud-controller-manager
             - --v=5
