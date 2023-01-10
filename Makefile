@@ -24,6 +24,9 @@ REGISTRY?=${REGISTRY_SERVER_ADDRESS}/k8s-cloudprovider
 
 # Set you version by env or using latest tags from git
 VERSION?=$(shell git describe --tags)
+COMMIT?=$(shell git rev-parse --short=8 HEAD)
+BRANCH?=$(shell git rev-parse --abbrev-ref HEAD)
+LDFLAGS := "-w -s -X 'k8s.io/component-base/version.gitVersion=$(VERSION)-$(BRANCH)+$(COMMIT)'"
 
 all: huawei-cloud-controller-manager
 
