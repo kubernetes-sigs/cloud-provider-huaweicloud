@@ -20,7 +20,7 @@ LDFLAGS := ""
 REGISTRY_USER_NAME?=""
 REGISTRY_PASSWORD?=""
 REGISTRY_SERVER_ADDRESS?=""
-REGISTRY?=${REGISTRY_SERVER_ADDRESS}/k8scloudcontrollermanager
+REGISTRY?=${REGISTRY_SERVER_ADDRESS}/k8s-cloudprovider
 
 # Set you version by env or using latest tags from git
 VERSION?=$(shell git describe --tags)
