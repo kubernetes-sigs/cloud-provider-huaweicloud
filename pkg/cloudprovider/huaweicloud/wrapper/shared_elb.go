@@ -21,6 +21,8 @@ import (
 
 	elb "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v2"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v2/model"
+	elbv3 "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v3"
+	modelv3 "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v3/model"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/apimachinery/pkg/util/errors"
@@ -142,6 +144,19 @@ func (s *SharedLoadBalanceClient) CreateListener(req *model.CreateListenerReq) (
 	return rst, err
 }
 
+func (s *SharedLoadBalanceClient) CreateListenerV3(req *modelv3.CreateListenerOption) (*modelv3.Listener, error) {
+	var rst *modelv3.CreateListenerResponse
+	err := s.wrapperV3(func(c *elbv3.ElbClient) (interface{}, error) {
+		return c.CreateListener(&modelv3.CreateListenerRequest{
+			Body: &modelv3.CreateListenerRequestBody{
+				Listener: req,
+			},
+		})
+	}, "Listener", &rst)
+
+	return rst.Listener, err
+}
+
 func (s *SharedLoadBalanceClient) GetListener(id string) (*model.ListenerResp, error) {
 	var rst *model.ListenerResp
 	err := s.wrapper(func(c *elb.ElbClient) (interface{}, error) {
@@ -161,11 +176,32 @@ func (s *SharedLoadBalanceClient) ListListeners(req *model.ListListenersRequest)
 	return rst, err
 }
 
+func (s *SharedLoadBalanceClient) ListListenersV3(req *modelv3.ListListenersRequest) ([]modelv3.Listener, error) {
+	//rst := make([]model.ListenerResp, 0)
+	var rst []modelv3.Listener
+	err := s.wrapperV3(func(c *elbv3.ElbClient) (interface{}, error) {
+		return c.ListListeners(req)
+	}, "Listeners", &rst)
+
+	return rst, err
+}
+
 func (s *SharedLoadBalanceClient) UpdateListener(id string, req *model.UpdateListenerReq) error {
 	return s.wrapper(func(c *elb.ElbClient) (interface{}, error) {
 		return c.UpdateListener(&model.UpdateListenerRequest{
 			ListenerId: id,
 			Body: &model.UpdateListenerRequestBody{
+				Listener: req,
+			},
+		})
+	})
+}
+
+func (s *SharedLoadBalanceClient) UpdateListenerV3(id string, req *modelv3.UpdateListenerOption) error {
+	return s.wrapperV3(func(c *elbv3.ElbClient) (interface{}, error) {
+		return c.UpdateListener(&modelv3.UpdateListenerRequest{
+			ListenerId: id,
+			Body: &modelv3.UpdateListenerRequestBody{
 				Listener: req,
 			},
 		})
@@ -222,6 +258,19 @@ func (s *SharedLoadBalanceClient) CreatePool(req *model.CreatePoolReq) (*model.P
 	return rst, err
 }
 
+func (s *SharedLoadBalanceClient) CreatePoolV3(req *modelv3.CreatePoolOption) (*modelv3.Pool, error) {
+	var rst *modelv3.Pool
+	err := s.wrapperV3(func(c *elbv3.ElbClient) (interface{}, error) {
+		return c.CreatePool(&modelv3.CreatePoolRequest{
+			Body: &modelv3.CreatePoolRequestBody{
+				Pool: req,
+			},
+		})
+	}, "Pool", &rst)
+
+	return rst, err
+}
+
 func (s *SharedLoadBalanceClient) GetPool(id string) (*model.PoolResp, error) {
 	var rst *model.PoolResp
 	err := s.wrapper(func(c *elb.ElbClient) (interface{}, error) {
@@ -236,6 +285,15 @@ func (s *SharedLoadBalanceClient) GetPool(id string) (*model.PoolResp, error) {
 func (s *SharedLoadBalanceClient) ListPools(req *model.ListPoolsRequest) ([]model.PoolResp, error) {
 	var rst []model.PoolResp
 	err := s.wrapper(func(c *elb.ElbClient) (interface{}, error) {
+		return c.ListPools(req)
+	}, "Pools", &rst)
+
+	return rst, err
+}
+
+func (s *SharedLoadBalanceClient) ListPoolsV3(req *modelv3.ListPoolsRequest) ([]modelv3.Pool, error) {
+	var rst []modelv3.Pool
+	err := s.wrapperV3(func(c *elbv3.ElbClient) (interface{}, error) {
 		return c.ListPools(req)
 	}, "Pools", &rst)
 
@@ -388,5 +446,12 @@ func (s *SharedLoadBalanceClient) wrapper(handler func(*elb.ElbClient) (interfac
 	return commonWrapper(func() (interface{}, error) {
 		hc := s.AuthOpts.GetHcClient("elb")
 		return handler(elb.NewElbClient(hc))
+	}, OKCodes, args...)
+}
+
+func (s *SharedLoadBalanceClient) wrapperV3(handler func(*elbv3.ElbClient) (interface{}, error), args ...interface{}) error {
+	return commonWrapper(func() (interface{}, error) {
+		hc := s.AuthOpts.GetHcClient("elb")
+		return handler(elbv3.NewElbClient(hc))
 	}, OKCodes, args...)
 }

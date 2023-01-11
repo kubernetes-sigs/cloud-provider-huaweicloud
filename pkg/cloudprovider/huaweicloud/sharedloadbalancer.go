@@ -25,13 +25,13 @@ import (
 	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 	eipmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/eip/v2/model"
 	elbmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v2/model"
+	elbmodelv3 "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v3/model"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
@@ -141,6 +141,8 @@ func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName
 	// get exits or create a new ELB instance
 	loadbalancer, err := l.getLoadBalancerInstance(ctx, clusterName, service)
 	specifiedID := getStringFromSvsAnnotation(service, ElbID, "")
+	// get value from annotation
+	transparentClientIpEnabled := true
 	if common.IsNotFound(err) && specifiedID != "" {
 		return nil, err
 	}
@@ -156,18 +158,19 @@ func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName
 	}
 
 	// query ELB listeners list
-	listeners, err := l.sharedELBClient.ListListeners(&elbmodel.ListListenersRequest{LoadbalancerId: &loadbalancer.Id})
+	elbid := []string{loadbalancer.Id}
+	listeners, err := l.sharedELBClient.ListListenersV3(&elbmodelv3.ListListenersRequest{LoadbalancerId: &elbid})
 	if err != nil {
 		return nil, err
 	}
 
 	for _, port := range service.Spec.Ports {
-		listener := filterListenerByPort(listeners, port)
+		listener := filterListenerByPortv3(listeners, port)
 		// add or update listener
 		if listener == nil {
-			listener, err = l.createListener(loadbalancer.Id, service, port)
+			listener, err = l.createListener(loadbalancer.Id, service, port, transparentClientIpEnabled)
 		} else {
-			err = l.updateListener(listener, service)
+			err = l.updateListener(listener, transparentClientIpEnabled)
 		}
 		if err != nil {
 			return nil, err
@@ -176,28 +179,28 @@ func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName
 		listeners = popListener(listeners, listener.Id)
 
 		// query pool or create pool
-		pool, err := l.getPool(loadbalancer.Id, listener.Id)
+		pool, err := l.getPoolV3(loadbalancer.Id, listener.Id)
 		if err != nil && common.IsNotFound(err) {
-			pool, err = l.createPool(listener, service)
+			pool, err = l.createPoolV3(listener, service)
 		}
 		if err != nil {
 			return nil, err
 		}
 
 		// add new members and remove the obsolete members.
-		if err = l.addOrRemoveMembers(loadbalancer, service, pool, port, nodes); err != nil {
+		if err = l.addOrRemoveMembersV3(loadbalancer, service, pool, port, nodes); err != nil {
 			return nil, err
 		}
 
 		// add or remove health monitor
-		if err = l.addOrRemoveHealthMonitor(loadbalancer.Id, pool, port, service); err != nil {
+		if err = l.addOrRemoveHealthMonitorV3(loadbalancer.Id, pool, port, service); err != nil {
 			return nil, err
 		}
 	}
 
 	if specifiedID == "" {
 		// All remaining listeners are obsolete, delete them
-		err = l.deleteListeners(loadbalancer.Id, listeners)
+		err = l.deleteListenersV3(loadbalancer.Id, listeners)
 		if err != nil {
 			return nil, err
 		}
@@ -286,6 +289,34 @@ func (l *SharedLoadBalancer) createLoadbalancer(clusterName, subnetID string, se
 }
 
 func (l *SharedLoadBalancer) addOrRemoveHealthMonitor(loadbalancerID string, pool *elbmodel.PoolResp, port v1.ServicePort, service *v1.Service) error {
+	healthCheckOpts := getHealthCheckOptionFromAnnotation(service, l.loadbalancerOpts)
+	monitorID := pool.HealthmonitorId
+	klog.Infof("add or remove health check: %s : %#v", monitorID, healthCheckOpts)
+
+	// create health monitor
+	if monitorID == "" && healthCheckOpts.Enable {
+		_, err := l.createHealthMonitor(loadbalancerID, pool.Id, port.Protocol, healthCheckOpts)
+		return err
+	}
+
+	// update health monitor
+	if monitorID != "" && healthCheckOpts.Enable {
+		return l.updateHealthMonitor(monitorID, port.Protocol, healthCheckOpts)
+	}
+
+	// delete health monitor
+	if monitorID != "" && !healthCheckOpts.Enable {
+		klog.Infof("Deleting health monitor %s for pool %s", monitorID, pool.Id)
+		err := l.sharedELBClient.DeleteHealthMonitor(monitorID)
+		if err != nil {
+			return fmt.Errorf("failed to delete health monitor %s for pool %s, error: %v", monitorID, pool.Id, err)
+		}
+	}
+
+	return nil
+}
+
+func (l *SharedLoadBalancer) addOrRemoveHealthMonitorV3(loadbalancerID string, pool *elbmodelv3.Pool, port v1.ServicePort, service *v1.Service) error {
 	healthCheckOpts := getHealthCheckOptionFromAnnotation(service, l.loadbalancerOpts)
 	monitorID := pool.HealthmonitorId
 	klog.Infof("add or remove health check: %s : %#v", monitorID, healthCheckOpts)
@@ -437,7 +468,114 @@ func (l *SharedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.Loadbalan
 	return nil
 }
 
+func (l *SharedLoadBalancer) addOrRemoveMembersV3(loadbalancer *elbmodel.LoadbalancerResp, service *v1.Service, pool *elbmodelv3.Pool,
+	port v1.ServicePort, nodes []*v1.Node) error {
+
+	members, err := l.sharedELBClient.ListMembers(&elbmodel.ListMembersRequest{PoolId: pool.Id})
+	if err != nil {
+		return err
+	}
+
+	existsMember := make(map[string]bool)
+	for _, m := range members {
+		existsMember[fmt.Sprintf("%s:%d", m.Address, m.ProtocolPort)] = true
+	}
+
+	nodeNameMapping := make(map[string]*v1.Node)
+	for _, node := range nodes {
+		nodeNameMapping[node.Name] = node
+	}
+
+	podList, err := l.listPodsBySelector(context.TODO(), service.Namespace, service.Spec.Selector)
+	if err != nil {
+		return err
+	}
+	for _, pod := range podList.Items {
+		if !IsPodActive(pod) {
+			klog.Errorf("Pod %s/%s is not activated skipping adding to ELB", pod.Namespace, pod.Name)
+			continue
+		}
+
+		if pod.Status.HostIP == "" {
+			klog.Errorf("Pod %s/%s is not scheduled, skipping adding to ELB", pod.Namespace, pod.Name)
+			continue
+		}
+
+		node, ok := nodeNameMapping[pod.Spec.NodeName]
+		if !ok {
+			return fmt.Errorf("could not find the node where the Pod resides, Pod: %s/%s",
+				pod.Namespace, pod.Spec.NodeName)
+		}
+
+		address, err := getNodeAddress(node)
+		if err != nil {
+			if common.IsNotFound(err) {
+				// Node failure, do not create member
+				klog.Warningf("Failed to create SharedLoadBalancer pool member for node %s: %v", node.Name, err)
+				continue
+			} else {
+				return fmt.Errorf("error getting address for node %s: %v", node.Name, err)
+			}
+		}
+
+		key := fmt.Sprintf("%s:%d", address, port.NodePort)
+		if existsMember[key] {
+			klog.Infof("[addOrRemoveMembers] node already exists, skip adding, name: %s, address: %s, port: %d",
+				node.Name, address, port.NodePort)
+			members = popMember(members, address, port.NodePort)
+			continue
+		}
+
+		klog.Infof("[addOrRemoveMembers] add node to pool, name: %s, address: %s, port: %d",
+			node.Name, address, port.NodePort)
+		// Add a member to the pool.
+		if err = l.addMemberV3(loadbalancer, pool, port, node); err != nil {
+			return err
+		}
+		existsMember[key] = true
+	}
+
+	// delete the remaining elements in members
+	for _, member := range members {
+		klog.Infof("[addOrRemoveMembers] remove node from pool, name: %s, address: %s, port: %d",
+			member.Name, member.Address, member.ProtocolPort)
+		err = l.deleteMember(loadbalancer.Id, pool.Id, member)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func (l *SharedLoadBalancer) addMember(loadbalancer *elbmodel.LoadbalancerResp, pool *elbmodel.PoolResp, port v1.ServicePort, node *v1.Node) error {
+	klog.Infof("Add a member(%s) to pool %s", node.Name, pool.Id)
+	address, err := getNodeAddress(node)
+	if err != nil {
+		return err
+	}
+
+	name := cutString(fmt.Sprintf("member_%s_%s", pool.Name, node.Name))
+	_, err = l.sharedELBClient.AddMember(pool.Id, &elbmodel.CreateMemberReq{
+		Name:         &name,
+		ProtocolPort: port.NodePort,
+		SubnetId:     loadbalancer.VipSubnetId,
+		Address:      address,
+	})
+	if err != nil {
+		return fmt.Errorf("error creating SharedLoadBalancer pool member for node: %s, %v", node.Name, err)
+	}
+
+	loadbalancer, err = l.sharedELBClient.WaitStatusActive(loadbalancer.Id)
+	if err != nil {
+		return fmt.Errorf("timeout when waiting for loadbalancer to be ACTIVE after adding members, "+
+			"current status %s", loadbalancer.ProvisioningStatus)
+	}
+
+	return nil
+}
+
+func (l *SharedLoadBalancer) addMemberV3(loadbalancer *elbmodel.LoadbalancerResp, pool *elbmodelv3.Pool, port v1.ServicePort, node *v1.Node) error {
 	klog.Infof("Add a member(%s) to pool %s", node.Name, pool.Id)
 	address, err := getNodeAddress(node)
 	if err != nil {
@@ -497,6 +635,25 @@ func (l *SharedLoadBalancer) getPool(elbID, listenerID string) (*elbmodel.PoolRe
 	return nil, status.Errorf(codes.NotFound, "not found pool matched ListenerId: %s, ELB ID: %s", listenerID, elbID)
 }
 
+func (l *SharedLoadBalancer) getPoolV3(elbID, listenerID string) (*elbmodelv3.Pool, error) {
+	elbids := []string{elbID}
+	pools, err := l.sharedELBClient.ListPoolsV3(&elbmodelv3.ListPoolsRequest{
+		LoadbalancerId: &elbids,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	for _, p := range pools {
+		for _, lis := range p.Listeners {
+			if lis.Id == listenerID {
+				return &p, nil
+			}
+		}
+	}
+	return nil, status.Errorf(codes.NotFound, "not found pool matched ListenerId: %s, ELB ID: %s", listenerID, elbID)
+}
+
 func (l *SharedLoadBalancer) getSessionAffinity(service *v1.Service) *elbmodel.SessionPersistence {
 	globalOpts := l.loadbalancerOpts
 	sessionMode := getStringFromSvsAnnotation(service, ElbSessionAffinityFlag, globalOpts.SessionAffinityFlag)
@@ -519,6 +676,38 @@ func (l *SharedLoadBalancer) getSessionAffinity(service *v1.Service) *elbmodel.S
 	}
 	printSessionAffinity(service, persistence)
 	return &persistence
+}
+
+func (l *SharedLoadBalancer) getSessionAffinityV3(service *v1.Service) *elbmodelv3.SessionPersistence {
+	globalOpts := l.loadbalancerOpts
+	sessionMode := getStringFromSvsAnnotation(service, ElbSessionAffinityFlag, globalOpts.SessionAffinityFlag)
+	if sessionMode == "" || sessionMode == "off" {
+		return nil
+	}
+
+	persistence := globalOpts.SessionAffinityOption
+
+	opts := getStringFromSvsAnnotation(service, ElbSessionAffinityOption, "")
+	if opts == "" {
+		klog.V(4).Infof("[DEBUG] SessionAffinityOption is empty, use default: %#v", persistence)
+		return &elbmodelv3.SessionPersistence{
+			CookieName:         persistence.CookieName,
+			Type:               persistence.Type.Value(),
+			PersistenceTimeout: persistence.PersistenceTimeout,
+		}
+	}
+
+	err := json.Unmarshal([]byte(opts), &persistence)
+	if err != nil {
+		klog.Warningf("error parsing \"kubernetes.io/elb.session-affinity-option\": %s, ignore options: %s",
+			err, opts)
+	}
+	printSessionAffinity(service, persistence)
+	return &elbmodelv3.SessionPersistence{
+		CookieName:         persistence.CookieName,
+		Type:               persistence.Type.Value(),
+		PersistenceTimeout: persistence.PersistenceTimeout,
+	}
 }
 
 func printSessionAffinity(service *v1.Service, per elbmodel.SessionPersistence) {
@@ -555,6 +744,42 @@ func (l *SharedLoadBalancer) createPool(listener *elbmodel.ListenerResp, service
 	})
 }
 
+func (l *SharedLoadBalancer) createPoolV3(listener *elbmodelv3.Listener, service *v1.Service) (*elbmodelv3.Pool, error) {
+	lbAlgorithm := getStringFromSvsAnnotation(service, ElbAlgorithm, l.loadbalancerOpts.LBAlgorithm)
+
+	persistence := l.getSessionAffinityV3(service)
+
+	protocol := elbmodel.CreatePoolReqProtocol{}
+	if err := protocol.UnmarshalJSON([]byte(listener.Protocol)); err != nil {
+		return nil, err
+	}
+
+	name := fmt.Sprintf("pl_%s", listener.Name)
+
+	sessionPersistenceTypes := elbmodelv3.GetCreatePoolSessionPersistenceOptionTypeEnum()
+	var sessionPersistenceType elbmodelv3.CreatePoolSessionPersistenceOptionType
+	switch persistence.Type {
+	case sessionPersistenceTypes.APP_COOKIE.Value():
+		sessionPersistenceType = sessionPersistenceTypes.APP_COOKIE
+	case sessionPersistenceTypes.HTTP_COOKIE.Value():
+		sessionPersistenceType = sessionPersistenceTypes.HTTP_COOKIE
+	case sessionPersistenceTypes.SOURCE_IP.Value():
+		sessionPersistenceType = sessionPersistenceTypes.SOURCE_IP
+	}
+
+	return l.sharedELBClient.CreatePoolV3(&elbmodelv3.CreatePoolOption{
+		Name:        &name,
+		Protocol:    protocol.Value(),
+		LbAlgorithm: lbAlgorithm,
+		ListenerId:  &listener.Id,
+		SessionPersistence: &elbmodelv3.CreatePoolSessionPersistenceOption{
+			CookieName:         persistence.CookieName,
+			Type:               sessionPersistenceType,
+			PersistenceTimeout: persistence.PersistenceTimeout,
+		},
+	})
+}
+
 func popMember(members []elbmodel.MemberResp, addr string, port int32) []elbmodel.MemberResp {
 	for i, m := range members {
 		if m.Address == addr && m.ProtocolPort == port {
@@ -565,7 +790,7 @@ func popMember(members []elbmodel.MemberResp, addr string, port int32) []elbmode
 	return members
 }
 
-func popListener(arr []elbmodel.ListenerResp, id string) []elbmodel.ListenerResp {
+func popListener(arr []elbmodelv3.Listener, id string) []elbmodelv3.Listener {
 	for i, lis := range arr {
 		if lis.Id == id {
 			arr[i] = arr[len(arr)-1]
@@ -603,6 +828,33 @@ func (l *SharedLoadBalancer) deleteListeners(elbID string, listeners []elbmodel.
 	return nil
 }
 
+func (l *SharedLoadBalancer) deleteListenersV3(elbID string, listeners []elbmodelv3.Listener) error {
+	errs := make([]error, 0)
+	for _, lis := range listeners {
+		pool, err := l.getPoolV3(elbID, lis.Id)
+		if err != nil && !common.IsNotFound(err) {
+			errs = append(errs, err)
+			continue
+		}
+		if err == nil {
+			delErrs := l.deletePoolV3(pool)
+			if len(delErrs) > 0 {
+				errs = append(errs, delErrs...)
+			}
+		}
+		// delete ELB listener
+		if err = l.sharedELBClient.DeleteListener(elbID, lis.Id); err != nil && !common.IsNotFound(err) {
+			errs = append(errs, fmt.Errorf("failed to delete ELB listener %s : %s ", lis.Id, err))
+		}
+	}
+
+	if len(errs) != 0 {
+		return fmt.Errorf("failed to delete listeners: %s", errors.NewAggregate(errs))
+	}
+
+	return nil
+}
+
 func (l *SharedLoadBalancer) deletePool(pool *elbmodel.PoolResp) []error {
 	errs := make([]error, 0)
 	// delete all members of pool
@@ -620,22 +872,40 @@ func (l *SharedLoadBalancer) deletePool(pool *elbmodel.PoolResp) []error {
 	return errs
 }
 
-func (l *SharedLoadBalancer) createListener(loadbalancerID string, service *v1.Service, port v1.ServicePort) (*elbmodel.ListenerResp, error) {
+func (l *SharedLoadBalancer) deletePoolV3(pool *elbmodelv3.Pool) []error {
+	errs := make([]error, 0)
+	// delete all members of pool
+	if err := l.sharedELBClient.DeleteAllPoolMembers(pool.Id); err != nil {
+		errs = append(errs, err)
+	}
+	// delete the pool monitor if exists
+	if err := l.sharedELBClient.DeleteHealthMonitor(pool.HealthmonitorId); err != nil && !common.IsNotFound(err) {
+		errs = append(errs, err)
+	}
+	// delete ELB listener pool
+	if err := l.sharedELBClient.DeletePool(pool.Id); err != nil && !common.IsNotFound(err) {
+		errs = append(errs, err)
+	}
+	return errs
+}
+
+func (l *SharedLoadBalancer) createListener(loadbalancerID string, service *v1.Service, port v1.ServicePort, transparentClientIpEnabled bool) (*elbmodelv3.Listener, error) {
 	protocol := elbmodel.CreateListenerReqProtocol{}
 	if err := protocol.UnmarshalJSON([]byte(port.Protocol)); err != nil {
 		return nil, err
 	}
 
 	xForwardFor := getBoolFromSvsAnnotation(service, ElbXForwardedHost, false)
-	connectLimit := getConnectionLimitFromAnnotation(service)
+	// connectLimit := getConnectionLimitFromAnnotation(service)
 	name := cutString(fmt.Sprintf("%s_%s_%v", service.Name, port.Protocol, port.Port))
-	listener, err := l.sharedELBClient.CreateListener(&elbmodel.CreateListenerReq{
-		LoadbalancerId:  loadbalancerID,
-		Protocol:        protocol,
-		ProtocolPort:    port.Port,
-		Name:            &name,
-		InsertHeaders:   &elbmodel.InsertHeader{XForwardedHost: &xForwardFor},
-		ConnectionLimit: pointer.Int32Ptr(int32(connectLimit)),
+	listener, err := l.sharedELBClient.CreateListenerV3(&elbmodelv3.CreateListenerOption{
+		LoadbalancerId:            loadbalancerID,
+		Protocol:                  protocol.Value(),
+		ProtocolPort:              port.Port,
+		Name:                      &name,
+		InsertHeaders:             &elbmodelv3.ListenerInsertHeaders{XForwardedHost: &xForwardFor},
+		TransparentClientIpEnable: &transparentClientIpEnabled,
+		// ConnectionLimit: pointer.Int32Ptr(int32(connectLimit)),
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to create listener for loadbalancer %s: %v",
@@ -645,14 +915,13 @@ func (l *SharedLoadBalancer) createListener(loadbalancerID string, service *v1.S
 	return listener, nil
 }
 
-func (l *SharedLoadBalancer) updateListener(listener *elbmodel.ListenerResp, service *v1.Service) error {
-	connectLimit := getConnectionLimitFromAnnotation(service)
-	if int32(connectLimit) == listener.ConnectionLimit {
+func (l *SharedLoadBalancer) updateListener(listener *elbmodelv3.Listener, transparentClientIpEnabled bool) error {
+	if transparentClientIpEnabled == listener.TransparentClientIpEnable {
 		return nil
 	}
 
-	err := l.sharedELBClient.UpdateListener(listener.Id, &elbmodel.UpdateListenerReq{
-		ConnectionLimit: pointer.Int32Ptr(int32(connectLimit)),
+	err := l.sharedELBClient.UpdateListenerV3(listener.Id, &elbmodelv3.UpdateListenerOption{
+		TransparentClientIpEnable: &transparentClientIpEnabled,
 	})
 	if err != nil {
 		return err
@@ -665,6 +934,16 @@ func (l *SharedLoadBalancer) updateListener(listener *elbmodel.ListenerResp, ser
 func filterListenerByPort(listenerArr []elbmodel.ListenerResp, port v1.ServicePort) *elbmodel.ListenerResp {
 	for _, l := range listenerArr {
 		if l.Protocol.Value() == string(port.Protocol) && l.ProtocolPort == port.Port {
+			return &l
+		}
+	}
+
+	return nil
+}
+
+func filterListenerByPortv3(listenerArr []elbmodelv3.Listener, port v1.ServicePort) *elbmodelv3.Listener {
+	for _, l := range listenerArr {
+		if l.Protocol == string(port.Protocol) && l.ProtocolPort == port.Port {
 			return &l
 		}
 	}
