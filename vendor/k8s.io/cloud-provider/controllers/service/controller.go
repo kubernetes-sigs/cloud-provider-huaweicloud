@@ -75,7 +75,7 @@ type serviceCache struct {
 type Controller struct {
 	cloud            cloudprovider.Interface
 	knownHosts       []*v1.Node
-	servicesToUpdate []*v1.Service
+	servicesToUpdate sets.String
 	kubeClient       clientset.Interface
 	clusterName      string
 	balancer         cloudprovider.LoadBalancer
@@ -727,7 +727,7 @@ func nodeReadyConditionStatus(node *v1.Node) v1.ConditionStatus {
 func (s *Controller) nodeSyncInternal(workers int) {
 	startTime := time.Now()
 	defer func() {
-		latency := time.Now().Sub(startTime).Seconds()
+		latency := time.Since(startTime).Seconds()
 		klog.V(4).Infof("It took %v seconds to finish nodeSyncInternal", latency)
 		nodeSyncLatency.Observe(latency)
 	}()
@@ -735,16 +735,28 @@ func (s *Controller) nodeSyncInternal(workers int) {
 	if !s.needFullSyncAndUnmark() {
 		// The set of nodes in the cluster hasn't changed, but we can retry
 		// updating any services that we failed to update last time around.
-		s.servicesToUpdate = s.updateLoadBalancerHosts(s.servicesToUpdate, workers)
+		// It is required to call `s.cache.get()` on each Service in case there was
+		// an update event that occurred between retries.
+		var servicesToUpdate []*v1.Service
+		for key := range s.servicesToUpdate {
+			cachedService, exist := s.cache.get(key)
+			if !exist {
+				klog.Errorf("Service %q should be in the cache but not", key)
+				continue
+			}
+			servicesToUpdate = append(servicesToUpdate, cachedService.state)
+		}
+
+		s.servicesToUpdate = s.updateLoadBalancerHosts(servicesToUpdate, workers)
 		return
 	}
 	klog.V(2).Infof("Syncing backends for all LB services.")
 
-	// Try updating all services, and save the ones that fail to try again next
+	// Try updating all services, and save the failed ones to try again next
 	// round.
-	s.servicesToUpdate = s.cache.allServices()
-	numServices := len(s.servicesToUpdate)
-	s.servicesToUpdate = s.updateLoadBalancerHosts(s.servicesToUpdate, workers)
+	servicesToUpdate := s.cache.allServices()
+	numServices := len(servicesToUpdate)
+	s.servicesToUpdate = s.updateLoadBalancerHosts(servicesToUpdate, workers)
 	klog.V(2).Infof("Successfully updated %d out of %d load balancers to direct traffic to the updated set of nodes",
 		numServices-len(s.servicesToUpdate), numServices)
 }
@@ -772,10 +784,11 @@ func (s *Controller) nodeSyncService(svc *v1.Service) bool {
 // updateLoadBalancerHosts updates all existing load balancers so that
 // they will match the latest list of nodes with input number of workers.
 // Returns the list of services that couldn't be updated.
-func (s *Controller) updateLoadBalancerHosts(services []*v1.Service, workers int) (servicesToRetry []*v1.Service) {
+func (s *Controller) updateLoadBalancerHosts(services []*v1.Service, workers int) (servicesToRetry sets.String) {
 	klog.V(4).Infof("Running updateLoadBalancerHosts(len(services)==%d, workers==%d)", len(services), workers)
 
 	// lock for servicesToRetry
+	servicesToRetry = sets.NewString()
 	lock := sync.Mutex{}
 	doWork := func(piece int) {
 		if shouldRetry := s.nodeSyncService(services[piece]); !shouldRetry {
@@ -783,7 +796,8 @@ func (s *Controller) updateLoadBalancerHosts(services []*v1.Service, workers int
 		}
 		lock.Lock()
 		defer lock.Unlock()
-		servicesToRetry = append(servicesToRetry, services[piece])
+		key := fmt.Sprintf("%s/%s", services[piece].Namespace, services[piece].Name)
+		servicesToRetry.Insert(key)
 	}
 
 	workqueue.ParallelizeUntil(context.TODO(), workers, len(services), doWork)
@@ -796,7 +810,7 @@ func (s *Controller) updateLoadBalancerHosts(services []*v1.Service, workers int
 func (s *Controller) lockedUpdateLoadBalancerHosts(service *v1.Service, hosts []*v1.Node) error {
 	startTime := time.Now()
 	defer func() {
-		latency := time.Now().Sub(startTime).Seconds()
+		latency := time.Since(startTime).Seconds()
 		klog.V(4).Infof("It took %v seconds to update load balancer hosts for service %s/%s", latency, service.Namespace, service.Name)
 		updateLoadBalancerHostLatency.Observe(latency)
 	}()
