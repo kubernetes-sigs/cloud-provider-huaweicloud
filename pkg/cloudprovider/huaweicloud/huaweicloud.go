@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -100,6 +101,7 @@ type Basic struct {
 	eipClient       *wrapper.EIpClient
 	ecsClient       *wrapper.EcsClient
 
+	restConfig    *rest.Config
 	kubeClient    *corev1.CoreV1Client
 	eventRecorder record.EventRecorder
 }
@@ -157,7 +159,7 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 
 	klog.Infof("get loadbalancer config: %#v", elbCfg)
 
-	kubeClient, err := newKubeClient()
+	restConfig, kubeClient, err := newKubeClient()
 	if err != nil {
 		return nil, err
 	}
@@ -183,6 +185,7 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 		eipClient:       &wrapper.EIpClient{AuthOpts: &cloudConfig.AuthOpts},
 		ecsClient:       &wrapper.EcsClient{AuthOpts: &cloudConfig.AuthOpts},
 
+		restConfig:    restConfig,
 		kubeClient:    kubeClient,
 		eventRecorder: recorder,
 	}
@@ -205,18 +208,18 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 	return hws, nil
 }
 
-func newKubeClient() (*corev1.CoreV1Client, error) {
+func newKubeClient() (*rest.Config, *corev1.CoreV1Client, error) {
 	clusterCfg, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("initial cluster configuration failed with error: %v", err)
+		return nil, nil, fmt.Errorf("initial cluster configuration failed with error: %v", err)
 	}
 
 	kubeClient, err := corev1.NewForConfig(clusterCfg)
 	if err != nil {
-		return nil, fmt.Errorf("create kubeClient failed with error: %v", err)
+		return nil, nil, fmt.Errorf("create kubeClient failed with error: %v", err)
 	}
 
-	return kubeClient, nil
+	return clusterCfg, kubeClient, nil
 }
 
 func (h *CloudProvider) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
@@ -494,7 +497,7 @@ func (h *CloudProvider) listenerDeploy() error {
 		return fmt.Errorf("failed to elect leader in listener EndpointSlice : %s", err)
 	}
 
-	go leaderElection(id, h.kubeClient, h.eventRecorder, func(ctx context.Context) {
+	go leaderElection(id, h.restConfig, h.eventRecorder, func(ctx context.Context) {
 		listener.startEndpointListener(func(service *v1.Service) {
 			if service.Spec.Type != v1.ServiceTypeLoadBalancer {
 				return
@@ -523,24 +526,30 @@ func (h *CloudProvider) listenerDeploy() error {
 	return nil
 }
 
-func leaderElection(id string, kubeClient *corev1.CoreV1Client, recorder record.EventRecorder, onSuccess func(context.Context), onStop func()) {
-	configmapLock := &resourcelock.ConfigMapLock{
-		ConfigMapMeta: metav1.ObjectMeta{
-			Namespace: "huawei-cloud-provider",
-			Name:      "endpoint-slice-listener",
-		},
-		Client: kubeClient,
-		LockConfig: resourcelock.ResourceLockConfig{
-			Identity:      fmt.Sprintf("lock-id-%s", id),
+func leaderElection(id string, restConfig *rest.Config, recorder record.EventRecorder, onSuccess func(context.Context), onStop func()) {
+	leaseName := "endpoint-slice-listener"
+	leaseDuration := 30 * time.Second
+	renewDeadline := 20 * time.Second
+	retryPeriod := 10 * time.Second
+
+	configmapLock, err := resourcelock.NewFromKubeconfig(resourcelock.ConfigMapsLeasesResourceLock,
+		config.ProviderNamespace,
+		leaseName,
+		resourcelock.ResourceLockConfig{
+			Identity:      fmt.Sprintf("%s_%s", id, string(uuid.NewUUID())),
 			EventRecorder: recorder,
 		},
+		restConfig,
+		renewDeadline)
+	if err != nil {
+		klog.Fatalf("error creating lock: %v", err)
 	}
 
 	leaderelection.RunOrDie(context.TODO(), leaderelection.LeaderElectionConfig{
 		Lock:          configmapLock,
-		LeaseDuration: 30 * time.Second,
-		RenewDeadline: 20 * time.Second,
-		RetryPeriod:   10 * time.Second,
+		LeaseDuration: leaseDuration,
+		RenewDeadline: renewDeadline,
+		RetryPeriod:   retryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
 				klog.V(4).Infof("[Listener EndpointSlices] leader election got: %s", id)
@@ -551,6 +560,6 @@ func leaderElection(id string, kubeClient *corev1.CoreV1Client, recorder record.
 				onStop()
 			},
 		},
-		Name: "endpoint-slice-listener",
+		Name: leaseName,
 	})
 }
