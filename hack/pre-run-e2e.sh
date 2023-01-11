@@ -37,6 +37,11 @@ kubectl delete -n kube-system deployment --ignore-not-found=true huawei-cloud-co
 
 echo -e "\nDeploy huawei-cloud-controller-manager"
 cat << EOF | kubectl apply -f -
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: huawei-cloud-provider
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -60,6 +65,7 @@ rules:
       - services
       - secrets
       - serviceaccounts
+      - serviceaccounts/token
     verbs:
       - get
       - list
