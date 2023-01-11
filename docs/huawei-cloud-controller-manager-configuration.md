@@ -9,7 +9,7 @@ There are 2 sets of configurations, as follows:
 ## Huawei Cloud Configuration
 
 The configuration is stored in `cloud-config`(namespace: `kube-system`) secret.
-See [create the cloud-config secret](/create-cloud-config-secret.md) to creating secret in Kubernetes cluster.
+See [create the cloud-config secret](./create-cloud-config-secret.md) to creating secret in Kubernetes cluster.
 
 The cloud-config structure is as follows:
 
