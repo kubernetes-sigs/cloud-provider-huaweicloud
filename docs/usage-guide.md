@@ -4,7 +4,7 @@ This page provides some examples and Service Annotations descriptions.
 
 Before running the examples below,
 make sure you have installed the `huawei-cloud-controller-manager` in your Kubernetes cluster,
-refer to [Running on an Existing Cluster on Huawei Cloud](/docs/getting-started.md).
+refer to [Running on an Existing Cluster on Huawei Cloud](./getting-started.md).
 
 ## Service Annotations
 

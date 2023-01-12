@@ -56,4 +56,5 @@ Step 3: Delete the cloud-config file.
 $ rm -rf ./cloud-config
 ```
 
-See [huawei-cloud-controller-manager-configuration](huawei-cloud-controller-manager-configuration.md) for supported arguments.
+See [huawei-cloud-controller-manager-configuration](./huawei-cloud-controller-manager-configuration.md)
+for supported arguments.
