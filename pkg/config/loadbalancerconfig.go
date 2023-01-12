@@ -31,7 +31,7 @@ import (
 )
 
 const (
-	providerNamespace     = "huawei-cloud-provider"
+	ProviderNamespace     = "huawei-cloud-provider"
 	loadbalancerConfigMap = "loadbalancer-config"
 
 	HealthCheckTimeout    = 3
@@ -91,7 +91,7 @@ func LoadElbConfigFromCM() (*LoadbalancerConfig, error) {
 		return defaultCfg, err
 	}
 
-	configMap, err := kubeClient.ConfigMaps(providerNamespace).
+	configMap, err := kubeClient.ConfigMaps(ProviderNamespace).
 		Get(context.TODO(), loadbalancerConfigMap, metav1.GetOptions{})
 	if err != nil {
 		return defaultCfg, err
