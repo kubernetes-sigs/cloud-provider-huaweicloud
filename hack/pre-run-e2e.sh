@@ -25,6 +25,15 @@ echo -e "\nBuild images"
 # todo: Maybe we need load the image to target cluster node.
 make image-huawei-cloud-controller-manager
 
+tmpPath=$(mktemp -d)
+is_containerd=`command -v containerd`
+echo "is_containerd: ${is_containerd}"
+if [[ -x ${is_containerd} ]]; then
+  docker save -o "${tmpPath}/huawei-cloud-controller-manager.tar" ${REGISTRY_SERVER_ADDRESS}/k8s-cloudprovider/huawei-cloud-controller-manager:${VERSION}
+  ctr -n=k8s.io i import ${tmpPath}/huawei-cloud-controller-manager.tar
+  rm -rf ${tmpPath}/huawei-cloud-controller-manager.tar
+fi
+
 echo -e "\nCheck cloud-config secret"
 count=`kubectl get -n kube-system secret cloud-config | grep cloud-config | wc -l`
 if [[ "$count" -ne 1 ]]; then
