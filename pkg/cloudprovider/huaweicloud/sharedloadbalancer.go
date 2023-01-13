@@ -635,7 +635,7 @@ func (l *SharedLoadBalancer) createListener(loadbalancerID string, service *v1.S
 		ProtocolPort:    port.Port,
 		Name:            &name,
 		InsertHeaders:   &elbmodel.InsertHeader{XForwardedHost: &xForwardFor},
-		ConnectionLimit: pointer.Int32Ptr(int32(connectLimit)),
+		ConnectionLimit: pointer.Int32(int32(connectLimit)),
 	})
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to create listener for loadbalancer %s: %v",
@@ -652,7 +652,7 @@ func (l *SharedLoadBalancer) updateListener(listener *elbmodel.ListenerResp, ser
 	}
 
 	err := l.sharedELBClient.UpdateListener(listener.Id, &elbmodel.UpdateListenerReq{
-		ConnectionLimit: pointer.Int32Ptr(int32(connectLimit)),
+		ConnectionLimit: pointer.Int32(int32(connectLimit)),
 	})
 	if err != nil {
 		return err

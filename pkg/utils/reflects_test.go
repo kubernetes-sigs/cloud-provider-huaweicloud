@@ -208,7 +208,7 @@ func TestReflectBasicType(t *testing.T) {
 				Value: struct {
 					TestVal *string
 				}{
-					TestVal: pointer.StringPtr("Abcdefg"),
+					TestVal: pointer.String("Abcdefg"),
 				},
 			},
 			keys:     "Value.TestVal",
@@ -224,7 +224,7 @@ func TestReflectBasicType(t *testing.T) {
 				Value: &struct {
 					TestVal *string
 				}{
-					TestVal: pointer.StringPtr("Abcdefg"),
+					TestVal: pointer.String("Abcdefg"),
 				},
 			},
 			keys:     "Value.TestVal",

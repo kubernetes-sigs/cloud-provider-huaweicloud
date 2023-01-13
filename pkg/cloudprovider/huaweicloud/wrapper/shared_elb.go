@@ -174,7 +174,7 @@ func (s *SharedLoadBalanceClient) UpdateListener(id string, req *model.UpdateLis
 
 func (s *SharedLoadBalanceClient) DeleteListener(elbID string, listenerID string) error {
 	// Check pools bound to this listener
-	pools, err := s.ListPools(&model.ListPoolsRequest{LoadbalancerId: pointer.StringPtr(elbID)})
+	pools, err := s.ListPools(&model.ListPoolsRequest{LoadbalancerId: pointer.String(elbID)})
 	if err != nil {
 		return err
 	}
