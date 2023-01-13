@@ -443,7 +443,7 @@ func (e *EndpointSliceListener) startEndpointListener(handle func(*v1.Service)) 
 		)
 
 		queue := make(chan v1.Service, 50)
-		endpointsInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+		_, err = endpointsInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
 			AddFunc: func(obj interface{}) {},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				newEndpoint := newObj.(*v1.Endpoints)
@@ -467,6 +467,12 @@ func (e *EndpointSliceListener) startEndpointListener(handle func(*v1.Service)) 
 			},
 			DeleteFunc: func(obj interface{}) {},
 		}, 5*time.Second)
+		if err != nil {
+			klog.Errorf("failed to start EventHandler, try again later, error: %s", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+
 		go endpointsInformer.Run(e.stopChannel)
 		break
 	}
