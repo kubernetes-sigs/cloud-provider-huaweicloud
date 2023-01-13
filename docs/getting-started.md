@@ -34,13 +34,13 @@ kubectl create secret -n kube-system generic cloud-config --from-file=./cloud-co
 - Create RBAC resources
 
 ```shell
-kubectl apply -f  https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-huaweicloud/master/manifests/rbac-huawei-cloud-controller-manager.yaml
+kubectl apply -f  https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-huaweicloud/release-1.26/manifests/rbac-huawei-cloud-controller-manager.yaml
 ```
 
 - Install the Huawei Cloud Provider Manager
 
 ```shell
-kubectl apply -f  https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-huaweicloud/master/manifests/huawei-cloud-controller-manager.yaml
+kubectl apply -f  https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-huaweicloud/release-1.26/manifests/huawei-cloud-controller-manager.yaml
 ```
 
 - Check the running status
