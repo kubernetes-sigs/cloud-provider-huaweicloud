@@ -28,7 +28,7 @@ Currently `huawei-cloud-controller-manager` implements:
 
 ## Quick Start
 
-- [Running on an Existing Kubernetes cluster on Huawei Cloud](/docs/getting-started.md)
+- [Running on an Existing Kubernetes Cluster on Huawei Cloud](/docs/getting-started.md)
 - [Huawei Cloud Controller Manager Configurations](/docs/huawei-cloud-controller-manager-configuration.md)
 - [Usage Guide](/docs/usage-guide.md)
 
