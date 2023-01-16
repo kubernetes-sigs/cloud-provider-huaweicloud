@@ -113,7 +113,7 @@ The following arguments are supported:
 
   This parameter is mandatory when the `session-affinity-flag` is `on`.
 
-  This is a json string, such as `{"type": "APP_COOKIE", "cookie_name": "sessionID", "persistence_timeout": 15}`.
+  This is a json string, such as `{"type": "SOURCE_IP", "persistence_timeout": 15}`.
 
   For details:
   
