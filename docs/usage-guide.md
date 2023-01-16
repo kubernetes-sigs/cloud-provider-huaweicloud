@@ -62,7 +62,7 @@ refer to [Running on an Existing Cluster on Huawei Cloud](./getting-started.md).
 * `kubernetes.io/elb.session-affinity-option` Specifies the sticky session timeout duration in minutes.
   This parameter is mandatory when the `kubernetes.io/elb.session-affinity-flag` is `'on'` or
   global `session-affinity-flag` is `on`.
-  This is a json string, such as `{"type": "APP_COOKIE", "cookie_name": "sessionID", "persistence_timeout": 15}`.
+  This is a json string, such as `{"type": "SOURCE_IP", "persistence_timeout": 15}`.
   For details:
 
   * `type` Required. Specifies the sticky session type.
@@ -294,7 +294,7 @@ metadata:
     kubernetes.io/elb.lb-algorithm: ROUND_ROBIN
     kubernetes.io/session-affinity-flag: 'on'
     kubernetes.io/session-affinity-option: >-
-      {"type": "APP_COOKIE", "cookie_name": "sessionID", "persistence_timeout": 15}
+      {"type": "SOURCE_IP", "persistence_timeout": 15}
   labels:
     app: nginx
   name: loadbalancer-service-demo-04
