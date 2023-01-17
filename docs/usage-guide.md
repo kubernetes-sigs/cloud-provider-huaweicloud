@@ -15,7 +15,7 @@ refer to [Running on an Existing Cluster on Huawei Cloud](./getting-started.md).
   If empty, a new ELB service will be created automatically.
 
 * `kubernetes.io/elb.connection-limit` Optional. Specifies the maximum number of connections for the listener.
-  The value ranges from `-1` to `2147483647`.
+  This option works with the Shared ELB service, the value ranges from `-1` to `2147483647`.
   The default value is `-1`, indicating that there is no restriction on the maximum number of connections.
 
 * `kubernetes.io/elb.subnet-id` Optional. Specifies the IPv4 subnet ID where the load balancer works.
@@ -109,8 +109,11 @@ refer to [Running on an Existing Cluster on Huawei Cloud](./getting-started.md).
 
 * `kubernetes.io/elb.x-forwarded-host` Optional. Specifies whether to rewrite the `X-Forwarded-Host` header.
   If this function is enabled, `X-Forwarded-Host` is rewritten based on Host in the request and sent to backend servers.
-
   Valid values are `'true'` and `'false'`, defaults to `'false'`.
+  When this option is set then the cloud provider will create a Listener of type `HTTP` for a loadbalancer.
+
+* `kubernetes.io/default-tls-container-ref` Optional. Specifies the ID of the server certificate used by the listener.
+  When this option is set then the cloud provider will create a Listener of type `TERMINATED_HTTPS` for a TLS Terminated loadbalancer.
 
 ## Creating a Service of LoadBalancer type
 

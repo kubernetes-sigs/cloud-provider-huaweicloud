@@ -66,7 +66,8 @@ const (
 	ElbHealthCheckFlag    = "kubernetes.io/elb.health-check-flag"
 	ElbHealthCheckOptions = "kubernetes.io/elb.health-check-option"
 
-	ElbXForwardedHost = "kubernetes.io/elb.x-forwarded-host"
+	ElbXForwardedHost      = "kubernetes.io/elb.x-forwarded-host"
+	DefaultTLSContainerRef = "kubernetes.io/default-tls-container-ref"
 
 	NodeSubnetIDLabelKey = "node.kubernetes.io/subnetid"
 	ELBMarkAnnotation    = "kubernetes.io/elb.mark"
@@ -83,6 +84,11 @@ const (
 	ELBSessionSourceIPDefaultTimeout = 60
 	ELBSessionSourceIPMinTimeout     = 1
 	ELBSessionSourceIPMaxTimeout     = 60
+
+	ProtocolUDP             = "UDP"
+	ProtocolHTTP            = "HTTP"
+	ProtocolHTTPS           = "HTTPS"
+	ProtocolTerminatedHTTPS = "TERMINATED_HTTPS"
 )
 
 type ELBProtocol string
@@ -309,7 +315,7 @@ func getLoadBalancerVersion(service *v1.Service) (LoadBalanceVersion, error) {
 		klog.Infof("DNAT for service %v", service.Name)
 		return VersionNAT, nil
 	default:
-		return 0, fmt.Errorf("Load balancer version unknown")
+		return 0, fmt.Errorf("Unknown elb.class: %s", class)
 	}
 }
 
