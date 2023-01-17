@@ -162,7 +162,7 @@ func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName
 	}
 
 	for _, port := range service.Spec.Ports {
-		listener := filterListenerByPort(listeners, port)
+		listener := filterListenerByPort(listeners, service, port)
 		// add or update listener
 		if listener == nil {
 			listener, err = l.createListener(loadbalancer.Id, service, port)
@@ -290,15 +290,16 @@ func (l *SharedLoadBalancer) addOrRemoveHealthMonitor(loadbalancerID string, poo
 	monitorID := pool.HealthmonitorId
 	klog.Infof("add or remove health check: %s : %#v", monitorID, healthCheckOpts)
 
+	protocolStr := parseProtocol(service, port)
 	// create health monitor
 	if monitorID == "" && healthCheckOpts.Enable {
-		_, err := l.createHealthMonitor(loadbalancerID, pool.Id, port.Protocol, healthCheckOpts)
+		_, err := l.createHealthMonitor(loadbalancerID, pool.Id, protocolStr, healthCheckOpts)
 		return err
 	}
 
 	// update health monitor
 	if monitorID != "" && healthCheckOpts.Enable {
-		return l.updateHealthMonitor(monitorID, port.Protocol, healthCheckOpts)
+		return l.updateHealthMonitor(monitorID, protocolStr, healthCheckOpts)
 	}
 
 	// delete health monitor
@@ -313,28 +314,31 @@ func (l *SharedLoadBalancer) addOrRemoveHealthMonitor(loadbalancerID string, poo
 	return nil
 }
 
-func (l *SharedLoadBalancer) updateHealthMonitor(id string, protocol corev1.Protocol, opts *config.HealthCheckOption) error {
-	monitorProtocol := string(protocol)
-	if protocol == corev1.ProtocolUDP {
-		monitorProtocol = "UDP_CONNECT"
+func (l *SharedLoadBalancer) updateHealthMonitor(id, protocol string, opts *config.HealthCheckOption) error {
+	if protocol == ProtocolHTTPS || protocol == ProtocolTerminatedHTTPS {
+		protocol = ProtocolHTTP
+	} else if protocol == ProtocolUDP {
+		protocol = "UDP_CONNECT"
 	}
 
 	return l.sharedELBClient.UpdateHealthMonitor(id, &elbmodel.UpdateHealthmonitorReq{
-		Type:       &monitorProtocol,
+		Type:       &protocol,
 		Timeout:    &opts.Timeout,
 		Delay:      &opts.Delay,
 		MaxRetries: &opts.MaxRetries,
 	})
 }
 
-func (l *SharedLoadBalancer) createHealthMonitor(loadbalancerID, poolID string, protocol corev1.Protocol, opts *config.HealthCheckOption) (*elbmodel.HealthmonitorResp, error) {
-	monitorProtocol := string(protocol)
-	if protocol == corev1.ProtocolUDP {
-		monitorProtocol = "UDP_CONNECT"
+func (l *SharedLoadBalancer) createHealthMonitor(loadbalancerID, poolID, protocol string,
+	opts *config.HealthCheckOption) (*elbmodel.HealthmonitorResp, error) {
+	if protocol == ProtocolHTTPS || protocol == ProtocolTerminatedHTTPS {
+		protocol = ProtocolHTTP
+	} else if protocol == ProtocolUDP {
+		protocol = "UDP_CONNECT"
 	}
 
 	protocolType := elbmodel.CreateHealthmonitorReqType{}
-	if err := protocolType.UnmarshalJSON([]byte(monitorProtocol)); err != nil {
+	if err := protocolType.UnmarshalJSON([]byte(protocol)); err != nil {
 		return nil, err
 	}
 
@@ -537,11 +541,14 @@ func printSessionAffinity(service *v1.Service, per elbmodel.SessionPersistence) 
 
 func (l *SharedLoadBalancer) createPool(listener *elbmodel.ListenerResp, service *v1.Service) (*elbmodel.PoolResp, error) {
 	lbAlgorithm := getStringFromSvsAnnotation(service, ElbAlgorithm, l.loadbalancerOpts.LBAlgorithm)
-
 	persistence := l.getSessionAffinity(service)
 
+	protocolStr := listener.Protocol.Value()
+	if protocolStr == ProtocolHTTPS || protocolStr == ProtocolTerminatedHTTPS {
+		protocolStr = ProtocolHTTP
+	}
 	protocol := elbmodel.CreatePoolReqProtocol{}
-	if err := protocol.UnmarshalJSON([]byte(listener.Protocol.Value())); err != nil {
+	if err := protocol.UnmarshalJSON([]byte(protocolStr)); err != nil {
 		return nil, err
 	}
 
@@ -621,22 +628,29 @@ func (l *SharedLoadBalancer) deletePool(pool *elbmodel.PoolResp) []error {
 }
 
 func (l *SharedLoadBalancer) createListener(loadbalancerID string, service *v1.Service, port v1.ServicePort) (*elbmodel.ListenerResp, error) {
+	protocolStr := parseProtocol(service, port)
 	protocol := elbmodel.CreateListenerReqProtocol{}
-	if err := protocol.UnmarshalJSON([]byte(port.Protocol)); err != nil {
+	if err := protocol.UnmarshalJSON([]byte(protocolStr)); err != nil {
 		return nil, err
 	}
 
 	xForwardFor := getBoolFromSvsAnnotation(service, ElbXForwardedHost, false)
 	connectLimit := getConnectionLimitFromAnnotation(service)
-	name := cutString(fmt.Sprintf("%s_%s_%v", service.Name, port.Protocol, port.Port))
-	listener, err := l.sharedELBClient.CreateListener(&elbmodel.CreateListenerReq{
+	name := cutString(fmt.Sprintf("%s_%s_%v", service.Name, protocolStr, port.Port))
+	createOpt := &elbmodel.CreateListenerReq{
 		LoadbalancerId:  loadbalancerID,
 		Protocol:        protocol,
 		ProtocolPort:    port.Port,
 		Name:            &name,
 		InsertHeaders:   &elbmodel.InsertHeader{XForwardedHost: &xForwardFor},
-		ConnectionLimit: pointer.Int32Ptr(int32(connectLimit)),
-	})
+		ConnectionLimit: pointer.Int32(int32(connectLimit)),
+	}
+	if protocolStr == ProtocolTerminatedHTTPS {
+		defaultTLSContainerRef := getStringFromSvsAnnotation(service, DefaultTLSContainerRef, "")
+		createOpt.DefaultTlsContainerRef = &defaultTLSContainerRef
+	}
+
+	listener, err := l.sharedELBClient.CreateListener(createOpt)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to create listener for loadbalancer %s: %v",
 			loadbalancerID, err)
@@ -652,7 +666,7 @@ func (l *SharedLoadBalancer) updateListener(listener *elbmodel.ListenerResp, ser
 	}
 
 	err := l.sharedELBClient.UpdateListener(listener.Id, &elbmodel.UpdateListenerReq{
-		ConnectionLimit: pointer.Int32Ptr(int32(connectLimit)),
+		ConnectionLimit: pointer.Int32(int32(connectLimit)),
 	})
 	if err != nil {
 		return err
@@ -662,9 +676,10 @@ func (l *SharedLoadBalancer) updateListener(listener *elbmodel.ListenerResp, ser
 	return nil
 }
 
-func filterListenerByPort(listenerArr []elbmodel.ListenerResp, port v1.ServicePort) *elbmodel.ListenerResp {
+func filterListenerByPort(listenerArr []elbmodel.ListenerResp, service *v1.Service, port v1.ServicePort) *elbmodel.ListenerResp {
+	protocol := parseProtocol(service, port)
 	for _, l := range listenerArr {
-		if l.Protocol.Value() == string(port.Protocol) && l.ProtocolPort == port.Port {
+		if l.Protocol.Value() == protocol && l.ProtocolPort == port.Port {
 			return &l
 		}
 	}
@@ -698,7 +713,7 @@ func (l *SharedLoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName
 	}
 
 	for _, port := range service.Spec.Ports {
-		listener := filterListenerByPort(listeners, port)
+		listener := filterListenerByPort(listeners, service, port)
 		if listener == nil {
 			return status.Errorf(codes.Unavailable, "error, can not find a listener matching %s:%v",
 				port.Protocol, port.Port)
@@ -767,7 +782,7 @@ func (l *SharedLoadBalancer) deleteListener(loadBalancer *elbmodel.LoadbalancerR
 
 	listenersMatched := make([]elbmodel.ListenerResp, 0)
 	for _, port := range service.Spec.Ports {
-		listener := filterListenerByPort(listenerArr, port)
+		listener := filterListenerByPort(listenerArr, service, port)
 		if listener != nil {
 			listenersMatched = append(listenersMatched, *listener)
 		}
@@ -989,4 +1004,17 @@ func (l *SharedLoadBalancer) createEIP(service *v1.Service) (string, error) {
 	}
 
 	return *eip.Id, nil
+}
+
+func parseProtocol(service *v1.Service, port v1.ServicePort) string {
+	xForwardFor := getBoolFromSvsAnnotation(service, ElbXForwardedHost, false)
+
+	protocol := string(port.Protocol)
+	defaultTLSContainerRef := getStringFromSvsAnnotation(service, DefaultTLSContainerRef, "")
+	if defaultTLSContainerRef != "" {
+		protocol = ProtocolTerminatedHTTPS
+	} else if xForwardFor {
+		protocol = ProtocolHTTP
+	}
+	return protocol
 }
