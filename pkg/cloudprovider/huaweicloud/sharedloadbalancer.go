@@ -271,7 +271,7 @@ func getEipAddress(eip *eipmodel.PublicipShowResp) (string, error) {
 func (l *SharedLoadBalancer) createLoadbalancer(clusterName, subnetID string, service *v1.Service) (*elbmodel.LoadbalancerResp, error) {
 	name := l.GetLoadBalancerName(context.TODO(), clusterName, service)
 	provider := elbmodel.GetCreateLoadbalancerReqProviderEnum().VLB
-	desc := fmt.Sprintf("Created by the ELB service(%s/%s) of the k8s cluster(%s).",
+	desc := fmt.Sprintf("Created by the LoadBalancer service(%s/%s) of the k8s cluster(%s). Do not modify.",
 		service.Namespace, service.Name, clusterName)
 	loadbalancer, err := l.sharedELBClient.CreateInstanceCompleted(&elbmodel.CreateLoadbalancerReq{
 		Name:        &name,
@@ -552,7 +552,7 @@ func (l *SharedLoadBalancer) createPool(listener *elbmodel.ListenerResp, service
 		return nil, err
 	}
 
-	name := fmt.Sprintf("pl_%s", listener.Name)
+	name := fmt.Sprintf("sg_%s", listener.Name)
 	return l.sharedELBClient.CreatePool(&elbmodel.CreatePoolReq{
 		Name:               &name,
 		Protocol:           protocol,
