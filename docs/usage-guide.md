@@ -113,7 +113,7 @@ refer to [Running on an Existing Cluster on Huawei Cloud](./getting-started.md).
   When this option is set then the cloud provider will create a Listener of type `HTTP` for a loadbalancer.
 
 
-* `kubernetes.io/default-tls-container-ref` Optional. Specifies the ID of the server certificate used by the listener.
+* `kubernetes.io/elb.default-tls-container-ref` Optional. Specifies the ID of the server certificate used by the listener.
   When this option is set then the cloud provider will create a Listener of type `TERMINATED_HTTPS` for a TLS Terminated loadbalancer.
 
 * `kubernetes.io/elb.idle-timeout` Optional. Specifies the idle timeout for the listener. Value range: `0` to `4000`.
