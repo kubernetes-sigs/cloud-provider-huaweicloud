@@ -66,7 +66,7 @@ const (
 	ElbHealthCheckOptions = "kubernetes.io/elb.health-check-option"
 
 	ElbXForwardedHost      = "kubernetes.io/elb.x-forwarded-host"
-	DefaultTLSContainerRef = "kubernetes.io/default-tls-container-ref"
+	DefaultTLSContainerRef = "kubernetes.io/elb.default-tls-container-ref"
 
 	ElbIdleTimeout     = "kubernetes.io/elb.idle-timeout"
 	ElbRequestTimeout  = "kubernetes.io/elb.request-timeout"
