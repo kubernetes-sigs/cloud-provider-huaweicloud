@@ -17,9 +17,9 @@ Currently `huawei-cloud-controller-manager` implements:
 ## Compatibility with Kubernetes
 
 | Kubernetes Version | Latest Huawei Cloud Controller Manager Version |
-| ------------------ | ---------------------------------------------- |
+| ------------------ |------------------------------------------------|
 | v1.20              | v0.20.0                                        |
-| v1.21              | v0.21.0                                        |
+| v1.21              | v0.21.1                                        |
 | v1.22              | v0.22.0                                        |
 | v1.23              | v0.23.0                                        |
 | v1.24              | v0.24.0                                        |
