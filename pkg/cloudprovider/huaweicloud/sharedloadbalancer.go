@@ -655,15 +655,15 @@ func (l *SharedLoadBalancer) createListener(loadbalancerID string, service *v1.S
 	// Set timeout parameters
 	globalOpts := l.loadbalancerOpts
 	if timeout := getIntFromSvsAnnotation(service, ElbIdleTimeout, globalOpts.IdleTimeout); timeout != 0 {
-		createOpt.KeepaliveTimeout = pointer.Int32(int32(timeout))
+		createOpt.KeepaliveTimeout = pointer.Int32Ptr(int32(timeout))
 	}
 
 	if protocol == ProtocolHTTP || protocol == ProtocolTerminatedHTTPS {
 		if timeout := getIntFromSvsAnnotation(service, ElbRequestTimeout, globalOpts.RequestTimeout); timeout != 0 {
-			createOpt.ClientTimeout = pointer.Int32(int32(timeout))
+			createOpt.ClientTimeout = pointer.Int32Ptr(int32(timeout))
 		}
 		if timeout := getIntFromSvsAnnotation(service, ElbResponseTimeout, globalOpts.ResponseTimeout); timeout != 0 {
-			createOpt.MemberTimeout = pointer.Int32(int32(timeout))
+			createOpt.MemberTimeout = pointer.Int32Ptr(int32(timeout))
 		}
 	}
 
@@ -688,14 +688,14 @@ func (l *SharedLoadBalancer) updateListener(listener *elbmodel.ListenerResp, ser
 	// Set timeout parameters
 	globalOpts := l.loadbalancerOpts
 	if timeout := getIntFromSvsAnnotation(service, ElbIdleTimeout, globalOpts.IdleTimeout); timeout != 0 {
-		updateOpt.KeepaliveTimeout = pointer.Int32(int32(timeout))
+		updateOpt.KeepaliveTimeout = pointer.Int32Ptr(int32(timeout))
 	}
 	if listener.Protocol.Value() == ProtocolHTTP || listener.Protocol.Value() == ProtocolTerminatedHTTPS {
 		if timeout := getIntFromSvsAnnotation(service, ElbRequestTimeout, globalOpts.RequestTimeout); timeout != 0 {
-			updateOpt.ClientTimeout = pointer.Int32(int32(timeout))
+			updateOpt.ClientTimeout = pointer.Int32Ptr(int32(timeout))
 		}
 		if timeout := getIntFromSvsAnnotation(service, ElbResponseTimeout, globalOpts.ResponseTimeout); timeout != 0 {
-			updateOpt.MemberTimeout = pointer.Int32(int32(timeout))
+			updateOpt.MemberTimeout = pointer.Int32Ptr(int32(timeout))
 		}
 	}
 
