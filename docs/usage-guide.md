@@ -109,8 +109,8 @@ refer to [Running on an Existing Cluster on Huawei Cloud](/docs/getting-started.
 
 * `kubernetes.io/elb.x-forwarded-host` Optional. Specifies whether to rewrite the `X-Forwarded-Host` header.
   If this function is enabled, `X-Forwarded-Host` is rewritten based on Host in the request and sent to backend servers.
-
   Valid values are `'true'` and `'false'`, defaults to `'false'`.
+  When this option is set then the cloud provider will create a Listener of type `HTTP` for a loadbalancer.
 
 * `kubernetes.io/elb.default-tls-container-ref` Optional. Specifies the ID of the server certificate used by the listener.
   When this option is set then the cloud provider will create a Listener of type `TERMINATED_HTTPS` for a TLS Terminated loadbalancer.
