@@ -115,6 +115,15 @@ refer to [Running on an Existing Cluster on Huawei Cloud](/docs/getting-started.
 * `kubernetes.io/default-tls-container-ref` Optional. Specifies the ID of the server certificate used by the listener.
   When this option is set then the cloud provider will create a Listener of type `TERMINATED_HTTPS` for a TLS Terminated loadbalancer.
 
+* `kubernetes.io/elb.idle-timeout` Optional. Specifies the idle timeout for the listener. Value range: `0` to `4000`.
+  Unit: second.
+
+* `kubernetes.io/elb.request-timeout` Optional. Specifies the request timeout for the listener. Value range: `1` to `300`.
+  Unit: second. This parameter is valid when protocol is set to *HTTP* or *HTTPS*.
+
+* `kubernetes.io/elb.response-timeout` Optional. Specifies the response timeout for the listener. Value range: `1` to `300`.
+  Unit: second. This parameter is valid when protocol is set to *HTTP* or *HTTPS*.
+
 ## Creating a Service of LoadBalancer type
 
 Below are some examples of using shared ELB services.
