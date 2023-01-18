@@ -112,7 +112,7 @@ refer to [Running on an Existing Cluster on Huawei Cloud](./getting-started.md).
 
   Valid values are `'true'` and `'false'`, defaults to `'false'`.
 
-* `kubernetes.io/default-tls-container-ref` Optional. Specifies the ID of the server certificate used by the listener.
+* `kubernetes.io/elb.default-tls-container-ref` Optional. Specifies the ID of the server certificate used by the listener.
   When this option is set then the cloud provider will create a Listener of type `TERMINATED_HTTPS` for a TLS Terminated loadbalancer.
 
 ## Creating a Service of LoadBalancer type
