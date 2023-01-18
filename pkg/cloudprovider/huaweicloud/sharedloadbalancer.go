@@ -169,7 +169,7 @@ func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName
 	}
 
 	for _, port := range service.Spec.Ports {
-		listener := filterListenerByPort(listeners, service, port)
+		listener := l.filterListenerByPort(listeners, service, port)
 		// add or update listener
 		if listener == nil {
 			listener, err = l.createListener(loadbalancer.Id, service, port)
@@ -278,7 +278,7 @@ func getEipAddress(eip *eipmodel.PublicipShowResp) (string, error) {
 func (l *SharedLoadBalancer) createLoadbalancer(clusterName, subnetID string, service *v1.Service) (*elbmodel.LoadbalancerResp, error) {
 	name := l.GetLoadBalancerName(context.TODO(), clusterName, service)
 	provider := elbmodel.GetCreateLoadbalancerReqProviderEnum().VLB
-	desc := fmt.Sprintf("Created by the LoadBalancer service(%s/%s) of the k8s cluster(%s). Do not modify.",
+	desc := fmt.Sprintf("Created by the ELB service(%s/%s) of the k8s cluster(%s).",
 		service.Namespace, service.Name, clusterName)
 	loadbalancer, err := l.sharedELBClient.CreateInstanceCompleted(&elbmodel.CreateLoadbalancerReq{
 		Name:        &name,
@@ -718,8 +718,7 @@ func convertToListenerV2(listener *elbmodelv3.Listener) (*elbmodel.ListenerResp,
 	loadBalancers := make([]elbmodel.ResourceList, 0)
 	for _, lb := range listener.Loadbalancers {
 		if lb.Id == nil {
-			klog.Warningf("The ID is missing from the ELB Listener 'Loadbalancers' field, listenerID: %s",
-				listener.Id)
+			klog.Warningf("The ELB Listener \"Loadbalancers\" field is empty, listenerID: %s", listener.Id)
 		}
 		loadBalancers = append(loadBalancers, elbmodel.ResourceList{
 			Id: *lb.Id,
@@ -761,11 +760,11 @@ func convertToListenerV2(listener *elbmodelv3.Listener) (*elbmodel.ListenerResp,
 	}, nil
 }
 
-func filterListenerByPort(listenerArr []elbmodel.ListenerResp, service *v1.Service, port v1.ServicePort) *elbmodel.ListenerResp {
+func (l *SharedLoadBalancer) filterListenerByPort(listeners []elbmodel.ListenerResp, service *v1.Service, port v1.ServicePort) *elbmodel.ListenerResp {
 	protocol := parseProtocol(service, port)
-	for _, l := range listenerArr {
-		if l.Protocol.Value() == protocol && l.ProtocolPort == port.Port {
-			return &l
+	for _, listener := range listeners {
+		if listener.Protocol.Value() == protocol && listener.ProtocolPort == port.Port {
+			return &listener
 		}
 	}
 
@@ -788,7 +787,7 @@ func (l *SharedLoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName
 	}
 
 	for _, port := range service.Spec.Ports {
-		listener := filterListenerByPort(listeners, service, port)
+		listener := l.filterListenerByPort(listeners, service, port)
 		if listener == nil {
 			return status.Errorf(codes.Unavailable, "error, can not find a listener matching %s:%v",
 				port.Protocol, port.Port)
@@ -855,7 +854,7 @@ func (l *SharedLoadBalancer) deleteListener(loadBalancer *elbmodel.LoadbalancerR
 
 	listenersMatched := make([]elbmodel.ListenerResp, 0)
 	for _, port := range service.Spec.Ports {
-		listener := filterListenerByPort(listenerArr, service, port)
+		listener := l.filterListenerByPort(listenerArr, service, port)
 		if listener != nil {
 			listenersMatched = append(listenersMatched, *listener)
 		}
@@ -918,33 +917,18 @@ func unbindEIP(eipClient *wrapper.EIpClient, loadBalancer *elbmodel.Loadbalancer
 	return nil
 }
 
-func getStringFromSvsAnnotation(service *corev1.Service, annotationKey string, defaultSetting string) string {
-	if annotationValue, ok := service.Annotations[annotationKey]; ok {
-		klog.V(4).Infof("Found a Service Annotation: %v = %v", annotationKey, annotationValue)
-		return annotationValue
-	}
-	klog.V(4).Infof("Could not find a Service Annotation; falling back on default setting: %v = %v",
-		annotationKey, defaultSetting)
-	return defaultSetting
-}
-
-func getBoolFromSvsAnnotation(service *corev1.Service, annotationKey string, defaultVal bool) bool {
-	valueStr, ok := service.Annotations[annotationKey]
-	if !ok {
-		return defaultVal
+func (l *SharedLoadBalancer) getSubnetID(service *v1.Service, node *v1.Node) (string, error) {
+	subnetID := getStringFromSvsAnnotation(service, ElbSubnetID, l.cloudConfig.VpcOpts.SubnetID)
+	if subnetID != "" {
+		return subnetID, nil
 	}
 
-	rstValue := false
-	switch valueStr {
-	case "true":
-		rstValue = true
-	case "false":
-		rstValue = false
-	default:
-		klog.Warningf("unknown %s annotation: %v, specify \"true\" or \"false\" ", annotationKey, valueStr)
-		rstValue = defaultVal
+	subnetID, err := l.getNodeSubnetID(node)
+	if err != nil {
+		return "", status.Errorf(codes.InvalidArgument, "missing subnet-id, "+
+			"can not to read subnet-id from the node also, error: %s", err)
 	}
-	return rstValue
+	return subnetID, nil
 }
 
 func (l *SharedLoadBalancer) getNodeSubnetID(node *corev1.Node) (string, error) {
@@ -963,8 +947,8 @@ func (l *SharedLoadBalancer) getNodeSubnetID(node *corev1.Node) (string, error) 
 		return "", err
 	}
 
-	for _, intfs := range interfaces {
-		for _, fixedIP := range *intfs.FixedIps {
+	for _, ia := range interfaces {
+		for _, fixedIP := range *ia.FixedIps {
 			if *fixedIP.IpAddress == ipAddress {
 				return *fixedIP.SubnetId, nil
 			}
@@ -1009,39 +993,6 @@ func getHealthCheckOptionFromAnnotation(service *v1.Service, opts *config.LoadBa
 	return &checkOpts
 }
 
-func (l *SharedLoadBalancer) getSubnetID(service *v1.Service, node *v1.Node) (string, error) {
-	subnetID := getStringFromSvsAnnotation(service, ElbSubnetID, l.cloudConfig.VpcOpts.SubnetID)
-	if subnetID != "" {
-		return subnetID, nil
-	}
-
-	subnetID, err := l.getNodeSubnetID(node)
-	if err != nil {
-		return "", status.Errorf(codes.InvalidArgument, "missing subnet-id, "+
-			"can not to read subnet-id from the node also, error: %s", err)
-	}
-	return subnetID, nil
-}
-
-type CreateEIPOptions struct {
-	BandwidthSize int32  `json:"bandwidth_size"`
-	ShareType     string `json:"share_type"`
-	ShareID       string `json:"share_id"`
-
-	IPType string `json:"ip_type"`
-}
-
-func parseEIPAutoCreateOptions(service *v1.Service) (*CreateEIPOptions, error) {
-	str := getStringFromSvsAnnotation(service, AutoCreateEipOptions, "")
-	if str == "" {
-		return nil, nil
-	}
-
-	opts := &CreateEIPOptions{}
-	err := json.Unmarshal([]byte(str), opts)
-	return opts, err
-}
-
 func (l *SharedLoadBalancer) createEIP(service *v1.Service) (string, error) {
 	opts, err := parseEIPAutoCreateOptions(service)
 	if err != nil || opts == nil {
@@ -1070,6 +1021,25 @@ func (l *SharedLoadBalancer) createEIP(service *v1.Service) (string, error) {
 	return *eip.Id, nil
 }
 
+type CreateEIPOptions struct {
+	BandwidthSize int32  `json:"bandwidth_size"`
+	ShareType     string `json:"share_type"`
+	ShareID       string `json:"share_id"`
+
+	IPType string `json:"ip_type"`
+}
+
+func parseEIPAutoCreateOptions(service *v1.Service) (*CreateEIPOptions, error) {
+	str := getStringFromSvsAnnotation(service, AutoCreateEipOptions, "")
+	if str == "" {
+		return nil, nil
+	}
+
+	opts := &CreateEIPOptions{}
+	err := json.Unmarshal([]byte(str), opts)
+	return opts, err
+}
+
 func parseProtocol(service *v1.Service, port v1.ServicePort) string {
 	xForwardFor := getBoolFromSvsAnnotation(service, ElbXForwardedHost, false)
 
@@ -1083,16 +1053,43 @@ func parseProtocol(service *v1.Service, port v1.ServicePort) string {
 	return protocol
 }
 
-func getIntFromSvsAnnotation(service *v1.Service, annotationKey string, defVal int) int {
-	if annotationValue, ok := service.Annotations[annotationKey]; ok {
-		klog.V(4).Infof("Found a Service Annotation: %v = %v", annotationKey, annotationValue)
+func getStringFromSvsAnnotation(service *corev1.Service, key string, defaultSetting string) string {
+	if annotationValue, ok := service.Annotations[key]; ok {
+		klog.V(4).Infof("Found annotation: %v = %v", key, annotationValue)
+		return annotationValue
+	}
+	klog.V(4).Infof("Annotation %s is empty, use default value: %v", key, defaultSetting)
+	return defaultSetting
+}
+
+func getBoolFromSvsAnnotation(service *corev1.Service, key string, defaultVal bool) bool {
+	value, ok := service.Annotations[key]
+	if !ok {
+		return defaultVal
+	}
+
+	rstValue := false
+	switch value {
+	case "true":
+		rstValue = true
+	case "false":
+		rstValue = false
+	default:
+		klog.Warningf("unknown %s annotation: %v, specify \"true\" or \"false\" ", key, value)
+		rstValue = defaultVal
+	}
+	return rstValue
+}
+
+func getIntFromSvsAnnotation(service *v1.Service, key string, defaultVal int) int {
+	if annotationValue, ok := service.Annotations[key]; ok {
+		klog.V(4).Infof("Found annotation: %v = %v", key, annotationValue)
 		val, err := strconv.Atoi(annotationValue)
 		if err != nil {
-			return defVal
+			return defaultVal
 		}
 		return val
 	}
-	klog.V(4).Infof("Could not find a Service Annotation; falling back on default setting: %v = %v",
-		annotationKey, defVal)
-	return defVal
+	klog.V(4).Infof("Annotation %s is empty, use default value: %v", key, defaultVal)
+	return defaultVal
 }
