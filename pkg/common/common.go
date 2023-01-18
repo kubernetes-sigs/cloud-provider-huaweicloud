@@ -38,6 +38,9 @@ func IsNotFound(err error) bool {
 	if e, ok := err.(sdkerr.ServiceResponseError); ok {
 		return e.StatusCode == 404
 	}
+	if e, ok := err.(*sdkerr.ServiceResponseError); ok {
+		return e.StatusCode == 404
+	}
 	return false
 }
 
