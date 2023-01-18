@@ -25,3 +25,11 @@ func IsStrSliceContains(list []string, strToSearch string) bool {
 	}
 	return false
 }
+
+func CutString(original string, length int) string {
+	rst := original
+	if len(original) > length {
+		rst = original[:length]
+	}
+	return rst
+}
