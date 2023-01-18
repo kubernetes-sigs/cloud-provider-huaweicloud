@@ -37,6 +37,12 @@ import (
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/utils"
+)
+
+const (
+	defaultMaxNameLength     = 255
+	maxServerGroupNameLength = 64
 )
 
 var (
@@ -107,7 +113,7 @@ func (l *SharedLoadBalancer) getLoadBalancerInstance(ctx context.Context, cluste
 func (l *SharedLoadBalancer) GetLoadBalancerName(_ context.Context, clusterName string, service *v1.Service) string {
 	klog.Infof("GetLoadBalancerName: called with service %s/%s", service.Namespace, service.Name)
 	name := fmt.Sprintf("k8s_service_%s_%s_%s", clusterName, service.Namespace, service.Name)
-	return cutString(name)
+	return utils.CutString(name, defaultMaxNameLength)
 }
 
 func ensureLoadBalancerValidation(service *v1.Service, nodes []*v1.Node) error {
@@ -449,9 +455,7 @@ func (l *SharedLoadBalancer) addMember(loadbalancer *elbmodel.LoadbalancerResp, 
 		return err
 	}
 
-	name := cutString(fmt.Sprintf("member_%s_%s", pool.Name, node.Name))
 	_, err = l.sharedELBClient.AddMember(pool.Id, &elbmodel.CreateMemberReq{
-		Name:         &name,
 		ProtocolPort: port.NodePort,
 		SubnetId:     loadbalancer.VipSubnetId,
 		Address:      address,
@@ -553,7 +557,7 @@ func (l *SharedLoadBalancer) createPool(listener *elbmodel.ListenerResp, service
 		return nil, err
 	}
 
-	name := fmt.Sprintf("sg_%s", listener.Name)
+	name := utils.CutString(fmt.Sprintf("sg_%s", listener.Name), maxServerGroupNameLength)
 	return l.sharedELBClient.CreatePool(&elbmodel.CreatePoolReq{
 		Name:               &name,
 		Protocol:           protocol,
@@ -645,7 +649,8 @@ func (l *SharedLoadBalancer) createListener(loadbalancerID string, service *v1.S
 		protocol = ProtocolHTTP
 	}
 	createOpt.Protocol = protocol
-	createOpt.Name = pointer.String(cutString(fmt.Sprintf("%s_%s_%v", service.Name, protocol, port.Port)))
+	name := utils.CutString(fmt.Sprintf("%s_%s_%v", service.Name, protocol, port.Port), defaultMaxNameLength)
+	createOpt.Name = &name
 
 	// Set timeout parameters
 	globalOpts := l.loadbalancerOpts
@@ -672,7 +677,8 @@ func (l *SharedLoadBalancer) createListener(loadbalancerID string, service *v1.S
 }
 
 func (l *SharedLoadBalancer) updateListener(listener *elbmodel.ListenerResp, service *v1.Service) error {
-	name := cutString(fmt.Sprintf("%s_%s_%v", service.Name, listener.Protocol.Value(), listener.ProtocolPort))
+	name := fmt.Sprintf("%s_%s_%v", service.Name, listener.Protocol.Value(), listener.ProtocolPort)
+	name = utils.CutString(name, defaultMaxNameLength)
 	xForwardFor := getBoolFromSvsAnnotation(service, ElbXForwardedHost, false)
 	updateOpt := &elbmodelv3.UpdateListenerOption{
 		Name:          &name,
@@ -910,15 +916,6 @@ func unbindEIP(eipClient *wrapper.EIpClient, loadBalancer *elbmodel.Loadbalancer
 		return err
 	}
 	return nil
-}
-
-// cutString makes sure the string length doesn't exceed 255, which is usually the maximum string length in HuaweiCloud.
-func cutString(original string) string {
-	ret := original
-	if len(original) > 255 {
-		ret = original[:255]
-	}
-	return ret
 }
 
 func getStringFromSvsAnnotation(service *corev1.Service, annotationKey string, defaultSetting string) string {
