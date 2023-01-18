@@ -58,3 +58,52 @@ func TestIsStrSliceContains(t *testing.T) {
 		})
 	}
 }
+
+func TestCutString(t *testing.T) {
+	tests := []struct {
+		name     string
+		origin   string
+		length   int
+		expected string
+	}{
+		{
+			name:     "test1",
+			origin:   "abcd",
+			length:   3,
+			expected: "abc",
+		},
+		{
+			name:     "test2",
+			origin:   "abcd",
+			length:   4,
+			expected: "abcd",
+		},
+		{
+			name:     "test3",
+			origin:   "abcd",
+			length:   5,
+			expected: "abcd",
+		},
+		{
+			name:     "test4",
+			origin:   "_12%&*()%$#@abcd123",
+			length:   12,
+			expected: "_12%&*()%$#@",
+		},
+		{
+			name:     "test5",
+			origin:   "",
+			length:   12,
+			expected: "",
+		},
+	}
+
+	for _, te := range tests {
+		t.Run(te.name, func(t *testing.T) {
+			isContain := CutString(te.origin, te.length)
+			if isContain != te.expected {
+				t.Fatalf("expected: %v, got : %v", te.expected, isContain)
+			}
+		})
+	}
+}
