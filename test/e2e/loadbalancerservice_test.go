@@ -36,7 +36,76 @@ import (
 	helper2 "sigs.k8s.io/cloud-provider-huaweicloud/test/e2e/helper"
 )
 
-var _ = ginkgo.Describe("loadbalancer service testing", func() {
+var _ = ginkgo.Describe("loadbalancer service TCP protocol testing", func() {
+	var deployment *appsv1.Deployment
+	var service *corev1.Service
+
+	ginkgo.BeforeEach(func() {
+		deploymentName := deploymentNamePrefix + rand.String(RandomStrLength)
+		deployment = helper2.NewDeployment(testNamespace, deploymentName)
+		framework.CreateDeployment(kubeClient, deployment)
+	})
+
+	ginkgo.AfterEach(func() {
+		framework.RemoveDeployment(kubeClient, deployment.Namespace, deployment.Name)
+		if service != nil {
+			framework.RemoveService(kubeClient, service.Namespace, service.Name)
+			ginkgo.By(fmt.Sprintf("Wait for the Service(%s/%s) to be deleted", testNamespace, service.Name), func() {
+				gomega.Eventually(func(g gomega.Gomega) (bool, error) {
+					_, err := kubeClient.CoreV1().Services(testNamespace).Get(context.TODO(), service.Name, metav1.GetOptions{})
+					if apierrors.IsNotFound(err) {
+						return true, nil
+					}
+					if err != nil {
+						return false, err
+					}
+					return false, nil
+				}, pollTimeout, pollInterval).Should(gomega.Equal(true))
+			})
+		}
+	})
+
+	ginkgo.It("service enhanced auto testing", func() {
+		serviceName := serviceNamePrefix + rand.String(RandomStrLength)
+
+		annotations := map[string]string{}
+		annotations[huaweicloud.ElbClass] = "shared"
+		annotations[huaweicloud.ElbAlgorithm] = "ROUND_ROBIN"
+		annotations[huaweicloud.ElbSessionAffinityFlag] = "on"
+		annotations[huaweicloud.ElbSessionAffinityOption] = `{"type":"SOURCE_IP", "persistence_timeout": 3}`
+		annotations[huaweicloud.ElbHealthCheckFlag] = "on"
+		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 3, "timeout": 15, "max_retries": 3}`
+
+		service = newLoadbalancerAutoService(testNamespace, serviceName, 80, annotations)
+		framework.CreateService(kubeClient, service)
+
+		var ingress string
+		ginkgo.By("Check service status", func() {
+			gomega.Eventually(func(g gomega.Gomega) bool {
+				svc, err := kubeClient.CoreV1().Services(testNamespace).Get(context.TODO(), serviceName, metav1.GetOptions{})
+				g.Expect(err).ShouldNot(gomega.HaveOccurred())
+
+				if len(svc.Status.LoadBalancer.Ingress) > 0 {
+					ingress = svc.Status.LoadBalancer.Ingress[0].IP
+					g.Expect(ingress).ShouldNot(gomega.BeEmpty())
+					return true
+				}
+
+				return false
+			}, pollTimeout, pollInterval).Should(gomega.Equal(true))
+		})
+
+		ginkgo.By("Check if ELB listener is available", func() {
+			url := fmt.Sprintf("http://%s", ingress)
+			statusCode, err := helper2.DoRequest(url)
+			gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+
+			gomega.Expect(statusCode).Should(gomega.Equal(200))
+		})
+	})
+})
+
+var _ = ginkgo.Describe("loadbalancer service HTTP protocol testing", func() {
 	var deployment *appsv1.Deployment
 	var service *corev1.Service
 
@@ -76,6 +145,9 @@ var _ = ginkgo.Describe("loadbalancer service testing", func() {
 		annotations[huaweicloud.ElbHealthCheckFlag] = "on"
 		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 3, "timeout": 15, "max_retries": 3}`
 		annotations[huaweicloud.ElbXForwardedHost] = "true"
+		annotations[huaweicloud.ElbIdleTimeout] = "120"
+		annotations[huaweicloud.ElbRequestTimeout] = "120"
+		annotations[huaweicloud.ElbResponseTimeout] = "120"
 
 		service = newLoadbalancerAutoService(testNamespace, serviceName, 80, annotations)
 		framework.CreateService(kubeClient, service)
