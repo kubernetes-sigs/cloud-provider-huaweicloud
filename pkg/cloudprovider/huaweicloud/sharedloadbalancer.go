@@ -25,6 +25,7 @@ import (
 	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 	eipmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/eip/v2/model"
 	elbmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v2/model"
+	elbmodelv3 "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v3/model"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
@@ -36,6 +37,12 @@ import (
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/utils"
+)
+
+const (
+	defaultMaxNameLength     = 255
+	maxServerGroupNameLength = 64
 )
 
 var (
@@ -106,7 +113,7 @@ func (l *SharedLoadBalancer) getLoadBalancerInstance(ctx context.Context, cluste
 func (l *SharedLoadBalancer) GetLoadBalancerName(_ context.Context, clusterName string, service *v1.Service) string {
 	klog.Infof("GetLoadBalancerName: called with service %s/%s", service.Namespace, service.Name)
 	name := fmt.Sprintf("k8s_service_%s_%s_%s", clusterName, service.Namespace, service.Name)
-	return cutString(name)
+	return utils.CutString(name, defaultMaxNameLength)
 }
 
 func ensureLoadBalancerValidation(service *v1.Service, nodes []*v1.Node) error {
@@ -162,7 +169,7 @@ func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName
 	}
 
 	for _, port := range service.Spec.Ports {
-		listener := filterListenerByPort(listeners, service, port)
+		listener := l.filterListenerByPort(listeners, service, port)
 		// add or update listener
 		if listener == nil {
 			listener, err = l.createListener(loadbalancer.Id, service, port)
@@ -448,9 +455,7 @@ func (l *SharedLoadBalancer) addMember(loadbalancer *elbmodel.LoadbalancerResp, 
 		return err
 	}
 
-	name := cutString(fmt.Sprintf("member_%s_%s", pool.Name, node.Name))
 	_, err = l.sharedELBClient.AddMember(pool.Id, &elbmodel.CreateMemberReq{
-		Name:         &name,
 		ProtocolPort: port.NodePort,
 		SubnetId:     loadbalancer.VipSubnetId,
 		Address:      address,
@@ -552,7 +557,7 @@ func (l *SharedLoadBalancer) createPool(listener *elbmodel.ListenerResp, service
 		return nil, err
 	}
 
-	name := fmt.Sprintf("pl_%s", listener.Name)
+	name := utils.CutString(fmt.Sprintf("sg_%s", listener.Name), maxServerGroupNameLength)
 	return l.sharedELBClient.CreatePool(&elbmodel.CreatePoolReq{
 		Name:               &name,
 		Protocol:           protocol,
@@ -627,47 +632,74 @@ func (l *SharedLoadBalancer) deletePool(pool *elbmodel.PoolResp) []error {
 	return errs
 }
 
-func (l *SharedLoadBalancer) createListener(loadbalancerID string, service *v1.Service, port v1.ServicePort) (*elbmodel.ListenerResp, error) {
-	protocolStr := parseProtocol(service, port)
-	protocol := elbmodel.CreateListenerReqProtocol{}
-	if err := protocol.UnmarshalJSON([]byte(protocolStr)); err != nil {
-		return nil, err
+func (l *SharedLoadBalancer) createListener(loadbalancerID string, service *v1.Service, port v1.ServicePort) (
+	*elbmodel.ListenerResp, error) {
+	xForwardFor := getBoolFromSvsAnnotation(service, ElbXForwardedHost, false)
+	createOpt := &elbmodelv3.CreateListenerOption{
+		LoadbalancerId: loadbalancerID,
+		ProtocolPort:   port.Port,
+		InsertHeaders:  &elbmodelv3.ListenerInsertHeaders{XForwardedHost: &xForwardFor},
 	}
 
-	xForwardFor := getBoolFromSvsAnnotation(service, ElbXForwardedHost, false)
-	connectLimit := getConnectionLimitFromAnnotation(service)
-	name := cutString(fmt.Sprintf("%s_%s_%v", service.Name, protocolStr, port.Port))
-	createOpt := &elbmodel.CreateListenerReq{
-		LoadbalancerId:  loadbalancerID,
-		Protocol:        protocol,
-		ProtocolPort:    port.Port,
-		Name:            &name,
-		InsertHeaders:   &elbmodel.InsertHeader{XForwardedHost: &xForwardFor},
-		ConnectionLimit: pointer.Int32(int32(connectLimit)),
-	}
-	if protocolStr == ProtocolTerminatedHTTPS {
+	protocol := parseProtocol(service, port)
+	if protocol == ProtocolTerminatedHTTPS {
 		defaultTLSContainerRef := getStringFromSvsAnnotation(service, DefaultTLSContainerRef, "")
 		createOpt.DefaultTlsContainerRef = &defaultTLSContainerRef
+	} else if xForwardFor {
+		protocol = ProtocolHTTP
+	}
+	createOpt.Protocol = protocol
+	name := utils.CutString(fmt.Sprintf("%s_%s_%v", service.Name, protocol, port.Port), defaultMaxNameLength)
+	createOpt.Name = &name
+
+	// Set timeout parameters
+	globalOpts := l.loadbalancerOpts
+	if timeout := getIntFromSvsAnnotation(service, ElbIdleTimeout, globalOpts.IdleTimeout); timeout != 0 {
+		createOpt.KeepaliveTimeout = pointer.Int32(int32(timeout))
 	}
 
-	listener, err := l.sharedELBClient.CreateListener(createOpt)
+	if protocol == ProtocolHTTP || protocol == ProtocolTerminatedHTTPS {
+		if timeout := getIntFromSvsAnnotation(service, ElbRequestTimeout, globalOpts.RequestTimeout); timeout != 0 {
+			createOpt.ClientTimeout = pointer.Int32(int32(timeout))
+		}
+		if timeout := getIntFromSvsAnnotation(service, ElbResponseTimeout, globalOpts.ResponseTimeout); timeout != 0 {
+			createOpt.MemberTimeout = pointer.Int32(int32(timeout))
+		}
+	}
+
+	listener, err := l.dedicatedELBClient.CreateListener(createOpt)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to create listener for loadbalancer %s: %v",
 			loadbalancerID, err)
 	}
 
-	return listener, nil
+	return convertToListenerV2(listener)
 }
 
 func (l *SharedLoadBalancer) updateListener(listener *elbmodel.ListenerResp, service *v1.Service) error {
-	connectLimit := getConnectionLimitFromAnnotation(service)
-	if int32(connectLimit) == listener.ConnectionLimit {
-		return nil
+	name := fmt.Sprintf("%s_%s_%v", service.Name, listener.Protocol.Value(), listener.ProtocolPort)
+	name = utils.CutString(name, defaultMaxNameLength)
+	xForwardFor := getBoolFromSvsAnnotation(service, ElbXForwardedHost, false)
+	updateOpt := &elbmodelv3.UpdateListenerOption{
+		Name:          &name,
+		InsertHeaders: &elbmodelv3.ListenerInsertHeaders{XForwardedHost: &xForwardFor},
 	}
 
-	err := l.sharedELBClient.UpdateListener(listener.Id, &elbmodel.UpdateListenerReq{
-		ConnectionLimit: pointer.Int32(int32(connectLimit)),
-	})
+	// Set timeout parameters
+	globalOpts := l.loadbalancerOpts
+	if timeout := getIntFromSvsAnnotation(service, ElbIdleTimeout, globalOpts.IdleTimeout); timeout != 0 {
+		updateOpt.KeepaliveTimeout = pointer.Int32(int32(timeout))
+	}
+	if listener.Protocol.Value() == ProtocolHTTP || listener.Protocol.Value() == ProtocolTerminatedHTTPS {
+		if timeout := getIntFromSvsAnnotation(service, ElbRequestTimeout, globalOpts.RequestTimeout); timeout != 0 {
+			updateOpt.ClientTimeout = pointer.Int32(int32(timeout))
+		}
+		if timeout := getIntFromSvsAnnotation(service, ElbResponseTimeout, globalOpts.ResponseTimeout); timeout != 0 {
+			updateOpt.MemberTimeout = pointer.Int32(int32(timeout))
+		}
+	}
+
+	err := l.dedicatedELBClient.UpdateListener(listener.Id, updateOpt)
 	if err != nil {
 		return err
 	}
@@ -676,25 +708,67 @@ func (l *SharedLoadBalancer) updateListener(listener *elbmodel.ListenerResp, ser
 	return nil
 }
 
-func filterListenerByPort(listenerArr []elbmodel.ListenerResp, service *v1.Service, port v1.ServicePort) *elbmodel.ListenerResp {
+func convertToListenerV2(listener *elbmodelv3.Listener) (*elbmodel.ListenerResp, error) {
+	protocol := elbmodel.ListenerRespProtocol{}
+	err := protocol.UnmarshalJSON([]byte(listener.Protocol))
+	if err != nil {
+		return nil, status.Errorf(codes.InvalidArgument, "failed to convert Listener V3 to V2, %s", err)
+	}
+
+	loadBalancers := make([]elbmodel.ResourceList, 0)
+	for _, lb := range listener.Loadbalancers {
+		if lb.Id == nil {
+			klog.Warningf("The ELB Listener \"Loadbalancers\" field is empty, listenerID: %s", listener.Id)
+		}
+		loadBalancers = append(loadBalancers, elbmodel.ResourceList{
+			Id: *lb.Id,
+		})
+	}
+
+	tags := make([]string, 0)
+	for _, t := range listener.Tags {
+		val := ""
+		if t.Value != nil {
+			val = *t.Value
+		}
+		tags = append(tags, fmt.Sprintf("%s=%s", *t.Key, val))
+	}
+	return &elbmodel.ListenerResp{
+		Id:                      listener.Id,
+		TenantId:                "",
+		Name:                    listener.Name,
+		Description:             listener.Description,
+		AdminStateUp:            listener.AdminStateUp,
+		Loadbalancers:           loadBalancers,
+		ConnectionLimit:         listener.ConnectionLimit,
+		Http2Enable:             listener.Http2Enable,
+		Protocol:                protocol,
+		ProtocolPort:            listener.ProtocolPort,
+		DefaultPoolId:           listener.DefaultPoolId,
+		DefaultTlsContainerRef:  listener.DefaultTlsContainerRef,
+		ClientCaTlsContainerRef: listener.ClientCaTlsContainerRef,
+		SniContainerRefs:        listener.SniContainerRefs,
+		Tags:                    tags,
+		CreatedAt:               listener.CreatedAt,
+		UpdatedAt:               listener.UpdatedAt,
+		InsertHeaders: &elbmodel.InsertHeader{
+			XForwardedHost:  listener.InsertHeaders.XForwardedHost,
+			XForwardedELBIP: listener.InsertHeaders.XForwardedELBIP,
+		},
+		ProjectId:        listener.ProjectId,
+		TlsCiphersPolicy: listener.TlsCiphersPolicy,
+	}, nil
+}
+
+func (l *SharedLoadBalancer) filterListenerByPort(listeners []elbmodel.ListenerResp, service *v1.Service, port v1.ServicePort) *elbmodel.ListenerResp {
 	protocol := parseProtocol(service, port)
-	for _, l := range listenerArr {
-		if l.Protocol.Value() == protocol && l.ProtocolPort == port.Port {
-			return &l
+	for _, listener := range listeners {
+		if listener.Protocol.Value() == protocol && listener.ProtocolPort == port.Port {
+			return &listener
 		}
 	}
 
 	return nil
-}
-
-func getConnectionLimitFromAnnotation(service *v1.Service) int {
-	connLimitStr := getStringFromSvsAnnotation(service, ElbConnectionLimit, "-1")
-	connectLimit, err := strconv.Atoi(connLimitStr)
-	if err != nil {
-		klog.Warningf("Could not parse int value from '%s' error: %s, failing back to default", connLimitStr, err)
-		connectLimit = -1
-	}
-	return connectLimit
 }
 
 // UpdateLoadBalancer updates hosts under the specified load balancer.
@@ -713,7 +787,7 @@ func (l *SharedLoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName
 	}
 
 	for _, port := range service.Spec.Ports {
-		listener := filterListenerByPort(listeners, service, port)
+		listener := l.filterListenerByPort(listeners, service, port)
 		if listener == nil {
 			return status.Errorf(codes.Unavailable, "error, can not find a listener matching %s:%v",
 				port.Protocol, port.Port)
@@ -744,8 +818,6 @@ func (l *SharedLoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName
 // EnsureLoadBalancerDeleted deletes the specified load balancer
 func (l *SharedLoadBalancer) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
 	klog.Infof("EnsureLoadBalancerDeleted: called with service %s/%s", service.Namespace, service.Name)
-	serviceName := fmt.Sprintf("%s/%s", service.Namespace, service.Name)
-	klog.Infof("EnsureLoadBalancerDeleted(%s, %s)", clusterName, serviceName)
 
 	loadBalancer, err := l.getLoadBalancerInstance(ctx, clusterName, service)
 	if err != nil {
@@ -782,7 +854,7 @@ func (l *SharedLoadBalancer) deleteListener(loadBalancer *elbmodel.LoadbalancerR
 
 	listenersMatched := make([]elbmodel.ListenerResp, 0)
 	for _, port := range service.Spec.Ports {
-		listener := filterListenerByPort(listenerArr, service, port)
+		listener := l.filterListenerByPort(listenerArr, service, port)
 		if listener != nil {
 			listenersMatched = append(listenersMatched, *listener)
 		}
@@ -845,42 +917,18 @@ func unbindEIP(eipClient *wrapper.EIpClient, loadBalancer *elbmodel.Loadbalancer
 	return nil
 }
 
-// cutString makes sure the string length doesn't exceed 255, which is usually the maximum string length in HuaweiCloud.
-func cutString(original string) string {
-	ret := original
-	if len(original) > 255 {
-		ret = original[:255]
-	}
-	return ret
-}
-
-func getStringFromSvsAnnotation(service *corev1.Service, annotationKey string, defaultSetting string) string {
-	if annotationValue, ok := service.Annotations[annotationKey]; ok {
-		klog.V(4).Infof("Found a Service Annotation: %v = %v", annotationKey, annotationValue)
-		return annotationValue
-	}
-	klog.V(4).Infof("Could not find a Service Annotation; falling back on default setting: %v = %v",
-		annotationKey, defaultSetting)
-	return defaultSetting
-}
-
-func getBoolFromSvsAnnotation(service *corev1.Service, annotationKey string, defaultVal bool) bool {
-	valueStr, ok := service.Annotations[annotationKey]
-	if !ok {
-		return defaultVal
+func (l *SharedLoadBalancer) getSubnetID(service *v1.Service, node *v1.Node) (string, error) {
+	subnetID := getStringFromSvsAnnotation(service, ElbSubnetID, l.cloudConfig.VpcOpts.SubnetID)
+	if subnetID != "" {
+		return subnetID, nil
 	}
 
-	rstValue := false
-	switch valueStr {
-	case "true":
-		rstValue = true
-	case "false":
-		rstValue = false
-	default:
-		klog.Warningf("unknown %s annotation: %v, specify \"true\" or \"false\" ", annotationKey, valueStr)
-		rstValue = defaultVal
+	subnetID, err := l.getNodeSubnetID(node)
+	if err != nil {
+		return "", status.Errorf(codes.InvalidArgument, "missing subnet-id, "+
+			"can not to read subnet-id from the node also, error: %s", err)
 	}
-	return rstValue
+	return subnetID, nil
 }
 
 func (l *SharedLoadBalancer) getNodeSubnetID(node *corev1.Node) (string, error) {
@@ -899,8 +947,8 @@ func (l *SharedLoadBalancer) getNodeSubnetID(node *corev1.Node) (string, error) 
 		return "", err
 	}
 
-	for _, intfs := range interfaces {
-		for _, fixedIP := range *intfs.FixedIps {
+	for _, ia := range interfaces {
+		for _, fixedIP := range *ia.FixedIps {
 			if *fixedIP.IpAddress == ipAddress {
 				return *fixedIP.SubnetId, nil
 			}
@@ -945,39 +993,6 @@ func getHealthCheckOptionFromAnnotation(service *v1.Service, opts *config.LoadBa
 	return &checkOpts
 }
 
-func (l *SharedLoadBalancer) getSubnetID(service *v1.Service, node *v1.Node) (string, error) {
-	subnetID := getStringFromSvsAnnotation(service, ElbSubnetID, l.cloudConfig.VpcOpts.SubnetID)
-	if subnetID != "" {
-		return subnetID, nil
-	}
-
-	subnetID, err := l.getNodeSubnetID(node)
-	if err != nil {
-		return "", status.Errorf(codes.InvalidArgument, "missing subnet-id, "+
-			"can not to read subnet-id from the node also, error: %s", err)
-	}
-	return subnetID, nil
-}
-
-type CreateEIPOptions struct {
-	BandwidthSize int32  `json:"bandwidth_size"`
-	ShareType     string `json:"share_type"`
-	ShareID       string `json:"share_id"`
-
-	IPType string `json:"ip_type"`
-}
-
-func parseEIPAutoCreateOptions(service *v1.Service) (*CreateEIPOptions, error) {
-	str := getStringFromSvsAnnotation(service, AutoCreateEipOptions, "")
-	if str == "" {
-		return nil, nil
-	}
-
-	opts := &CreateEIPOptions{}
-	err := json.Unmarshal([]byte(str), opts)
-	return opts, err
-}
-
 func (l *SharedLoadBalancer) createEIP(service *v1.Service) (string, error) {
 	opts, err := parseEIPAutoCreateOptions(service)
 	if err != nil || opts == nil {
@@ -1006,6 +1021,25 @@ func (l *SharedLoadBalancer) createEIP(service *v1.Service) (string, error) {
 	return *eip.Id, nil
 }
 
+type CreateEIPOptions struct {
+	BandwidthSize int32  `json:"bandwidth_size"`
+	ShareType     string `json:"share_type"`
+	ShareID       string `json:"share_id"`
+
+	IPType string `json:"ip_type"`
+}
+
+func parseEIPAutoCreateOptions(service *v1.Service) (*CreateEIPOptions, error) {
+	str := getStringFromSvsAnnotation(service, AutoCreateEipOptions, "")
+	if str == "" {
+		return nil, nil
+	}
+
+	opts := &CreateEIPOptions{}
+	err := json.Unmarshal([]byte(str), opts)
+	return opts, err
+}
+
 func parseProtocol(service *v1.Service, port v1.ServicePort) string {
 	xForwardFor := getBoolFromSvsAnnotation(service, ElbXForwardedHost, false)
 
@@ -1017,4 +1051,45 @@ func parseProtocol(service *v1.Service, port v1.ServicePort) string {
 		protocol = ProtocolHTTP
 	}
 	return protocol
+}
+
+func getStringFromSvsAnnotation(service *corev1.Service, key string, defaultSetting string) string {
+	if annotationValue, ok := service.Annotations[key]; ok {
+		klog.V(4).Infof("Found annotation: %v = %v", key, annotationValue)
+		return annotationValue
+	}
+	klog.V(4).Infof("Annotation %s is empty, use default value: %v", key, defaultSetting)
+	return defaultSetting
+}
+
+func getBoolFromSvsAnnotation(service *corev1.Service, key string, defaultVal bool) bool {
+	value, ok := service.Annotations[key]
+	if !ok {
+		return defaultVal
+	}
+
+	rstValue := false
+	switch value {
+	case "true":
+		rstValue = true
+	case "false":
+		rstValue = false
+	default:
+		klog.Warningf("unknown %s annotation: %v, specify \"true\" or \"false\" ", key, value)
+		rstValue = defaultVal
+	}
+	return rstValue
+}
+
+func getIntFromSvsAnnotation(service *v1.Service, key string, defaultVal int) int {
+	if annotationValue, ok := service.Annotations[key]; ok {
+		klog.V(4).Infof("Found annotation: %v = %v", key, annotationValue)
+		val, err := strconv.Atoi(annotationValue)
+		if err != nil {
+			return defaultVal
+		}
+		return val
+	}
+	klog.V(4).Infof("Annotation %s is empty, use default value: %v", key, defaultVal)
+	return defaultVal
 }

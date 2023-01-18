@@ -53,6 +53,10 @@ type LoadBalancerOptions struct {
 	SessionAffinityOption elbmodel.SessionPersistence `json:"session-affinity-option"`
 	SessionAffinityFlag   string                      `json:"session-affinity-flag"`
 
+	IdleTimeout     int `json:"idle-timeout"`
+	RequestTimeout  int `json:"request-timeout"`
+	ResponseTimeout int `json:"response-timeout"`
+
 	HealthCheckFlag   string            `json:"health-check-flag"`
 	HealthCheckOption HealthCheckOption `json:"health-check-option"`
 }

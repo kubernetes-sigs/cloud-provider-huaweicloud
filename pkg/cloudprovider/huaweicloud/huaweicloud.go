@@ -69,6 +69,10 @@ const (
 	ElbXForwardedHost      = "kubernetes.io/elb.x-forwarded-host"
 	DefaultTLSContainerRef = "kubernetes.io/elb.default-tls-container-ref"
 
+	ElbIdleTimeout     = "kubernetes.io/elb.idle-timeout"
+	ElbRequestTimeout  = "kubernetes.io/elb.request-timeout"
+	ElbResponseTimeout = "kubernetes.io/elb.response-timeout"
+
 	NodeSubnetIDLabelKey = "node.kubernetes.io/subnetid"
 	ELBMarkAnnotation    = "kubernetes.io/elb.mark"
 
@@ -103,9 +107,10 @@ type Basic struct {
 	networkingOpts   *config.NetworkingOptions
 	metadataOpts     *config.MetadataOptions
 
-	sharedELBClient *wrapper.SharedLoadBalanceClient
-	eipClient       *wrapper.EIpClient
-	ecsClient       *wrapper.EcsClient
+	sharedELBClient    *wrapper.SharedLoadBalanceClient
+	dedicatedELBClient *wrapper.DedicatedLoadBalanceClient
+	eipClient          *wrapper.EIpClient
+	ecsClient          *wrapper.EcsClient
 
 	restConfig    *rest.Config
 	kubeClient    *corev1.CoreV1Client
@@ -187,9 +192,10 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 		networkingOpts:   &elbCfg.NetworkingOpts,
 		metadataOpts:     &elbCfg.MetadataOpts,
 
-		sharedELBClient: &wrapper.SharedLoadBalanceClient{AuthOpts: &cloudConfig.AuthOpts},
-		eipClient:       &wrapper.EIpClient{AuthOpts: &cloudConfig.AuthOpts},
-		ecsClient:       &wrapper.EcsClient{AuthOpts: &cloudConfig.AuthOpts},
+		sharedELBClient:    &wrapper.SharedLoadBalanceClient{AuthOpts: &cloudConfig.AuthOpts},
+		dedicatedELBClient: &wrapper.DedicatedLoadBalanceClient{AuthOpts: &cloudConfig.AuthOpts},
+		eipClient:          &wrapper.EIpClient{AuthOpts: &cloudConfig.AuthOpts},
+		ecsClient:          &wrapper.EcsClient{AuthOpts: &cloudConfig.AuthOpts},
 
 		restConfig:    restConfig,
 		kubeClient:    kubeClient,
