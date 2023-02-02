@@ -26,7 +26,7 @@ ARTIFACTS_PATH=${ARTIFACTS_PATH:-"${REPO_ROOT}/e2e-logs"}
 mkdir -p "${ARTIFACTS_PATH}"
 
 # Install ginkgo
-GO111MODULE=on go install github.com/onsi/ginkgo/v2/ginkgo@v2.6.1
+GO111MODULE=on go install github.com/onsi/ginkgo/v2/ginkgo@v2.2.0
 GOPATH=$(go env GOPATH | awk -F ':' '{print $1}')
 export PATH=$PATH:$GOPATH/bin
 
