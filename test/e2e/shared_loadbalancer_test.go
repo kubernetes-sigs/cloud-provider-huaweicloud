@@ -36,7 +36,7 @@ import (
 	helper2 "sigs.k8s.io/cloud-provider-huaweicloud/test/e2e/helper"
 )
 
-var _ = ginkgo.Describe("loadbalancer service TCP protocol testing", func() {
+var _ = ginkgo.Describe("Shared loadbalancer(TCP) service testing", func() {
 	var deployment *appsv1.Deployment
 	var service *corev1.Service
 
@@ -65,7 +65,7 @@ var _ = ginkgo.Describe("loadbalancer service TCP protocol testing", func() {
 		}
 	})
 
-	ginkgo.It("service enhanced auto testing", func() {
+	ginkgo.It("Auto create service testing", func() {
 		serviceName := serviceNamePrefix + rand.String(RandomStrLength)
 
 		annotations := map[string]string{}
@@ -105,7 +105,7 @@ var _ = ginkgo.Describe("loadbalancer service TCP protocol testing", func() {
 	})
 })
 
-var _ = ginkgo.Describe("loadbalancer service HTTP protocol testing", func() {
+var _ = ginkgo.Describe("Shared loadbalancer(HTTP) service testing", func() {
 	var deployment *appsv1.Deployment
 	var service *corev1.Service
 
@@ -134,7 +134,7 @@ var _ = ginkgo.Describe("loadbalancer service HTTP protocol testing", func() {
 		}
 	})
 
-	ginkgo.It("service enhanced auto testing", func() {
+	ginkgo.It("Auto create service testing", func() {
 		serviceName := serviceNamePrefix + rand.String(RandomStrLength)
 
 		annotations := map[string]string{}
@@ -178,7 +178,7 @@ var _ = ginkgo.Describe("loadbalancer service HTTP protocol testing", func() {
 	})
 })
 
-var _ = ginkgo.Describe("load balancing service test with the specified ID", func() {
+var _ = ginkgo.Describe("Use an existing shared load balancer (TCP) service testing", func() {
 	var deployment *appsv1.Deployment
 	var service1 *corev1.Service
 	var service2 *corev1.Service
@@ -226,7 +226,7 @@ var _ = ginkgo.Describe("load balancing service test with the specified ID", fun
 		clients.DeleteEip(authOpts, *eipID)
 	})
 
-	ginkgo.It("service1 enhanced auto testing", func() {
+	ginkgo.It("Create multiple listeners", func() {
 		if vpcOpts.SubnetID == "" {
 			ginkgo.Skip("not found HC_SUBNET_ID env, skip testing")
 			return
