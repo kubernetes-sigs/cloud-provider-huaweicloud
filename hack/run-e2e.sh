@@ -36,8 +36,8 @@ echo -e "\nRun pre run e2e"
 
 # Run e2e
 echo -e "\nRun e2e"
+set +e
 ginkgo -v --race --trace --fail-fast -p --randomize-all ./test/e2e/
-
 TESTING_RESULT=$?
 
 # Collect logs
