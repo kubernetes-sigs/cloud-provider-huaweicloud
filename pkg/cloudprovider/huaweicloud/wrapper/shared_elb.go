@@ -374,7 +374,7 @@ func (s *SharedLoadBalanceClient) DeleteAllPoolMembers(poolID string) error {
 
 	errs := make([]error, 0)
 	for _, m := range members {
-		if err := s.DeleteMember(poolID, m.Id); err != nil {
+		if err := s.DeleteMember(poolID, m.Id); err != nil && !common.IsNotFound(err) {
 			errs = append(errs, err)
 		}
 	}
