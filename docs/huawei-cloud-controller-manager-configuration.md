@@ -177,3 +177,14 @@ The following arguments are supported:
 
   * `timeout` Required. Specifies the health check timeout duration in the unit of second.
     The value ranges from `1` to `50`. Defaults to `3`.
+
+* `enable-cross-vpc` Optional. Specifies whether to enable cross-VPC backend.
+  The value can be `true` (enable cross-VPC backend) or `false` (disable cross-VPC backend).
+  The value can only be updated to `true`.
+  Only dedicated load balancer service will use this annotation.
+
+* `l4-flavor-id` Optional. Specifies the ID of a flavor at Layer 4.
+  Only dedicated load balancer service will use this annotation.
+
+* `l7-flavor-id` Optional. Specifies the ID of a flavor at Layer 7.
+  Only dedicated load balancer service will use this annotation.
