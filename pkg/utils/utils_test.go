@@ -127,11 +127,11 @@ func TestToJsonStr(t *testing.T) {
 				Field6 *bool
 			}{
 				Field1: "abcd",
-				Field2: pointer.String("abcd"),
+				Field2: pointer.StringPtr("abcd"),
 				Field3: 123,
-				Field4: pointer.Int(123),
+				Field4: intPtr(123),
 				Field5: true,
-				Field6: pointer.Bool(true),
+				Field6: pointer.BoolPtr(true),
 			},
 			expected: `{"Field1":"abcd","Field2":"abcd","Field3":123,"Field4":123,"Field5":true,"Field6":true}`,
 		},
@@ -142,7 +142,7 @@ func TestToJsonStr(t *testing.T) {
 		},
 		{
 			name:     "test3",
-			object:   pointer.Int(123),
+			object:   intPtr(123),
 			expected: "123",
 		},
 		{
@@ -152,7 +152,7 @@ func TestToJsonStr(t *testing.T) {
 		},
 		{
 			name:     "test5",
-			object:   pointer.String("abcd"),
+			object:   pointer.StringPtr("abcd"),
 			expected: "abcd",
 		},
 		{
@@ -162,7 +162,7 @@ func TestToJsonStr(t *testing.T) {
 		},
 		{
 			name:     "test7",
-			object:   pointer.Bool(true),
+			object:   pointer.BoolPtr(true),
 			expected: "true",
 		},
 	}
@@ -175,4 +175,8 @@ func TestToJsonStr(t *testing.T) {
 			}
 		})
 	}
+}
+
+func intPtr(v int) *int {
+	return &v
 }

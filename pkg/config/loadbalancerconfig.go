@@ -50,8 +50,14 @@ type LoadBalancerOptions struct {
 	LBProvider  string `json:"lb-provider"`
 	KeepEIP     bool   `json:"keep-eip"`
 
+	EnableCrossVpc bool   `json:"enable-cross-vpc"`
+	L4FlavorID     string `json:"l4-flavor-id"`
+	L7FlavorID     string `json:"l7-flavor-id"`
+
 	SessionAffinityOption elbmodel.SessionPersistence `json:"session-affinity-option"`
 	SessionAffinityFlag   string                      `json:"session-affinity-flag"`
+
+	EnableTransparentClientIP bool `json:"enable-transparent-client-ip"`
 
 	IdleTimeout     int `json:"idle-timeout"`
 	RequestTimeout  int `json:"request-timeout"`
