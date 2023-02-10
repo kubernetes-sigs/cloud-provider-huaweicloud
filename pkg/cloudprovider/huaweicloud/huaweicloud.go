@@ -23,6 +23,9 @@ import (
 	"os"
 	"time"
 
+	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -50,9 +53,8 @@ import (
 const (
 	ProviderName = "huaweicloud"
 
-	ElbClass           = "kubernetes.io/elb.class"
-	ElbID              = "kubernetes.io/elb.id"
-	ElbConnectionLimit = "kubernetes.io/elb.connection-limit"
+	ElbClass = "kubernetes.io/elb.class"
+	ElbID    = "kubernetes.io/elb.id"
 
 	ElbSubnetID          = "kubernetes.io/elb.subnet-id"
 	ElbEipID             = "kubernetes.io/elb.eip-id"
@@ -89,6 +91,7 @@ const (
 	ELBSessionSourceIPMinTimeout     = 1
 	ELBSessionSourceIPMaxTimeout     = 60
 
+	ProtocolTCP             = "TCP"
 	ProtocolUDP             = "UDP"
 	ProtocolHTTP            = "HTTP"
 	ProtocolHTTPS           = "HTTPS"
@@ -127,6 +130,47 @@ func (b Basic) sendEvent(reason, msg string, service *v1.Service) {
 	b.eventRecorder.Event(service, v1.EventTypeNormal, reason, msg)
 }
 
+func (b Basic) getSubnetID(service *v1.Service, node *v1.Node) (string, error) {
+	subnetID := getStringFromSvsAnnotation(service, ElbSubnetID, b.cloudConfig.VpcOpts.SubnetID)
+	if subnetID != "" {
+		return subnetID, nil
+	}
+
+	subnetID, err := b.getNodeSubnetID(node)
+	if err != nil {
+		return "", status.Errorf(codes.InvalidArgument, "missing subnet-id, "+
+			"can not to read subnet-id from the node also, error: %s", err)
+	}
+	return subnetID, nil
+}
+
+func (b Basic) getNodeSubnetID(node *v1.Node) (string, error) {
+	ipAddress, err := getNodeAddress(node)
+	if err != nil {
+		return "", err
+	}
+
+	instance, err := b.ecsClient.GetByName(node.Name)
+	if err != nil {
+		return "", err
+	}
+
+	interfaces, err := b.ecsClient.ListInterfaces(&ecsmodel.ListServerInterfacesRequest{ServerId: instance.Id})
+	if err != nil {
+		return "", err
+	}
+
+	for _, intfs := range interfaces {
+		for _, fixedIP := range *intfs.FixedIps {
+			if *fixedIP.IpAddress == ipAddress {
+				return *fixedIP.SubnetId, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("failed to get node subnet ID")
+}
+
 type CloudProvider struct {
 	Basic
 	providers map[LoadBalanceVersion]cloudprovider.LoadBalancer
@@ -138,7 +182,7 @@ const (
 	VersionNotNeedLB LoadBalanceVersion = iota // if the service type is not LoadBalancer
 	VersionELB                                 // classic load balancer
 	VersionShared                              // enhanced load balancer(performance share)
-	VersionPLB                                 // enhanced load balancer(performance guarantee)
+	VersionDedicated                           // enhanced load balancer(performance guarantee)
 	VersionNAT                                 // network address translation
 )
 
@@ -213,8 +257,7 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 
 	hws.providers[VersionELB] = &ELBCloud{Basic: basic}
 	hws.providers[VersionShared] = &SharedLoadBalancer{Basic: basic}
-	// TODO(RainbowMango): Support PLB later.
-	// hws.providers[VersionPLB] = &PLBCloud{lrucache: lrucache, config: &gConfig.LoadBalancer, kubeClient: kubeClient, clientPool: deprecateddynamic.NewDynamicClientPool(clientConfig), eventRecorder: recorder, subnetMap: map[string]string{}}
+	hws.providers[VersionDedicated] = &DedicatedLoadBalancer{Basic: basic}
 	hws.providers[VersionNAT] = &NATCloud{Basic: basic}
 
 	return hws, nil
@@ -314,14 +357,14 @@ func getLoadBalancerVersion(service *v1.Service) (LoadBalanceVersion, error) {
 	case "shared", "":
 		klog.Infof("Shared load balancer for service %v", service.Name)
 		return VersionShared, nil
-	case "performance":
-		klog.Infof("Load balancer Version III for service %v", service.Name)
-		return VersionPLB, nil
+	case "dedicated":
+		klog.Infof("Dedicated Load balancer for service %v", service.Name)
+		return VersionDedicated, nil
 	case "dnat":
 		klog.Infof("DNAT for service %v", service.Name)
 		return VersionNAT, nil
 	default:
-		return 0, fmt.Errorf("Unknown elb.class: %s", class)
+		return 0, fmt.Errorf("unknow load balancer elb.class: %s", class)
 	}
 }
 
