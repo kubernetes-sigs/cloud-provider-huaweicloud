@@ -18,6 +18,8 @@ package utils
 
 import (
 	"testing"
+
+	"k8s.io/utils/pointer"
 )
 
 func TestIsStrSliceContains(t *testing.T) {
@@ -103,6 +105,73 @@ func TestCutString(t *testing.T) {
 			isContain := CutString(te.origin, te.length)
 			if isContain != te.expected {
 				t.Fatalf("expected: %v, got : %v", te.expected, isContain)
+			}
+		})
+	}
+}
+
+func TestToJsonStr(t *testing.T) {
+	tests := []struct {
+		name     string
+		object   any
+		expected string
+	}{
+		{
+			name: "test1",
+			object: struct {
+				Field1 string
+				Field2 *string
+				Field3 int
+				Field4 *int
+				Field5 bool
+				Field6 *bool
+			}{
+				Field1: "abcd",
+				Field2: pointer.String("abcd"),
+				Field3: 123,
+				Field4: pointer.Int(123),
+				Field5: true,
+				Field6: pointer.Bool(true),
+			},
+			expected: `{"Field1":"abcd","Field2":"abcd","Field3":123,"Field4":123,"Field5":true,"Field6":true}`,
+		},
+		{
+			name:     "test2",
+			object:   123,
+			expected: "123",
+		},
+		{
+			name:     "test3",
+			object:   pointer.Int(123),
+			expected: "123",
+		},
+		{
+			name:     "test4",
+			object:   "abcd",
+			expected: "abcd",
+		},
+		{
+			name:     "test5",
+			object:   pointer.String("abcd"),
+			expected: "abcd",
+		},
+		{
+			name:     "test6",
+			object:   true,
+			expected: "true",
+		},
+		{
+			name:     "test7",
+			object:   pointer.Bool(true),
+			expected: "true",
+		},
+	}
+
+	for _, te := range tests {
+		t.Run(te.name, func(t *testing.T) {
+			jsonStr := ToString(te.object)
+			if jsonStr != te.expected {
+				t.Fatalf("expected: %v, got : %v", te.expected, jsonStr)
 			}
 		})
 	}
