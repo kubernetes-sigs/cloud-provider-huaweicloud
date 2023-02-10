@@ -16,6 +16,11 @@ limitations under the License.
 
 package utils
 
+import (
+	"encoding/json"
+	"fmt"
+)
+
 // IsStrSliceContains searches if a string list contains the given string or not.
 func IsStrSliceContains(list []string, strToSearch string) bool {
 	for _, item := range list {
@@ -32,4 +37,20 @@ func CutString(original string, length int) string {
 		rst = original[:length]
 	}
 	return rst
+}
+
+func ToString(a any) string {
+	if v, ok := a.(string); ok {
+		return v
+	}
+	if v, ok := a.(*string); ok {
+		return *v
+	}
+
+	b, err := json.Marshal(a)
+	if err != nil {
+		return fmt.Sprintf("%#v", a)
+	}
+
+	return string(b)
 }
