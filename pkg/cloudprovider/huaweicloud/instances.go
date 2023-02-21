@@ -29,7 +29,6 @@ import (
 	"k8s.io/klog/v2"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
-	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/utils/metadata"
 )
 
 const (
@@ -135,13 +134,9 @@ func (i *Instances) AddSSHKeyToAllInstances(_ context.Context, _ string, _ []byt
 
 // CurrentNodeName returns the name of the node we are currently running on
 // On most clouds (e.g. GCE) this is the hostname, so we provide the hostname
-func (i *Instances) CurrentNodeName(_ context.Context, _ string) (types.NodeName, error) {
-	klog.Infof("CurrentNodeName is called")
-	m, err := metadata.Get(i.metadataOpts.SearchOrder)
-	if err != nil {
-		return "", err
-	}
-	return types.NodeName(m.Name), nil
+func (i *Instances) CurrentNodeName(_ context.Context, hostname string) (types.NodeName, error) {
+	klog.Infof("CurrentNodeName is called, hostname: %s", hostname)
+	return types.NodeName(hostname), nil
 }
 
 // InstanceExistsByProviderID returns true if the instance for the given provider exists.
@@ -196,7 +191,7 @@ func (i *Instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 	klog.Infof("InstanceMetadata is called with node %s", node.Name)
 	providerID := node.Spec.ProviderID
 	if providerID == "" {
-		klog.V(4).Infof("node.Spec.ProviderID is empty, query ECS details by hostname")
+		klog.V(4).Infof("node.Spec.ProviderID is empty, query ECS details by hostname: %s", node.Name)
 		id, err := i.InstanceID(ctx, types.NodeName(node.Name))
 		if err != nil {
 			return nil, err
