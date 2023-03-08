@@ -26,7 +26,7 @@ ARTIFACTS_PATH=${ARTIFACTS_PATH:-"${REPO_ROOT}/e2e-logs"}
 mkdir -p "${ARTIFACTS_PATH}"
 
 # Install ginkgo
-GO111MODULE=on go install github.com/onsi/ginkgo/v2/ginkgo@v2.6.0
+GO111MODULE=on go install github.com/onsi/ginkgo/v2/ginkgo@v2.6.1
 GOPATH=$(go env GOPATH | awk -F ':' '{print $1}')
 export PATH=$PATH:$GOPATH/bin
 
@@ -36,8 +36,8 @@ echo -e "\nRun pre run e2e"
 
 # Run e2e
 echo -e "\nRun e2e"
+set +e
 ginkgo -v --race --trace --fail-fast -p --randomize-all ./test/e2e/
-
 TESTING_RESULT=$?
 
 # Collect logs
