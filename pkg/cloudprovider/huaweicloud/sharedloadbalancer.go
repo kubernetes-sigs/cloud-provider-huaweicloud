@@ -881,7 +881,7 @@ func (l *SharedLoadBalancer) deleteELBInstance(loadBalancer *elbmodel.Loadbalanc
 
 	eipID := getStringFromSvsAnnotation(service, ElbEipID, "")
 	keepEip := getBoolFromSvsAnnotation(service, ELBKeepEip, l.loadbalancerOpts.KeepEIP)
-	if err = unbindEIP(l.eipClient, loadBalancer, eipID, keepEip); err != nil {
+	if err = unbindEIP(l.eipClient, loadBalancer.VipPortId, eipID, keepEip); err != nil {
 		return err
 	}
 	if err = l.sharedELBClient.DeleteInstance(loadBalancer.Id); err != nil {
@@ -890,10 +890,10 @@ func (l *SharedLoadBalancer) deleteELBInstance(loadBalancer *elbmodel.Loadbalanc
 	return nil
 }
 
-func unbindEIP(eipClient *wrapper.EIpClient, loadBalancer *elbmodel.LoadbalancerResp, eipID string, keepEIP bool) error {
+func unbindEIP(eipClient *wrapper.EIpClient, vipPortID, eipID string, keepEIP bool) error {
 	if eipID == "" {
 		ips, err := eipClient.List(&eipmodel.ListPublicipsRequest{
-			PortId: &[]string{loadBalancer.VipPortId},
+			PortId: &[]string{vipPortID},
 		})
 
 		if err != nil {
