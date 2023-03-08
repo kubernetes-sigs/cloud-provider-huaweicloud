@@ -6,10 +6,20 @@ Before running the examples below,
 make sure you have installed the `huawei-cloud-controller-manager` in your Kubernetes cluster,
 refer to [Running on an Existing Cluster on Huawei Cloud](./getting-started.md).
 
+If the annotation in the service is empty, the [Loadbalancer Configuration](./huawei-cloud-controller-manager-configuration.md#loadbalancer-configuration) will be used,
+otherwise use the set value.
+
 ## Service Annotations
 
 * `kubernetes.io/elb.class` Required. Specifies the type of ELB service to use. Values are:
+  
   **shared**: Use the shared load balancer service.
+
+  **dedicated**: Use the dedicated load balancer service.
+
+* `kubernetes.io/elb.availability-zones` Optional. Specifies the list of AZs where the load balancer can be created.
+  This annotation works with dedicated load balancers (`kubernetes.io/elb.class: dedicated`),
+  and it is required when creating a dedicated load balancer service.
 
 * `kubernetes.io/elb.id` Optional. Specifies use of an existing ELB service.
   If empty, a new ELB service will be created automatically.
@@ -124,6 +134,21 @@ refer to [Running on an Existing Cluster on Huawei Cloud](./getting-started.md).
 
 * `kubernetes.io/elb.response-timeout` Optional. Specifies the response timeout for the listener. Value range: `1` to `300`.
   Unit: second. This parameter is valid when protocol is set to *HTTP* or *HTTPS*.
+
+* `kubernetes.io/elb.enable-cross-vpc` Optional. Specifies whether to enable cross-VPC backend.
+  The value can be `true` (enable cross-VPC backend) or `false` (disable cross-VPC backend).
+  The value can only be updated to `true`.
+  Only dedicated load balancer service (`kubernetes.io/elb.class: dedicated`) will use this annotation.
+
+* `kubernetes.io/elb.l4-flavor-id` Optional. Specifies the ID of a flavor at Layer 4.
+  If neither `kubernetes.io/elb.l4-flavor-id` nor `kubernetes.io/elb.l7-flavor-id` is specified, 
+  the default flavor is used.
+  Only dedicated load balancer service (`kubernetes.io/elb.class: dedicated`) will use this annotation.
+
+* `kubernetes.io/elb.l7-flavor-id` Optional. Specifies the ID of a flavor at Layer 7.
+  If neither `kubernetes.io/elb.l4-flavor-id` nor `kubernetes.io/elb.l7-flavor-id` is specified,
+  the default flavor is used.
+  Only dedicated load balancer service (`kubernetes.io/elb.class: dedicated`) will use this annotation.
 
 ## Creating a Service of LoadBalancer type
 
