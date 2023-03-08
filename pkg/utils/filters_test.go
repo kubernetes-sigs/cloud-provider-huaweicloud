@@ -21,8 +21,8 @@ import (
 	"testing"
 )
 
-func TestFilter(t *testing.T) {
-	type filterTestStructA struct {
+func TestFilterSlice(t *testing.T) {
+	type childrenStruct struct {
 		ID      int
 		PIntVal *int
 		FValue  float64
@@ -30,7 +30,7 @@ func TestFilter(t *testing.T) {
 		StrVal  string
 		PStrVal *string
 	}
-	type filterTestStructB struct {
+	type filterTestStruct struct {
 		ID      int
 		PIntVal *int
 		FValue  float64
@@ -38,16 +38,16 @@ func TestFilter(t *testing.T) {
 		StrVal  string
 		PStrVal *string
 
-		StructA  filterTestStructA
-		PStructA *filterTestStructA
+		StructA  childrenStruct
+		PStructA *childrenStruct
 	}
 
-	testData := make([]filterTestStructB, 0, 9)
+	testData := make([]filterTestStruct, 0, 9)
 	for i := 1; i <= 9; i++ {
 		val := i % 3
 		fVal := float64(i % 3)
 		strVal := "strVal_" + strconv.Itoa(i)
-		child := filterTestStructA{
+		child := childrenStruct{
 			ID:      i,
 			PIntVal: &val,
 			FValue:  fVal,
@@ -56,7 +56,7 @@ func TestFilter(t *testing.T) {
 			PStrVal: &strVal,
 		}
 
-		obj := filterTestStructB{
+		obj := filterTestStruct{
 			ID:       i,
 			PIntVal:  &val,
 			FValue:   fVal,
@@ -69,10 +69,11 @@ func TestFilter(t *testing.T) {
 		testData = append(testData, obj)
 	}
 
-	tests := []struct {
-		name     string
-		filter   map[string]interface{}
-		expected int
+	testCases := []struct {
+		name       string
+		filter     map[string]interface{}
+		expected   int
+		ignoreZero bool
 	}{
 		{
 			name: "test 1",
@@ -128,16 +129,134 @@ func TestFilter(t *testing.T) {
 				"PStructA.PIntVal": 1,
 			},
 			expected: 3,
+		}, {
+			name: "test 8",
+			filter: map[string]interface{}{
+				"PIntVal":          1,
+				"FValue":           float64(1),
+				"PFValue":          float64(1),
+				"PStructA.PIntVal": 1,
+				"StrVal":           "",
+			},
+			ignoreZero: true,
+			expected:   3,
+		}, {
+			name: "test 9",
+			filter: map[string]interface{}{
+				"PIntVal":          1,
+				"FValue":           float64(1),
+				"PFValue":          float64(1),
+				"PStructA.PIntVal": 1,
+				"StrVal":           "",
+			},
+			ignoreZero: false,
+			expected:   0,
 		},
 	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			var result []filterTestStructB
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			var result []filterTestStruct
 
-			if err := FilterSlice(testData, tt.filter, &result); err != nil {
+			if err := FilterSlice(testData, testCase.filter, &result, testCase.ignoreZero); err != nil {
 				t.Fatalf("filter error: %s", err)
-			} else if len(result) != tt.expected {
-				t.Fatalf("expected: %d, got : %d", tt.expected, len(result))
+			} else if len(result) != testCase.expected {
+				t.Fatalf("expected: %d, got : %d", testCase.expected, len(result))
+			}
+		})
+	}
+}
+
+func TestFilterSliceBasic(t *testing.T) {
+	a := "a"
+	b := "b"
+	c := "c"
+	d := "d"
+
+	target := []string{a, b, c, d}
+	filter := []string{a, b}
+
+	targetPtr := []*string{&a, &b, &c, &d}
+	filterPtr := []*string{&a, &b}
+
+	testCases := []struct {
+		name     string
+		target   any
+		filter   any
+		dedupe   bool
+		expected int
+	}{
+		{
+			name:     "test 1",
+			target:   target,
+			filter:   filter,
+			expected: 2,
+		}, {
+			name:     "test 2",
+			target:   targetPtr,
+			filter:   filter,
+			expected: 2,
+		}, {
+			name:     "test 3",
+			target:   target,
+			filter:   filterPtr,
+			expected: 2,
+		}, {
+			name:     "test 4",
+			target:   targetPtr,
+			filter:   filterPtr,
+			expected: 2,
+		}, {
+			name:     "test 5",
+			target:   &targetPtr,
+			filter:   &filterPtr,
+			expected: 2,
+		}, {
+			name:     "test 6",
+			target:   &target,
+			filter:   &filter,
+			expected: 2,
+		}, {
+			name:     "test 7",
+			target:   target,
+			filter:   &filter,
+			expected: 2,
+		}, {
+			name:     "test 8",
+			target:   &target,
+			filter:   filter,
+			expected: 2,
+		}, {
+			name:     "test 9",
+			target:   []int{0, 0, 1, 2, 3},
+			filter:   []int{0, 1},
+			expected: 3,
+		}, {
+			name:     "test 10",
+			target:   []int{0, 0, 1, 2, 3},
+			filter:   []int{0, 1},
+			dedupe:   true,
+			expected: 2,
+		}, {
+			name:     "test 11",
+			target:   []bool{true, true, true, false, false},
+			filter:   []bool{false},
+			expected: 2,
+		}, {
+			name:     "test 12",
+			target:   []bool{true, true, true, false, false},
+			filter:   []bool{false},
+			dedupe:   true,
+			expected: 1,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			var result []any
+			if err := FilterSlice(tc.target, tc.filter, &result, tc.dedupe); err != nil {
+				t.Fatalf("filter error: %s", err)
+			} else if len(result) != tc.expected {
+				t.Fatalf("expected: %d, got : %d", tc.expected, len(result))
 			}
 		})
 	}
