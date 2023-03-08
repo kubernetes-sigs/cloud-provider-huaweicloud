@@ -44,7 +44,7 @@ spec:
       serviceAccountName: cloud-controller-manager
       containers:
         - name: huawei-cloud-controller-manager
-          image: swr.cn-north-4.myhuaweicloud.com/k8s-cloudprovider/huawei-cloud-controller-manager:v0.26.0
+          image: swr.cn-north-4.myhuaweicloud.com/k8s-cloudprovider/huawei-cloud-controller-manager:v0.26.1
           args:
             - /bin/huawei-cloud-controller-manager
             - --v=5
