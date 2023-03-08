@@ -18,6 +18,8 @@ package utils
 
 import (
 	"testing"
+
+	"k8s.io/utils/pointer"
 )
 
 func TestIsStrSliceContains(t *testing.T) {
@@ -106,4 +108,75 @@ func TestCutString(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestToJsonStr(t *testing.T) {
+	tests := []struct {
+		name     string
+		object   any
+		expected string
+	}{
+		{
+			name: "test1",
+			object: struct {
+				Field1 string
+				Field2 *string
+				Field3 int
+				Field4 *int
+				Field5 bool
+				Field6 *bool
+			}{
+				Field1: "abcd",
+				Field2: pointer.StringPtr("abcd"),
+				Field3: 123,
+				Field4: intPtr(123),
+				Field5: true,
+				Field6: pointer.BoolPtr(true),
+			},
+			expected: `{"Field1":"abcd","Field2":"abcd","Field3":123,"Field4":123,"Field5":true,"Field6":true}`,
+		},
+		{
+			name:     "test2",
+			object:   123,
+			expected: "123",
+		},
+		{
+			name:     "test3",
+			object:   intPtr(123),
+			expected: "123",
+		},
+		{
+			name:     "test4",
+			object:   "abcd",
+			expected: "abcd",
+		},
+		{
+			name:     "test5",
+			object:   pointer.StringPtr("abcd"),
+			expected: "abcd",
+		},
+		{
+			name:     "test6",
+			object:   true,
+			expected: "true",
+		},
+		{
+			name:     "test7",
+			object:   pointer.BoolPtr(true),
+			expected: "true",
+		},
+	}
+
+	for _, te := range tests {
+		t.Run(te.name, func(t *testing.T) {
+			jsonStr := ToString(te.object)
+			if jsonStr != te.expected {
+				t.Fatalf("expected: %v, got : %v", te.expected, jsonStr)
+			}
+		})
+	}
+}
+
+func intPtr(v int) *int {
+	return &v
 }
