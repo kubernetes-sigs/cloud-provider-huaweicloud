@@ -266,11 +266,18 @@ func (d *DedicatedLoadBalancer) parsePublicIP(service *v1.Service) (*elbmodel.Cr
 			return nil, err
 		}
 
+		chargeModel := &elbmodel.CreateLoadBalancerBandwidthOptionChargeMode{}
+		err = chargeModel.UnmarshalJSON([]byte(eipOpt.ChargeMode))
+		if err != nil {
+			return nil, err
+		}
+
 		name := fmt.Sprintf("%s_%s", service.Namespace, service.Name)
 		publicIP.Bandwidth = &elbmodel.CreateLoadBalancerBandwidthOption{
-			Name:      &name,
-			Size:      &eipOpt.BandwidthSize,
-			ShareType: shareType,
+			Name:       &name,
+			Size:       &eipOpt.BandwidthSize,
+			ShareType:  shareType,
+			ChargeMode: chargeModel,
 		}
 	}
 	if eipOpt.ShareID != "" {
