@@ -1005,13 +1005,20 @@ func (l *SharedLoadBalancer) createEIP(service *v1.Service) (string, error) {
 		return "", err
 	}
 
+	chargeModel := &eipmodel.CreatePublicipBandwidthOptionChargeMode{}
+	err = chargeModel.UnmarshalJSON([]byte(opts.ChargeMode))
+	if err != nil {
+		return "", err
+	}
+
 	name := fmt.Sprintf("%s_%s", service.Namespace, service.Name)
 	eip, err := l.eipClient.Create(&eipmodel.CreatePublicipRequestBody{
 		Bandwidth: &eipmodel.CreatePublicipBandwidthOption{
-			Name:      &name,
-			Id:        &opts.ShareID,
-			Size:      &opts.BandwidthSize,
-			ShareType: shareType,
+			Name:       &name,
+			Id:         &opts.ShareID,
+			Size:       &opts.BandwidthSize,
+			ShareType:  shareType,
+			ChargeMode: chargeModel,
 		},
 		Publicip: &eipmodel.CreatePublicipOption{Type: opts.IPType},
 	})
@@ -1026,6 +1033,7 @@ type CreateEIPOptions struct {
 	BandwidthSize int32  `json:"bandwidth_size"`
 	ShareType     string `json:"share_type"`
 	ShareID       string `json:"share_id"`
+	ChargeMode    string `json:"charge_mode"`
 
 	IPType string `json:"ip_type"`
 }
@@ -1038,6 +1046,9 @@ func parseEIPAutoCreateOptions(service *v1.Service) (*CreateEIPOptions, error) {
 
 	opts := &CreateEIPOptions{}
 	err := json.Unmarshal([]byte(str), opts)
+	if opts.ChargeMode == "" {
+		opts.ChargeMode = "traffic"
+	}
 	return opts, err
 }
 
