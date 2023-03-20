@@ -71,6 +71,7 @@ var _ = ginkgo.Describe("Shared loadbalancer(TCP) service testing", func() {
 		annotations := map[string]string{}
 		annotations[huaweicloud.ElbClass] = "shared"
 		annotations[huaweicloud.ElbAlgorithm] = "ROUND_ROBIN"
+		annotations[huaweicloud.AutoCreateEipOptions] = `{"ip_type": "5_bgp", "bandwidth_size": 5, "share_type": "PER", "charge_mode": "bandwidth"}`
 		annotations[huaweicloud.ElbSessionAffinityFlag] = "on"
 		annotations[huaweicloud.ElbSessionAffinityOption] = `{"type":"SOURCE_IP", "persistence_timeout": 3}`
 		annotations[huaweicloud.ElbHealthCheckFlag] = "on"
