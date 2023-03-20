@@ -19,6 +19,7 @@ package e2e
 import (
 	"context"
 	"fmt"
+
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/utils/metadata"
 
 	"github.com/onsi/ginkgo/v2"
@@ -52,6 +53,7 @@ var _ = ginkgo.Describe("dedicated ELB service (TCP protocol) testing", func() {
 		serviceName := serviceNamePrefix + rand.String(RandomStrLength)
 
 		annotations := genTCPServiceAnnotations("")
+		annotations[huaweicloud.AutoCreateEipOptions] = `{"ip_type": "5_bgp", "bandwidth_size": 5, "share_type": "PER", "charge_mode": "bandwidth"}`
 
 		service = newLoadbalancerAutoService(testNamespace, serviceName, 80, annotations)
 		framework.CreateService(kubeClient, service)

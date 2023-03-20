@@ -6,13 +6,14 @@ Before running the examples below,
 make sure you have installed the `huawei-cloud-controller-manager` in your Kubernetes cluster,
 refer to [Running on an Existing Cluster on Huawei Cloud](./getting-started.md).
 
-If the annotation in the service is empty, the [Loadbalancer Configuration](./huawei-cloud-controller-manager-configuration.md#loadbalancer-configuration) will be used,
-otherwise use the set value.
+If the annotation in the service is empty,
+the [Loadbalancer Configuration](./huawei-cloud-controller-manager-configuration.md#loadbalancer-configuration)
+will be used, otherwise use the set value.
 
 ## Service Annotations
 
 * `kubernetes.io/elb.class` Required. Specifies the type of ELB service to use. Values are:
-  
+
   **shared**: Use the shared load balancer service.
 
   **dedicated**: Use the dedicated load balancer service.
@@ -38,23 +39,39 @@ otherwise use the set value.
 * `kubernetes.io/elb.keep-eip` Optional. Specifies whether to retain the EIP when deleting a ELB service
   Valid values are `'true'` and `'false'`, defaults to `'false'`.
 
-* `kubernetes.io/elb.eip-auto-create-option` Optional. Specifies whether to automatically create an EIP for the ELB service.
-  This is a json string, such as `{"ip_type": "5_bgp", "bandwidth_size": 5, "share_type": "PER"}`.
+* `kubernetes.io/elb.eip-auto-create-option` Optional. Specifies whether to automatically create an EIP for the ELB
+  service.
+  This is a JSON string, such as `{"ip_type": "5_bgp", "bandwidth_size": 5, "share_type": "PER"}`.
 
   For details:
 
-  * `ip_type` Required. Specifies the EIP type. The value can be `5_bgp` (dynamic BGP) or `5_sbgp` (static BGP).
-
-    For the `ip_type` supported by each region, please see [Assigning an EIP](https://support.huaweicloud.com/intl/en-us/api-eip/eip_api_0001.html) "Table 4 Description of the publicip field".
-
-  * `bandwidth_size` Required. Specifies the bandwidth size.
-
   * `share_type` Required. Specifies the bandwidth type. Valid values:
-    **PER**: Dedicated bandwidth
-    **WHOLE**: Shared bandwidth
+
+    **PER**: Dedicated bandwidth.
+    **WHOLE**: Shared bandwidth.
+
     If this parameter is set to **WHOLE**, the `share_id` must be specified.
 
+  * `ip_type` Optional. Specifies the EIP type. The value can be `5_bgp` (dynamic BGP) or `5_sbgp` (static BGP).
+    It is required when `share_type` is `PER`.
+
+    For the `ip_type` supported by each region, please
+    see [Assigning an EIP](https://support.huaweicloud.com/intl/en-us/api-eip/eip_api_0001.html) "Table 4 Description of
+    the publicIP field".
+
+  * `bandwidth_size` Optional. Specifies the bandwidth size. It is required when `share_type` is `PER`.
+
+  * `charge_mode` Optional. Specifies whether the bandwidth is billed by traffic or by bandwidth size.
+
+    It is required when `share_type` is `PER`. Defaults is `traffic`, valid values:
+
+    **bandwidth**: billed by bandwidth size.
+
+    **traffic**: billed by traffic.
+
   * `share_id` Optional. Specifies the bandwidth ID. You can specify an existing shared bandwidth when assigning an EIP.
+
+    It is required when `share_type` is `WHOLE`.
 
 * `kubernetes.io/elb.lb-algorithm` Optional. Specifies the load balancing algorithm of the backend server group.
   The value range varies depending on the protocol of the backend server group:
@@ -122,16 +139,20 @@ otherwise use the set value.
   Valid values are `'true'` and `'false'`, defaults to `'false'`.
   When this option is set then the cloud provider will create a Listener of type `HTTP` for a loadbalancer.
 
-* `kubernetes.io/elb.default-tls-container-ref` Optional. Specifies the ID of the server certificate used by the listener.
-  When this option is set then the cloud provider will create a Listener of type `TERMINATED_HTTPS` for a TLS Terminated loadbalancer.
+* `kubernetes.io/elb.default-tls-container-ref` Optional. Specifies the ID of the server certificate used by the
+  listener.
+  When this option is set then the cloud provider will create a Listener of type `TERMINATED_HTTPS` for a TLS Terminated
+  loadbalancer.
 
 * `kubernetes.io/elb.idle-timeout` Optional. Specifies the idle timeout for the listener. Value range: `0` to `4000`.
   Unit: second.
 
-* `kubernetes.io/elb.request-timeout` Optional. Specifies the request timeout for the listener. Value range: `1` to `300`.
+* `kubernetes.io/elb.request-timeout` Optional. Specifies the request timeout for the listener. Value range: `1`
+  to `300`.
   Unit: second. This parameter is valid when protocol is set to *HTTP* or *HTTPS*.
 
-* `kubernetes.io/elb.response-timeout` Optional. Specifies the response timeout for the listener. Value range: `1` to `300`.
+* `kubernetes.io/elb.response-timeout` Optional. Specifies the response timeout for the listener. Value range: `1`
+  to `300`.
   Unit: second. This parameter is valid when protocol is set to *HTTP* or *HTTPS*.
 
 * `kubernetes.io/elb.enable-cross-vpc` Optional. Specifies whether to enable cross-VPC backend.
@@ -140,7 +161,7 @@ otherwise use the set value.
   Only dedicated load balancer service (`kubernetes.io/elb.class: dedicated`) will use this annotation.
 
 * `kubernetes.io/elb.l4-flavor-id` Optional. Specifies the ID of a flavor at Layer 4.
-  If neither `kubernetes.io/elb.l4-flavor-id` nor `kubernetes.io/elb.l7-flavor-id` is specified, 
+  If neither `kubernetes.io/elb.l4-flavor-id` nor `kubernetes.io/elb.l7-flavor-id` is specified,
   the default flavor is used.
   Only dedicated load balancer service (`kubernetes.io/elb.class: dedicated`) will use this annotation.
 
@@ -224,7 +245,6 @@ $ curl 192.168.0.113
 <title>Welcome to nginx!</title>
 ...
 ```
-
 
 ### Example 2: Automatically create a new shared ELB service
 
