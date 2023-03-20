@@ -1005,9 +1005,10 @@ func (l *SharedLoadBalancer) createEIP(service *v1.Service) (string, error) {
 		return "", err
 	}
 
+	name := fmt.Sprintf("%s_%s", service.Namespace, service.Name)
 	eip, err := l.eipClient.Create(&eipmodel.CreatePublicipRequestBody{
 		Bandwidth: &eipmodel.CreatePublicipBandwidthOption{
-			Name:      &service.Name,
+			Name:      &name,
 			Id:        &opts.ShareID,
 			Size:      &opts.BandwidthSize,
 			ShareType: shareType,
