@@ -120,6 +120,12 @@ will be used, otherwise use the set value.
 * `kubernetes.io/elb.health-check-flag` Optional. Specifies whether to enable health check for a backend server group.
   Valid values are `on` and `off`, defaults to `on`.
 
+  > When health check is enabled, CCM will add a new inbound rule to one of the security groups of the backend service,
+  allowing traffic from `100.125.0.0/16`.
+  This rule will be removed when all LoadBalance services are removed.
+  >
+  > `100.125.0.0/16` are internal IP addresses used by ELB to check the health of backend servers.
+
 * `kubernetes.io/elb.health-check-option` Optional. Specifies the health check.
   This parameter is mandatory when the `health-check` is `on`.
   This is a json string, such as `{"delay": 3, "timeout": 15, "max_retries": 3}`.
