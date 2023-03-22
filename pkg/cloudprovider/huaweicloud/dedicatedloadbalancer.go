@@ -177,7 +177,7 @@ func (d *DedicatedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterN
 		}
 
 		// add or remove health monitor
-		if err = d.addOrRemoveHealthMonitor(loadbalancer.Id, pool, port, service); err != nil {
+		if err = d.ensureHealthCheck(loadbalancer.Id, pool, port, service, nodes[0]); err != nil {
 			return nil, err
 		}
 	}
@@ -672,11 +672,19 @@ func (d *DedicatedLoadBalancer) getSessionAffinity(service *v1.Service) *elbmode
 	}
 }
 
-func (d *DedicatedLoadBalancer) addOrRemoveHealthMonitor(loadbalancerID string, pool *elbmodel.Pool,
-	port v1.ServicePort, service *v1.Service) error {
+// ensureHealthCheck add or update or remove health check
+func (d *DedicatedLoadBalancer) ensureHealthCheck(loadbalancerID string, pool *elbmodel.Pool,
+	port v1.ServicePort, service *v1.Service, node *v1.Node) error {
 	healthCheckOpts := getHealthCheckOptionFromAnnotation(service, d.loadbalancerOpts)
 	monitorID := pool.HealthmonitorId
-	klog.Infof("add or remove health check: %s : %#v", monitorID, healthCheckOpts)
+	klog.Infof("add or update or remove health check: %s : %#v", monitorID, healthCheckOpts)
+
+	if healthCheckOpts.Enable {
+		err := d.allowHealthCheckRule(node)
+		if err != nil {
+			return err
+		}
+	}
 
 	// create health monitor
 	if monitorID == "" && healthCheckOpts.Enable {
@@ -775,7 +783,7 @@ func (d *DedicatedLoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterN
 		}
 
 		// add or remove health monitor
-		if err = d.addOrRemoveHealthMonitor(loadbalancer.Id, pool, port, service); err != nil {
+		if err = d.ensureHealthCheck(loadbalancer.Id, pool, port, service, nodes[0]); err != nil {
 			return err
 		}
 	}
