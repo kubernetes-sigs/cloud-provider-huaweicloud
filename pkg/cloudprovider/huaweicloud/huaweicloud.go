@@ -21,9 +21,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sync"
 	"time"
 
 	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
+	vpcmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/vpc/v2/model"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/api/core/v1"
@@ -42,6 +44,7 @@ import (
 	"k8s.io/cloud-provider"
 	"k8s.io/cloud-provider/options"
 	"k8s.io/klog/v2"
+	"k8s.io/utils/pointer"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
@@ -95,10 +98,14 @@ const (
 	ProtocolHTTP            = "HTTP"
 	ProtocolHTTPS           = "HTTPS"
 	ProtocolTerminatedHTTPS = "TERMINATED_HTTPS"
+
+	healthCheckCidr = "100.125.0.0/16"
 )
 
 type ELBProtocol string
 type ELBAlgorithm string
+
+var healthCheckCidrOptLock = &sync.Mutex{}
 
 type Basic struct {
 	cloudControllerManagerOpts *options.CloudControllerManagerOptions
@@ -113,7 +120,9 @@ type Basic struct {
 	dedicatedELBClient *wrapper.DedicatedLoadBalanceClient
 	eipClient          *wrapper.EIpClient
 	ecsClient          *wrapper.EcsClient
+	vpcClient          *wrapper.VpcClient
 
+	restConfig    *rest.Config
 	kubeClient    *corev1.CoreV1Client
 	eventRecorder record.EventRecorder
 }
@@ -169,6 +178,99 @@ func (b Basic) getNodeSubnetID(node *v1.Node) (string, error) {
 	return "", fmt.Errorf("failed to get node subnet ID")
 }
 
+func (b Basic) allowHealthCheckRule(node *v1.Node) error {
+	// Avoid adding security group rules in parallel.
+	healthCheckCidrOptLock.Lock()
+	defer func() {
+		healthCheckCidrOptLock.Unlock()
+	}()
+
+	instance, err := b.ecsClient.GetByName(node.Name)
+	if err != nil {
+		return err
+	}
+
+	secGroups, err := b.ecsClient.ListSecurityGroups(instance.Id)
+	if err != nil {
+		return err
+	}
+	if len(secGroups) == 0 {
+		klog.Warningf("not found any security groups on %s", node.Name)
+		return nil
+	}
+
+	for _, sg := range secGroups {
+		rules, err := b.vpcClient.ListSecurityGroupRules(sg.Id)
+		if err != nil {
+			return fmt.Errorf("failed to list security group[%s] rules: %s", sg.Id, err)
+		}
+
+		for _, r := range rules {
+			if r.Direction == "ingress" && r.RemoteIpPrefix == healthCheckCidr &&
+				r.Ethertype == "IPv4" && r.PortRangeMin == 0 && r.PortRangeMax == 0 {
+				klog.Infof("the health check IP is already in the security group, no need to add rules")
+				return nil
+			}
+		}
+	}
+
+	desc := fmt.Sprintf("DO NOT EDIT. %s are internal IP addresses used by ELB to check the health of backend"+
+		" servers. Created by K8s CCM.", healthCheckCidr)
+
+	securityGroupID := secGroups[0].Id
+	_, err = b.vpcClient.CreateSecurityGroupRule(&vpcmodel.CreateSecurityGroupRuleOption{
+		SecurityGroupId: securityGroupID,
+		Description:     &desc,
+		Direction:       "ingress",
+		Ethertype:       pointer.String("IPv4"),
+		RemoteIpPrefix:  pointer.String(healthCheckCidr),
+	})
+
+	if err != nil {
+		return fmt.Errorf("failed to create security group[%s] rules: %s", securityGroupID, err)
+	}
+
+	return err
+}
+
+func (b Basic) removeHealthCheckRules(node *v1.Node) error {
+	instance, err := b.ecsClient.GetByName(node.Name)
+	if err != nil {
+		return err
+	}
+
+	secGroups, err := b.ecsClient.ListSecurityGroups(instance.Id)
+	if err != nil {
+		return err
+	}
+	if len(secGroups) == 0 {
+		klog.Warningf("not found any security groups on %s", node.Name)
+		return nil
+	}
+
+	desc := fmt.Sprintf("DO NOT EDIT. %s are internal IP addresses used by ELB to check the health of backend"+
+		" servers. Created by K8s CCM.", healthCheckCidr)
+
+	for _, sg := range secGroups {
+		rules, err := b.vpcClient.ListSecurityGroupRules(sg.Id)
+		if err != nil {
+			return fmt.Errorf("failed to list security group[%s] rules: %s", sg.Id, err)
+		}
+
+		for _, r := range rules {
+			if r.Direction == "ingress" && r.RemoteIpPrefix == healthCheckCidr &&
+				r.Ethertype == "IPv4" && r.PortRangeMin == 0 && r.PortRangeMax == 0 && r.Description == desc {
+				err := b.vpcClient.DeleteSecurityGroupRule(r.Id)
+				if err != nil {
+					klog.Errorf("failed to delete security group[%s] rule[%s]", sg.Id, r.Id)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
 type CloudProvider struct {
 	Basic
 	providers map[LoadBalanceVersion]cloudprovider.LoadBalancer
@@ -212,7 +314,7 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 
 	klog.Infof("get loadbalancer config: %#v", elbCfg)
 
-	kubeClient, err := newKubeClient()
+	restConfig, kubeClient, err := newKubeClient()
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +340,9 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 		dedicatedELBClient: &wrapper.DedicatedLoadBalanceClient{AuthOpts: &cloudConfig.AuthOpts},
 		eipClient:          &wrapper.EIpClient{AuthOpts: &cloudConfig.AuthOpts},
 		ecsClient:          &wrapper.EcsClient{AuthOpts: &cloudConfig.AuthOpts},
+		vpcClient:          &wrapper.VpcClient{AuthOpts: &cloudConfig.AuthOpts},
 
+		restConfig:    restConfig,
 		kubeClient:    kubeClient,
 		eventRecorder: recorder,
 	}
@@ -260,18 +364,18 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 	return hws, nil
 }
 
-func newKubeClient() (*corev1.CoreV1Client, error) {
+func newKubeClient() (*rest.Config, *corev1.CoreV1Client, error) {
 	clusterCfg, err := rest.InClusterConfig()
 	if err != nil {
-		return nil, fmt.Errorf("initial cluster configuration failed with error: %v", err)
+		return nil, nil, fmt.Errorf("initial cluster configuration failed with error: %v", err)
 	}
 
 	kubeClient, err := corev1.NewForConfig(clusterCfg)
 	if err != nil {
-		return nil, fmt.Errorf("create kubeClient failed with error: %v", err)
+		return nil, nil, fmt.Errorf("create kubeClient failed with error: %v", err)
 	}
 
-	return kubeClient, nil
+	return clusterCfg, kubeClient, nil
 }
 
 func (h *CloudProvider) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
@@ -451,18 +555,20 @@ func IsPodActive(p v1.Pod) bool {
 	return false
 }
 
-type EndpointSliceListener struct {
+type LoadBalancerServiceListener struct {
 	stopChannel chan struct{}
 	kubeClient  *corev1.CoreV1Client
 	mutexLock   *mutexkv.MutexKV
+
+	serviceCache map[string]*v1.Service
 }
 
-func (e *EndpointSliceListener) stopListenerSlice() {
+func (e *LoadBalancerServiceListener) stopListenerSlice() {
 	klog.Warningf("Stop listening to Endpoints")
 	close(e.stopChannel)
 }
 
-func (e *EndpointSliceListener) startEndpointListener(handle func(*v1.Service)) {
+func (e *LoadBalancerServiceListener) startEndpointListener(handle func(*v1.Service)) {
 	klog.Infof("starting EndpointListener")
 	for {
 		endpointsList, err := e.kubeClient.Endpoints(metav1.NamespaceAll).
@@ -525,7 +631,7 @@ func (e *EndpointSliceListener) startEndpointListener(handle func(*v1.Service)) 
 	klog.Infof("EndpointListener started")
 }
 
-func (e *EndpointSliceListener) dispatcher(namespace, name string, handle func(*v1.Service)) {
+func (e *LoadBalancerServiceListener) dispatcher(namespace, name string, handle func(*v1.Service)) {
 	key := fmt.Sprintf("%s/%s", namespace, name)
 	e.mutexLock.Lock(key)
 	defer e.mutexLock.Unlock(key)
@@ -537,10 +643,75 @@ func (e *EndpointSliceListener) dispatcher(namespace, name string, handle func(*
 	handle(svc)
 }
 
+func (e *LoadBalancerServiceListener) autoRemoveHealthCheckRule(handle func(node *v1.Node) error) {
+	informer := cache.NewSharedIndexInformer(
+		&cache.ListWatch{
+			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+				return e.kubeClient.Services(metav1.NamespaceAll).List(context.Background(), options)
+			},
+			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+				return e.kubeClient.Services(metav1.NamespaceAll).Watch(context.Background(), options)
+			},
+		},
+		&v1.Service{},
+		0,
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+	)
+
+	informer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			service := obj.(*v1.Service)
+			if service.Spec.Type != v1.ServiceTypeLoadBalancer {
+				return
+			}
+
+			key := fmt.Sprintf("%s/%s", service.Namespace, service.Name)
+			e.serviceCache[key] = service
+			klog.V(6).Infof("new LoadBalancer service %s/%s added, cache size: %v",
+				service.Namespace, service.Name, len(e.serviceCache))
+		},
+		UpdateFunc: func(oldObj, newObj interface{}) {},
+		DeleteFunc: func(obj interface{}) {
+			service := obj.(*v1.Service)
+			if service.Spec.Type != v1.ServiceTypeLoadBalancer {
+				return
+			}
+			key := fmt.Sprintf("%s/%s", service.Namespace, service.Name)
+			delete(e.serviceCache, key)
+			klog.V(6).Infof("found LoadBalancer service %s/%s deleted, cache size: %v",
+				service.Namespace, service.Name, len(e.serviceCache))
+
+			if len(e.serviceCache) > 0 {
+				klog.V(6).Infof("found %v LoadBalancer service(s), "+
+					"skip clearing the security group rules for ELB health check", len(e.serviceCache))
+				return
+			}
+
+			nodes, err := e.kubeClient.Nodes().List(context.TODO(), metav1.ListOptions{
+				Limit: 1,
+			})
+			if err != nil {
+				klog.Errorf("failed to query a list of nodes in autoRemoveHealthCheckRule: %s", err)
+			}
+
+			if len(nodes.Items) <= 0 {
+				klog.Warningf("not found any nodes, skip clearing the security group rules for ELB health check")
+				return
+			}
+			klog.Infof("all LoadBalancer services has been deleted, start to clean health check rules")
+			n := nodes.Items[0]
+			handle(&n) //nolint:errcheck
+		},
+	}, 5*time.Second)
+
+	informer.Run(e.stopChannel)
+}
+
 func (h *CloudProvider) listenerDeploy() error {
-	listener := EndpointSliceListener{
-		kubeClient: h.kubeClient,
-		mutexLock:  mutexkv.NewMutexKV(),
+	listener := LoadBalancerServiceListener{
+		kubeClient:   h.kubeClient,
+		mutexLock:    mutexkv.NewMutexKV(),
+		serviceCache: make(map[string]*v1.Service, 0),
 	}
 
 	clusterName := h.cloudControllerManagerOpts.KubeCloudShared.ClusterName
@@ -550,6 +721,8 @@ func (h *CloudProvider) listenerDeploy() error {
 	}
 
 	go leaderElection(id, h.kubeClient, h.eventRecorder, func(ctx context.Context) {
+		go listener.autoRemoveHealthCheckRule(h.removeHealthCheckRules)
+
 		listener.startEndpointListener(func(service *v1.Service) {
 			if service.Spec.Type != v1.ServiceTypeLoadBalancer {
 				return
@@ -579,6 +752,11 @@ func (h *CloudProvider) listenerDeploy() error {
 }
 
 func leaderElection(id string, kubeClient *corev1.CoreV1Client, recorder record.EventRecorder, onSuccess func(context.Context), onStop func()) {
+	leaseName := "endpoint-slice-listener"
+	leaseDuration := 60 * time.Second
+	renewDeadline := 50 * time.Second
+	retryPeriod := 30 * time.Second
+
 	configmapLock := &resourcelock.ConfigMapLock{
 		ConfigMapMeta: metav1.ObjectMeta{
 			Namespace: "huawei-cloud-provider",
@@ -593,19 +771,19 @@ func leaderElection(id string, kubeClient *corev1.CoreV1Client, recorder record.
 
 	leaderelection.RunOrDie(context.TODO(), leaderelection.LeaderElectionConfig{
 		Lock:          configmapLock,
-		LeaseDuration: 30 * time.Second,
-		RenewDeadline: 20 * time.Second,
-		RetryPeriod:   10 * time.Second,
+		LeaseDuration: leaseDuration,
+		RenewDeadline: renewDeadline,
+		RetryPeriod:   retryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
-				klog.V(4).Infof("[Listener EndpointSlices] leader election got: %s", id)
+				klog.V(6).Infof("[Listener EndpointSlices] leader election got: %s", id)
 				onSuccess(ctx)
 			},
 			OnStoppedLeading: func() {
-				klog.V(4).Infof("[Listener EndpointSlices] leader election lost: %s", id)
+				klog.V(6).Infof("[Listener EndpointSlices] leader election lost: %s", id)
 				onStop()
 			},
 		},
-		Name: "endpoint-slice-listener",
+		Name: leaseName,
 	})
 }
