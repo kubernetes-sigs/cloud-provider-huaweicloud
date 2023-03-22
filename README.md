@@ -31,6 +31,7 @@ Currently `huawei-cloud-controller-manager` implements:
 - [Running on an Existing Kubernetes Cluster on Huawei Cloud](/docs/getting-started.md)
 - [Huawei Cloud Controller Manager Configurations](/docs/huawei-cloud-controller-manager-configuration.md)
 - [Usage Guide](/docs/usage-guide.md)
+- [IAM Policy](/docs/iam-policy.md) for Kubernetes Cloud Provider on Huawei Cloud.
 
 ## More About Cloud Controller Manager
 
