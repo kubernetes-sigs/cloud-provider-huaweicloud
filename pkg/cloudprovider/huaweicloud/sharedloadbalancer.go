@@ -197,7 +197,7 @@ func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName
 		}
 
 		// add or remove health monitor
-		if err = l.addOrRemoveHealthMonitor(loadbalancer.Id, pool, port, service); err != nil {
+		if err = l.ensureHealthCheck(loadbalancer.Id, pool, port, service, nodes[0]); err != nil {
 			return nil, err
 		}
 	}
@@ -292,10 +292,19 @@ func (l *SharedLoadBalancer) createLoadbalancer(clusterName, subnetID string, se
 	return loadbalancer, nil
 }
 
-func (l *SharedLoadBalancer) addOrRemoveHealthMonitor(loadbalancerID string, pool *elbmodel.PoolResp, port v1.ServicePort, service *v1.Service) error {
+// ensureHealthCheck add or update or remove health check
+func (l *SharedLoadBalancer) ensureHealthCheck(loadbalancerID string, pool *elbmodel.PoolResp,
+	port v1.ServicePort, service *v1.Service, node *v1.Node) error {
 	healthCheckOpts := getHealthCheckOptionFromAnnotation(service, l.loadbalancerOpts)
 	monitorID := pool.HealthmonitorId
-	klog.Infof("add or remove health check: %s : %#v", monitorID, healthCheckOpts)
+	klog.Infof("add or update or remove health check: %s : %#v", monitorID, healthCheckOpts)
+
+	if healthCheckOpts.Enable {
+		err := l.allowHealthCheckRule(node)
+		if err != nil {
+			return err
+		}
+	}
 
 	protocolStr := parseProtocol(service, port)
 	// create health monitor
@@ -808,7 +817,7 @@ func (l *SharedLoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName
 		}
 
 		// add or remove health monitor
-		if err = l.addOrRemoveHealthMonitor(loadbalancer.Id, pool, port, service); err != nil {
+		if err = l.ensureHealthCheck(loadbalancer.Id, pool, port, service, nodes[0]); err != nil {
 			return err
 		}
 	}
@@ -978,10 +987,9 @@ func getHealthCheckOptionFromAnnotation(service *v1.Service, opts *config.LoadBa
 	checkOpts := opts.HealthCheckOption
 
 	healthCheckFlag := getStringFromSvsAnnotation(service, ElbHealthCheckFlag, opts.HealthCheckFlag)
-	if healthCheckFlag == "off" || healthCheckFlag == "" {
-		checkOpts.Enable = false
+	if healthCheckFlag == "" || healthCheckFlag == "on" {
+		checkOpts.Enable = true
 	}
-	checkOpts.Enable = true
 
 	str := getStringFromSvsAnnotation(service, ElbHealthCheckOptions, "")
 	if str == "" {
