@@ -174,6 +174,16 @@ func (e *EcsClient) BuildAddresses(server *model.ServerDetail, interfaces []mode
 	return addrs, nil
 }
 
+func (e *EcsClient) ListSecurityGroups(instanceID string) ([]model.NovaSecurityGroup, error) {
+	var rst []model.NovaSecurityGroup
+	err := e.wrapper(func(c *ecs.EcsClient) (interface{}, error) {
+		return c.NovaListServerSecurityGroups(&model.NovaListServerSecurityGroupsRequest{
+			ServerId: instanceID,
+		})
+	}, "SecurityGroups", &rst)
+	return rst, err
+}
+
 // addToNodeAddresses appends the NodeAddresses to the passed-by-pointer slice, only if they do not already exist.
 func addToNodeAddresses(addresses *[]v1.NodeAddress, addAddresses ...v1.NodeAddress) {
 	for _, add := range addAddresses {

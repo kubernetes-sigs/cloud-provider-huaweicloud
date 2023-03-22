@@ -75,7 +75,7 @@ var _ = ginkgo.Describe("Shared loadbalancer(TCP) service testing", func() {
 		annotations[huaweicloud.ElbSessionAffinityFlag] = "on"
 		annotations[huaweicloud.ElbSessionAffinityOption] = `{"type":"SOURCE_IP", "persistence_timeout": 3}`
 		annotations[huaweicloud.ElbHealthCheckFlag] = "on"
-		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 3, "timeout": 15, "max_retries": 3}`
+		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 4, "timeout": 16, "max_retries": 4}`
 
 		service = newLoadbalancerAutoService(testNamespace, serviceName, 80, annotations)
 		framework.CreateService(kubeClient, service)
@@ -144,7 +144,7 @@ var _ = ginkgo.Describe("Shared loadbalancer(HTTP) service testing", func() {
 		annotations[huaweicloud.ElbSessionAffinityFlag] = "on"
 		annotations[huaweicloud.ElbSessionAffinityOption] = `{"type":"SOURCE_IP", "persistence_timeout": 3}`
 		annotations[huaweicloud.ElbHealthCheckFlag] = "on"
-		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 3, "timeout": 15, "max_retries": 3}`
+		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 4, "timeout": 16, "max_retries": 4}`
 		annotations[huaweicloud.ElbXForwardedHost] = "true"
 		annotations[huaweicloud.ElbIdleTimeout] = "120"
 		annotations[huaweicloud.ElbRequestTimeout] = "120"
@@ -239,7 +239,7 @@ var _ = ginkgo.Describe("Use an existing shared load balancer (TCP) service test
 		annotations[huaweicloud.ElbAlgorithm] = "ROUND_ROBIN"
 		annotations[huaweicloud.ElbSessionAffinityFlag] = "on"
 		annotations[huaweicloud.ElbSessionAffinityOption] = `{"type":"SOURCE_IP", "persistence_timeout": 5}`
-		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 3, "timeout": 15, "max_retries": 3}`
+		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 4, "timeout": 16, "max_retries": 4}`
 		annotations[huaweicloud.ElbXForwardedHost] = "true"
 		annotations[huaweicloud.ElbID] = *elbID
 		annotations[huaweicloud.ElbEipID] = *eipID
