@@ -76,6 +76,8 @@ var _ = ginkgo.Describe("Shared loadbalancer(TCP) service testing", func() {
 		annotations[huaweicloud.ElbSessionAffinityOption] = `{"type":"SOURCE_IP", "persistence_timeout": 3}`
 		annotations[huaweicloud.ElbHealthCheckFlag] = "on"
 		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 4, "timeout": 16, "max_retries": 4}`
+		annotations[huaweicloud.ElbHealthCheckOptions] = `{"delay": 3, "timeout": 15, "max_retries": 3}`
+		annotations[huaweicloud.ElbEnableTransparentClientIP] = "true"
 
 		service = newLoadbalancerAutoService(testNamespace, serviceName, 80, annotations)
 		framework.CreateService(kubeClient, service)
