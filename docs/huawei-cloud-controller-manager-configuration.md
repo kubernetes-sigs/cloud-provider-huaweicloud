@@ -184,6 +184,27 @@ The following arguments are supported:
   * `timeout` Required. Specifies the health check timeout duration in the unit of second.
     The value ranges from `1` to `50`. Defaults to `3`.
 
+* `enable-transparent-client-ip` Specifies whether to pass source IP addresses of the clients to backend servers.
+  Valid values are `'true'` and `'false'`.
+
+  TCP or UDP listeners of shared load balancers:
+  The value can be **true** or **false**, and the default value is **false** if this annotation is not passed.
+
+  HTTP or HTTPS listeners of shared load balancers:
+  The value can only be **true**, and the default value is **true** if this annotation is not passed.
+
+  All listeners of dedicated load balancers:
+  The value can only be **true**, and the default value is **true** if this annotation is not passed.
+
+  > Note:
+  >
+  > If this function is enabled, the load balancer communicates with backend servers using their real IP addresses.
+  > Ensure that security group rules and access control policies are correctly configured.
+  >
+  > If this function is enabled, a server cannot serve as both a backend server and a client.
+  >
+  > If this function is enabled, backend server specifications cannot be changed.
+
 * `enable-cross-vpc` Optional. Specifies whether to enable cross-VPC backend.
   The value can be `true` (enable cross-VPC backend) or `false` (disable cross-VPC backend).
   The value can only be updated to `true`.
