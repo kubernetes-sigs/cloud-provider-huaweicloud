@@ -676,6 +676,13 @@ func (l *SharedLoadBalancer) createListener(loadbalancerID string, service *v1.S
 		}
 	}
 
+	if protocol == ProtocolTCP || protocol == ProtocolUDP {
+		// TCP or UDP listeners transparent_client_ip_enable can be true or false.
+		transparentClientIPEnable := getBoolFromSvsAnnotation(service, ElbEnableTransparentClientIP,
+			l.loadbalancerOpts.EnableTransparentClientIP)
+		createOpt.TransparentClientIpEnable = &transparentClientIPEnable
+	}
+
 	listener, err := l.dedicatedELBClient.CreateListener(createOpt)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "Failed to create listener for loadbalancer %s: %v",
@@ -706,6 +713,13 @@ func (l *SharedLoadBalancer) updateListener(listener *elbmodel.ListenerResp, ser
 		if timeout := getIntFromSvsAnnotation(service, ElbResponseTimeout, globalOpts.ResponseTimeout); timeout != 0 {
 			updateOpt.MemberTimeout = pointer.Int32(int32(timeout))
 		}
+	}
+
+	if listener.Protocol.Value() == ProtocolTCP || listener.Protocol.Value() == ProtocolUDP {
+		// TCP or UDP listeners transparent_client_ip_enable can be true or false.
+		transparentClientIPEnable := getBoolFromSvsAnnotation(service, ElbEnableTransparentClientIP,
+			l.loadbalancerOpts.EnableTransparentClientIP)
+		updateOpt.TransparentClientIpEnable = &transparentClientIPEnable
 	}
 
 	err := l.dedicatedELBClient.UpdateListener(listener.Id, updateOpt)

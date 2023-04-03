@@ -141,6 +141,27 @@ will be used, otherwise use the set value.
   * `timeout` Required. Specifies the health check timeout duration in the unit of second.
     The value ranges from `1` to `50`. Defaults to `3`.
 
+* `kubernetes.io/elb.enable-transparent-client-ip` Optional. Specifies whether to pass source IP addresses of the clients to backend servers.
+  Valid values are `'true'` and `'false'`.
+
+  TCP or UDP listeners of shared load balancers: 
+  The value can be **true** or **false**, and the default value is **false** if this annotation is not passed.
+
+  HTTP or HTTPS listeners of shared load balancers: 
+  The value can only be **true**, and the default value is **true** if this annotation is not passed.
+
+  All listeners of dedicated load balancers: 
+  The value can only be **true**, and the default value is **true** if this annotation is not passed.
+
+  > Note:
+  > 
+  > If this function is enabled, the load balancer communicates with backend servers using their real IP addresses. 
+  > Ensure that security group rules and access control policies are correctly configured.
+  > 
+  > If this function is enabled, a server cannot serve as both a backend server and a client.
+  > 
+  > If this function is enabled, backend server specifications cannot be changed.
+
 * `kubernetes.io/elb.x-forwarded-host` Optional. Specifies whether to rewrite the `X-Forwarded-Host` header.
   If this function is enabled, `X-Forwarded-Host` is rewritten based on Host in the request and sent to backend servers.
 
@@ -216,7 +237,7 @@ kind: Service
 metadata:
   annotations:
     kubernetes.io/elb.class: shared
-    kubernetes.io/elb.id: xxxx  # Please fill your ELB service ID.
+    kubernetes.io/elb.id: xx  # Please replace xx with your ELB instance ID.
     kubernetes.io/elb.lb-algorithm: ROUND_ROBIN
   labels:
     app: nginx
@@ -263,6 +284,7 @@ metadata:
   annotations:
     kubernetes.io/elb.class: shared
     kubernetes.io/elb.lb-algorithm: ROUND_ROBIN
+    kubernetes.io/elb.enable-transparent-client-ip: 'true'  # Preserve client IP to backend servers.
   labels:
     app: nginx
   name: loadbalancer-service-demo-02
