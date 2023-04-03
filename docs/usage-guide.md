@@ -35,6 +35,7 @@ will be used, otherwise use the set value.
   Only IPv4 subnets are supported.
 
 * `kubernetes.io/elb.eip-id` Optional. Specifies use the specified EIP for ELB service.
+   This field has no effect when using an existing ELB service.
 
 * `kubernetes.io/elb.keep-eip` Optional. Specifies whether to retain the EIP when deleting a ELB service
   Valid values are `'true'` and `'false'`, defaults to `'false'`.
