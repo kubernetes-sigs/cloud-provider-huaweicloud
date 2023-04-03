@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"strings"
 
-	eipmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/eip/v2/model"
 	elbmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v3/model"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -61,27 +60,20 @@ func (d *DedicatedLoadBalancer) GetLoadBalancer(ctx context.Context, clusterName
 		return nil, false, err
 	}
 
-	portID := loadbalancer.VipPortId
-	if portID == "" {
-		return nil, false, status.Errorf(codes.Unavailable, "The ELB %s VipPortId is empty, "+
-			"and the instance is unavailable", d.GetLoadBalancerName(ctx, clusterName, service))
-	}
+	lbStatus := d.buildStatus(loadbalancer)
+	return lbStatus, true, nil
+}
+
+func (d *DedicatedLoadBalancer) buildStatus(loadbalancer *elbmodel.LoadBalancer) *v1.LoadBalancerStatus {
 	ingressIP := loadbalancer.VipAddress
-
-	ips, err := d.eipClient.List(&eipmodel.ListPublicipsRequest{PortId: &[]string{portID}})
-	if err != nil {
-		return nil, false, status.Errorf(codes.Unavailable, "error querying EIP list base on PortId (%s): %s",
-			portID, err)
+	if len(loadbalancer.Eips) > 0 && loadbalancer.Eips[0].EipAddress != nil {
+		ingressIP = *loadbalancer.Eips[0].EipAddress
 	}
-	if len(ips) > 0 {
-		ingressIP = *ips[0].PublicIpAddress
-	}
-
 	return &v1.LoadBalancerStatus{
 		Ingress: []v1.LoadBalancerIngress{
 			{IP: ingressIP},
 		},
-	}, true, nil
+	}
 }
 
 func (d *DedicatedLoadBalancer) getLoadBalancerInstance(ctx context.Context, clusterName string, service *v1.Service,
@@ -190,11 +182,8 @@ func (d *DedicatedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterN
 		}
 	}
 
-	ingressIP := loadbalancer.VipAddress
-
-	return &v1.LoadBalancerStatus{
-		Ingress: []v1.LoadBalancerIngress{{IP: ingressIP}},
-	}, nil
+	lbStatus := d.buildStatus(loadbalancer)
+	return lbStatus, nil
 }
 
 func (d *DedicatedLoadBalancer) createLoadbalancer(clusterName, subnetID string, service *v1.Service) (*elbmodel.LoadBalancer, error) {
@@ -362,8 +351,6 @@ func (d *DedicatedLoadBalancer) updateListener(listener *elbmodel.Listener, serv
 	transparentClientIPEnable := getBoolFromSvsAnnotation(service, ElbEnableTransparentClientIP,
 		d.loadbalancerOpts.EnableTransparentClientIP)
 	if transparentClientIPEnable {
-		updateOpts.TransparentClientIpEnable = &transparentClientIPEnable
-	} else if protocol == ProtocolUDP || protocol == ProtocolTCP {
 		updateOpts.TransparentClientIpEnable = &transparentClientIPEnable
 	}
 
@@ -709,8 +696,13 @@ func (d *DedicatedLoadBalancer) ensureHealthCheck(loadbalancerID string, pool *e
 	return nil
 }
 
-func (d *DedicatedLoadBalancer) updateHealthMonitor(id string, protocol v1.Protocol, opts *config.HealthCheckOption,
-) error {
+func (d *DedicatedLoadBalancer) updateHealthMonitor(id string, protocol v1.Protocol, opts *config.HealthCheckOption) error {
+	if protocol == ProtocolHTTPS || protocol == ProtocolTerminatedHTTPS {
+		protocol = ProtocolHTTP
+	} else if protocol == ProtocolUDP {
+		protocol = "UDP_CONNECT"
+	}
+
 	monitorProtocol := string(protocol)
 	if protocol == v1.ProtocolSCTP {
 		return status.Errorf(codes.InvalidArgument, "Protocol SCTP not supported")
@@ -725,6 +717,12 @@ func (d *DedicatedLoadBalancer) updateHealthMonitor(id string, protocol v1.Proto
 }
 
 func (d *DedicatedLoadBalancer) createHealthMonitor(loadbalancerID, poolID, protocol string, opts *config.HealthCheckOption) (*elbmodel.HealthMonitor, error) {
+	if protocol == ProtocolHTTPS || protocol == ProtocolTerminatedHTTPS {
+		protocol = ProtocolHTTP
+	} else if protocol == ProtocolUDP {
+		protocol = "UDP_CONNECT"
+	}
+
 	monitor, err := d.dedicatedELBClient.CreateHealthMonitor(&elbmodel.CreateHealthMonitorOption{
 		PoolId:     poolID,
 		Type:       protocol,
@@ -857,13 +855,26 @@ func (d *DedicatedLoadBalancer) deleteELBInstance(loadBalancer *elbmodel.LoadBal
 		return err
 	}
 
-	eipID := getStringFromSvsAnnotation(service, ElbEipID, "")
+	if err = d.dedicatedELBClient.DeleteInstance(loadBalancer.Id); err != nil {
+		return err
+	}
+
 	keepEip := getBoolFromSvsAnnotation(service, ELBKeepEip, d.loadbalancerOpts.KeepEIP)
-	if err = unbindEIP(d.eipClient, loadBalancer.VipPortId, eipID, keepEip); err != nil {
-		return err
+	if keepEip {
+		return nil
 	}
-	if err = d.sharedELBClient.DeleteInstance(loadBalancer.Id); err != nil {
-		return err
+
+	eipID := getStringFromSvsAnnotation(service, ElbEipID, "")
+	if eipID == "" {
+		if eipID == "" && len(loadBalancer.Eips) > 0 && loadBalancer.Eips[0].EipId != nil {
+			eipID = *loadBalancer.Eips[0].EipId
+		}
 	}
+
+	klog.Infof("deleting unbind EIP: %v", eipID)
+	if err := d.eipClient.Delete(eipID); err != nil {
+		klog.Errorf("failed to delete EIP: %s", loadBalancer.Eips[0].EipAddress)
+	}
+
 	return nil
 }
