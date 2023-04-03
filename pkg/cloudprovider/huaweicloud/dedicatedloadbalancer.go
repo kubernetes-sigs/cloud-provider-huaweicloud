@@ -352,8 +352,6 @@ func (d *DedicatedLoadBalancer) updateListener(listener *elbmodel.Listener, serv
 		d.loadbalancerOpts.EnableTransparentClientIP)
 	if transparentClientIPEnable {
 		updateOpts.TransparentClientIpEnable = &transparentClientIPEnable
-	} else if protocol == ProtocolUDP || protocol == ProtocolTCP {
-		updateOpts.TransparentClientIpEnable = &transparentClientIPEnable
 	}
 
 	if timeout := getIntFromSvsAnnotation(service, ElbIdleTimeout, d.loadbalancerOpts.IdleTimeout); timeout != 0 {
@@ -698,8 +696,13 @@ func (d *DedicatedLoadBalancer) ensureHealthCheck(loadbalancerID string, pool *e
 	return nil
 }
 
-func (d *DedicatedLoadBalancer) updateHealthMonitor(id string, protocol v1.Protocol, opts *config.HealthCheckOption,
-) error {
+func (d *DedicatedLoadBalancer) updateHealthMonitor(id string, protocol v1.Protocol, opts *config.HealthCheckOption) error {
+	if protocol == ProtocolHTTPS || protocol == ProtocolTerminatedHTTPS {
+		protocol = ProtocolHTTP
+	} else if protocol == ProtocolUDP {
+		protocol = "UDP_CONNECT"
+	}
+
 	monitorProtocol := string(protocol)
 	if protocol == v1.ProtocolSCTP {
 		return status.Errorf(codes.InvalidArgument, "Protocol SCTP not supported")
@@ -714,6 +717,12 @@ func (d *DedicatedLoadBalancer) updateHealthMonitor(id string, protocol v1.Proto
 }
 
 func (d *DedicatedLoadBalancer) createHealthMonitor(loadbalancerID, poolID, protocol string, opts *config.HealthCheckOption) (*elbmodel.HealthMonitor, error) {
+	if protocol == ProtocolHTTPS || protocol == ProtocolTerminatedHTTPS {
+		protocol = ProtocolHTTP
+	} else if protocol == ProtocolUDP {
+		protocol = "UDP_CONNECT"
+	}
+
 	monitor, err := d.dedicatedELBClient.CreateHealthMonitor(&elbmodel.CreateHealthMonitorOption{
 		PoolId:     poolID,
 		Type:       protocol,
