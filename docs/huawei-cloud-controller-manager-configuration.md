@@ -161,6 +161,12 @@ The following arguments are supported:
 * `health-check-flag` Specifies whether to enable health check for a backend server group.
   Valid values are `on` and `off`, defaults to `on`.
 
+  > When health check is enabled, CCM will add a new inbound rule to one of the security groups of the backend service,
+  allowing traffic from `100.125.0.0/16`.
+  This rule will be removed when all LoadBalance services are removed.
+  >
+  > `100.125.0.0/16` are internal IP addresses used by ELB to check the health of backend servers.
+
 * `health-check-option` Specifies the health check.
 
   This parameter is mandatory when the `health-check` is `on`.
