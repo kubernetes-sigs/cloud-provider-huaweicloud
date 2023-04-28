@@ -18,7 +18,7 @@ will be used, otherwise use the set value.
 
   **dedicated**: Use the dedicated load balancer service.
 
-* `kubernetes.io/elb.availability-zones` Optional. Specifies the list of AZs where the load balancer can be created.
+* `kubernetes.io/elb.availability-zones` Optional. Specifies AZs sperated by a semi-colon(;), AZs are  where the load balancer can be created.
   This annotation works with dedicated load balancers (`kubernetes.io/elb.class: dedicated`),
   and it is required when creating a dedicated load balancer service.
 
