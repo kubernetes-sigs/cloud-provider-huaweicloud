@@ -27,6 +27,8 @@ id=
 subnet-id=
 ```
 
+> After modification, CCM needs to be restarted to load the data.
+
 The following arguments are supported:
 
 ### Global
@@ -89,6 +91,8 @@ data:
        }
     }
 ```
+
+> After modification, CCM needs to be restarted to load the data.
 
 The following arguments are supported:
 
