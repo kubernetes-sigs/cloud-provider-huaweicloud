@@ -121,11 +121,11 @@ func LoadELBConfig(data map[string]string) *LoadbalancerConfig {
 	}
 	networkingOptions := []byte(data["networkingOption"])
 	if err := json.Unmarshal(networkingOptions, &cfg.NetworkingOpts); err != nil {
-		klog.Errorf("error parsing networkingOption config: %s", err)
+		klog.Errorf("error parsing networkingOptions config: %s", err)
 	}
-	metadataOption := []byte(data["metadataOption"])
-	if err := json.Unmarshal(metadataOption, &cfg.MetadataOpts); err != nil {
-		klog.Errorf("error parsing metadataOption config: %s", err)
+	metadataOptions := []byte(data["metadataOption"])
+	if err := json.Unmarshal(metadataOptions, &cfg.MetadataOpts); err != nil {
+		klog.Errorf("error parsing metadataOptions config: %s", err)
 	}
 	return cfg
 }
