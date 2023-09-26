@@ -20,8 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strconv"
-
 	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 	eipmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/eip/v2/model"
 	elbmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v2/model"
@@ -31,8 +29,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
+	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
+	"strconv"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
@@ -138,8 +139,10 @@ func ensureLoadBalancerValidation(service *v1.Service, nodes []*v1.Node) error {
 //
 //nolint:gocyclo
 func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
-	klog.Infof("EnsureLoadBalancer: called with service %s/%s, node: %d",
-		service.Namespace, service.Name, len(nodes))
+	klog.Infof("EnsureLoadBalancer: called with service %s/%s, node: %d", service.Namespace, service.Name, len(nodes))
+	if !l.isSupportedSvc(service) {
+		return nil, cloudprovider.ImplementedElsewhere
+	}
 
 	if err := ensureLoadBalancerValidation(service, nodes); err != nil {
 		return nil, err
@@ -334,15 +337,20 @@ func (l *SharedLoadBalancer) updateHealthMonitor(id, protocol string, opts *conf
 	if protocol == ProtocolHTTPS || protocol == ProtocolTerminatedHTTPS {
 		protocol = ProtocolHTTP
 	} else if protocol == ProtocolUDP {
-		protocol = "UDP_CONNECT"
+		protocol = ""
 	}
 
-	return l.sharedELBClient.UpdateHealthMonitor(id, &elbmodel.UpdateHealthmonitorReq{
-		Type:       &protocol,
+	updateOpts := elbmodel.UpdateHealthmonitorReq{
 		Timeout:    &opts.Timeout,
 		Delay:      &opts.Delay,
 		MaxRetries: &opts.MaxRetries,
-	})
+	}
+
+	if protocol != "" {
+		updateOpts.Type = &protocol
+	}
+
+	return l.sharedELBClient.UpdateHealthMonitor(id, &updateOpts)
 }
 
 func (l *SharedLoadBalancer) createHealthMonitor(loadbalancerID, poolID, protocol string,
@@ -378,7 +386,7 @@ func (l *SharedLoadBalancer) createHealthMonitor(loadbalancerID, poolID, protoco
 }
 
 func (l *SharedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.LoadbalancerResp, service *v1.Service, pool *elbmodel.PoolResp,
-	port v1.ServicePort, nodes []*v1.Node) error {
+	svcPort v1.ServicePort, nodes []*v1.Node) error {
 
 	members, err := l.sharedELBClient.ListMembers(&elbmodel.ListMembersRequest{PoolId: pool.Id})
 	if err != nil {
@@ -416,7 +424,8 @@ func (l *SharedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.Loadbalan
 				pod.Namespace, pod.Spec.NodeName)
 		}
 
-		address, err := getNodeAddress(node)
+		//address, err := getNodeAddress(node)
+		address, portNum, err := getMemberIP(service, node, pod, svcPort)
 		if err != nil {
 			if common.IsNotFound(err) {
 				// Node failure, do not create member
@@ -427,18 +436,18 @@ func (l *SharedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.Loadbalan
 			}
 		}
 
-		key := fmt.Sprintf("%s:%d", address, port.NodePort)
+		key := fmt.Sprintf("%s:%d", address, portNum)
 		if existsMember[key] {
 			klog.Infof("[addOrRemoveMembers] node already exists, skip adding, name: %s, address: %s, port: %d",
-				node.Name, address, port.NodePort)
-			members = popMember(members, address, port.NodePort)
+				node.Name, address, portNum)
+			members = popMember(members, address, portNum)
 			continue
 		}
 
 		klog.Infof("[addOrRemoveMembers] add node to pool, name: %s, address: %s, port: %d",
-			node.Name, address, port.NodePort)
+			node.Name, address, portNum)
 		// Add a member to the pool.
-		if err = l.addMember(loadbalancer, pool, port, node); err != nil {
+		if err = l.addMember(service, loadbalancer.Id, pool.Id, svcPort, pod, node); err != nil {
 			return err
 		}
 		existsMember[key] = true
@@ -457,26 +466,62 @@ func (l *SharedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.Loadbalan
 	return nil
 }
 
-func (l *SharedLoadBalancer) addMember(loadbalancer *elbmodel.LoadbalancerResp, pool *elbmodel.PoolResp, port v1.ServicePort, node *v1.Node) error {
-	klog.Infof("Add a member(%s) to pool %s", node.Name, pool.Id)
-	address, err := getNodeAddress(node)
+func getMemberIP(service *v1.Service, node *v1.Node, pod v1.Pod, svcPort v1.ServicePort) (string, int32, error) {
+	if service.Spec.AllocateLoadBalancerNodePorts != nil && *service.Spec.AllocateLoadBalancerNodePorts {
+		klog.V(6).Infof("add member using the Node's IP and port, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
+
+		address, err := getNodeAddress(node)
+		if err != nil {
+			return "", 0, err
+		}
+		return address, svcPort.NodePort, nil
+	}
+
+	if service.Spec.AllocateLoadBalancerNodePorts != nil && !*service.Spec.AllocateLoadBalancerNodePorts {
+		klog.V(6).Infof("add member using the Pod's IP and port, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
+		// get IP and port from Pod
+		if svcPort.TargetPort.Type == intstr.Int {
+			klog.V(6).Infof("targetPort is a number, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
+			return pod.Status.PodIP, svcPort.TargetPort.IntVal, nil
+		}
+
+		klog.V(6).Infof("targetPort is a name, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
+		for _, c := range pod.Spec.Containers {
+			for _, p := range c.Ports {
+				if p.Name == svcPort.TargetPort.StrVal && string(p.Protocol) == string(svcPort.Protocol) {
+					return pod.Status.PodIP, p.ContainerPort, nil
+				}
+			}
+		}
+	}
+	return "", 0, fmt.Errorf("not found member IP and port")
+}
+
+func (l *SharedLoadBalancer) addMember(service *v1.Service, elbID, poolID string, svcPort v1.ServicePort, pod v1.Pod, node *v1.Node) error {
+	klog.Infof("Add a member(%s) to pool %s", node.Name, poolID)
+	address, port, err := getMemberIP(service, node, pod, svcPort)
 	if err != nil {
 		return err
 	}
 
-	_, err = l.sharedELBClient.AddMember(pool.Id, &elbmodel.CreateMemberReq{
-		ProtocolPort: port.NodePort,
-		SubnetId:     loadbalancer.VipSubnetId,
+	subnetID, err := l.getSubnetID(service, node)
+	if err != nil {
+		return err
+	}
+
+	_, err = l.sharedELBClient.AddMember(poolID, &elbmodel.CreateMemberReq{
+		ProtocolPort: port,
+		SubnetId:     subnetID,
 		Address:      address,
 	})
 	if err != nil {
 		return fmt.Errorf("error creating SharedLoadBalancer pool member for node: %s, %v", node.Name, err)
 	}
 
-	loadbalancer, err = l.sharedELBClient.WaitStatusActive(loadbalancer.Id)
+	loadbalancer, err := l.sharedELBClient.WaitStatusActive(elbID)
 	if err != nil {
-		return fmt.Errorf("timeout when waiting for loadbalancer to be ACTIVE after adding members, "+
-			"current status %s", loadbalancer.ProvisioningStatus)
+		return fmt.Errorf("timeout when waiting for loadbalancer to be ACTIVE after adding members, current status %s",
+			loadbalancer.ProvisioningStatus)
 	}
 
 	return nil
@@ -797,6 +842,10 @@ func (l *SharedLoadBalancer) filterListenerByPort(listeners []elbmodel.ListenerR
 // UpdateLoadBalancer updates hosts under the specified load balancer.
 func (l *SharedLoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
 	klog.Infof("UpdateLoadBalancer: called with service %s/%s, node: %d", service.Namespace, service.Name, len(nodes))
+	if !l.isSupportedSvc(service) {
+		return cloudprovider.ImplementedElsewhere
+	}
+
 	// get exits or create a new ELB instance
 	loadbalancer, err := l.getLoadBalancerInstance(ctx, clusterName, service)
 	if err != nil {

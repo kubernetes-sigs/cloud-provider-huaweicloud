@@ -413,5 +413,4 @@ $ curl 192.168.0.113
 <html>
 <head>
 <title>Welcome to nginx!</title>
-...
 ```

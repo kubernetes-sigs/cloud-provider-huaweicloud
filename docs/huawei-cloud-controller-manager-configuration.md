@@ -83,6 +83,7 @@ data:
          "type": "SOURCE_IP",
          "persistence_timeout": 15
        },
+       "disable-create-security-group": false,
        "health-check-flag": "on",
        "health-check-option": {
          "delay": 5,
@@ -219,3 +220,6 @@ The following arguments are supported:
 
 * `l7-flavor-id` Optional. Specifies the ID of a flavor at Layer 7.
   Only dedicated load balancer service will use this annotation.
+
+* `disable-create-security-group` Optional. Disable automatic creation of security groups for ELB health checks.
+  Valid values are `'true'` and `'false'`. The default is `'false'`.
