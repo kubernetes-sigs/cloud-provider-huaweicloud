@@ -44,7 +44,7 @@ type Instances struct {
 // NodeAddresses returns the addresses of the specified instance.
 func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v1.NodeAddress, error) {
 	klog.Infof("NodeAddresses is called with name %s", name)
-	instance, err := i.ecsClient.GetByName(string(name))
+	instance, err := i.ecsClient.GetByNodeName(string(name))
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func (i *Instances) NodeAddressesByProviderID(_ context.Context, providerID stri
 // InstanceID returns the cloud provider ID of the node with the specified NodeName.
 func (i *Instances) InstanceID(_ context.Context, name types.NodeName) (string, error) {
 	klog.Infof("InstanceID is called with name %s", name)
-	server, err := i.ecsClient.GetByName(string(name))
+	server, err := i.ecsClient.GetByNodeName(string(name))
 	if err != nil {
 		return "", err
 	}
@@ -91,7 +91,7 @@ func (i *Instances) InstanceID(_ context.Context, name types.NodeName) (string, 
 // InstanceType returns the type of the specified instance.
 func (i *Instances) InstanceType(_ context.Context, name types.NodeName) (string, error) {
 	klog.Infof("InstanceType is called with name %s", name)
-	instance, err := i.ecsClient.GetByName(string(name))
+	instance, err := i.ecsClient.GetByNodeName(string(name))
 	if err != nil {
 		return "", err
 	}

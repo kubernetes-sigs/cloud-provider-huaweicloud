@@ -50,6 +50,51 @@ func (e *EcsClient) Get(id string) (*model.ServerDetail, error) {
 	return rst, err
 }
 
+func (e *EcsClient) GetByNodeName(name string) (*model.ServerDetail, error) {
+	privateIP := ""
+	if net.ParseIP(name).To4() != nil {
+		privateIP = name
+	} else if ips := utils.LookupHost(name); len(ips) > 0 {
+		for _, ip := range ips {
+			if ip != "127.0.0.1" {
+				privateIP = ip
+				break
+			}
+		}
+	}
+
+	if privateIP == "" {
+		klog.V(6).Infof("query ECS detail by name: %s", name)
+		return e.GetByName(name)
+	}
+
+	klog.V(6).Infof("query ECS detail by private IP: %s, NodeName: %s", privateIP, name)
+
+	rsp, err := e.List(&model.ListServersDetailsRequest{
+		IpEq: &privateIP,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	notFound := fmt.Errorf("not found any ECS, node: %s, PrivateIP: %s", name, privateIP)
+	if rsp.Servers == nil || len(*rsp.Servers) == 0 {
+		return nil, notFound
+	}
+
+	for _, sv := range *rsp.Servers {
+		for _, addresses := range sv.Addresses {
+			for _, addr := range addresses {
+				if addr.Addr == privateIP {
+					return &sv, nil
+				}
+			}
+		}
+	}
+
+	return nil, notFound
+}
+
 func (e *EcsClient) GetByName(name string) (*model.ServerDetail, error) {
 	name = fmt.Sprintf("^%s$", name)
 

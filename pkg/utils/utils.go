@@ -44,11 +44,10 @@ func CutString(original string, length int) string {
 }
 
 func ToString(val any) string {
-	switch val.(type) {
+	switch v := val.(type) {
 	case string:
-		return val.(string)
+		return v
 	case *string:
-		v, _ := val.(*string)
 		if v == nil {
 			return ""
 		}
@@ -58,7 +57,6 @@ func ToString(val any) string {
 		if err != nil {
 			return fmt.Sprintf("%#v", val)
 		}
-
 		return string(b)
 	}
 }
