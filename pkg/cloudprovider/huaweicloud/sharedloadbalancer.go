@@ -960,7 +960,7 @@ func (l *SharedLoadBalancer) getNodeSubnetID(node *corev1.Node) (string, error) 
 		return "", err
 	}
 
-	instance, err := l.ecsClient.GetByName(node.Name)
+	instance, err := l.ecsClient.GetByNodeName(node.Name)
 	if err != nil {
 		return "", err
 	}

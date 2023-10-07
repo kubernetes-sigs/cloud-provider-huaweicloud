@@ -17,6 +17,7 @@ limitations under the License.
 package utils
 
 import (
+	"net/http"
 	"testing"
 
 	"k8s.io/utils/pointer"
@@ -111,6 +112,11 @@ func TestCutString(t *testing.T) {
 }
 
 func TestToJsonStr(t *testing.T) {
+	var str *string
+	var obj *http.Server
+	var mp *map[string]any
+	var ap *[]any
+
 	tests := []struct {
 		name     string
 		object   any
@@ -164,6 +170,26 @@ func TestToJsonStr(t *testing.T) {
 			name:     "test7",
 			object:   pointer.Bool(true),
 			expected: "true",
+		},
+		{
+			name:     "test8",
+			object:   str,
+			expected: "",
+		},
+		{
+			name:     "test9",
+			object:   obj,
+			expected: "null",
+		},
+		{
+			name:     "test10",
+			object:   mp,
+			expected: "null",
+		},
+		{
+			name:     "test11",
+			object:   ap,
+			expected: "null",
 		},
 	}
 

@@ -158,7 +158,7 @@ func (b Basic) getNodeSubnetID(node *v1.Node) (string, error) {
 		return "", err
 	}
 
-	instance, err := b.ecsClient.GetByName(node.Name)
+	instance, err := b.ecsClient.GetByNodeName(node.Name)
 	if err != nil {
 		return "", err
 	}
@@ -186,7 +186,7 @@ func (b Basic) allowHealthCheckRule(node *v1.Node) error {
 		healthCheckCidrOptLock.Unlock()
 	}()
 
-	instance, err := b.ecsClient.GetByName(node.Name)
+	instance, err := b.ecsClient.GetByNodeName(node.Name)
 	if err != nil {
 		return err
 	}
@@ -235,7 +235,7 @@ func (b Basic) allowHealthCheckRule(node *v1.Node) error {
 }
 
 func (b Basic) removeHealthCheckRules(node *v1.Node) error {
-	instance, err := b.ecsClient.GetByName(node.Name)
+	instance, err := b.ecsClient.GetByNodeName(node.Name)
 	if err != nil {
 		return err
 	}

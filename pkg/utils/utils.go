@@ -19,6 +19,10 @@ package utils
 import (
 	"encoding/json"
 	"fmt"
+	"net"
+	"strings"
+
+	"k8s.io/klog"
 )
 
 // IsStrSliceContains searches if a string list contains the given string or not.
@@ -39,18 +43,31 @@ func CutString(original string, length int) string {
 	return rst
 }
 
-func ToString(a any) string {
-	if v, ok := a.(string); ok {
+func ToString(val any) string {
+	switch v := val.(type) {
+	case string:
 		return v
-	}
-	if v, ok := a.(*string); ok {
+	case *string:
+		if v == nil {
+			return ""
+		}
 		return *v
+	default:
+		b, err := json.Marshal(val)
+		if err != nil {
+			return fmt.Sprintf("%#v", val)
+		}
+		return string(b)
 	}
+}
 
-	b, err := json.Marshal(a)
+func LookupHost(domain string) []string {
+	ns, err := net.LookupHost(domain)
 	if err != nil {
-		return fmt.Sprintf("%#v", a)
+		klog.Errorf("failed to looks up the given host using the local resolver: %s", err)
+		return nil
 	}
 
-	return string(b)
+	klog.Infof("lookup host %s: %s", domain, strings.Join(ns, ", "))
+	return ns
 }
