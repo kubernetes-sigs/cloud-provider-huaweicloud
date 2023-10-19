@@ -864,11 +864,13 @@ func (d *DedicatedLoadBalancer) deleteELBInstance(loadBalancer *elbmodel.LoadBal
 		return nil
 	}
 
-	eipID := getStringFromSvsAnnotation(service, ElbEipID, "")
+	lbEIP := ""
+	if len(loadBalancer.Eips) > 0 && loadBalancer.Eips[0].EipId != nil {
+		lbEIP = *loadBalancer.Eips[0].EipId
+	}
+	eipID := getStringFromSvsAnnotation(service, ElbEipID, lbEIP)
 	if eipID == "" {
-		if eipID == "" && len(loadBalancer.Eips) > 0 && loadBalancer.Eips[0].EipId != nil {
-			eipID = *loadBalancer.Eips[0].EipId
-		}
+		return nil
 	}
 
 	klog.Infof("deleting unbind EIP: %v", eipID)
