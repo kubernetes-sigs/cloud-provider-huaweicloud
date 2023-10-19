@@ -127,7 +127,6 @@ var _ = ginkgo.Describe("dedicated ELB service test with the specified ID", func
 		if vpcOpts.SubnetID == "" {
 			return
 		}
-		framework.RemoveDeployment(kubeClient, deployment.Namespace, deployment.Name)
 		if service1 != nil {
 			framework.RemoveService(kubeClient, service1.Namespace, service1.Name)
 			framework.WaitServiceDisappearOnCluster(kubeClient, service1.Namespace, service1.Name)
@@ -136,6 +135,8 @@ var _ = ginkgo.Describe("dedicated ELB service test with the specified ID", func
 			framework.RemoveService(kubeClient, service2.Namespace, service2.Name)
 			framework.WaitServiceDisappearOnCluster(kubeClient, service2.Namespace, service2.Name)
 		}
+
+		framework.RemoveDeployment(kubeClient, deployment.Namespace, deployment.Name)
 
 		sharedElbClient := wrapper.SharedLoadBalanceClient{AuthOpts: authOpts}
 		_, err := sharedElbClient.GetInstance(*elbID)
