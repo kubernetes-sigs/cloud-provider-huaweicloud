@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
-	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
-	vpcmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/vpc/v2/model"
+	gocache "github.com/patrickmn/go-cache"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/api/core/v1"
@@ -44,8 +44,14 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/cloud-provider"
 	"k8s.io/cloud-provider/options"
+	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/utils"
+
+	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
+	vpcmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/vpc/v2/model"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
@@ -55,6 +61,8 @@ import (
 // Cloud provider name: PaaS Web Services.
 const (
 	ProviderName = "huaweicloud"
+
+	LoadBalancerClass = "huaweicloud.com/elb"
 
 	ElbClass = "kubernetes.io/elb.class"
 	ElbID    = "kubernetes.io/elb.id"
@@ -101,6 +109,9 @@ const (
 	ProtocolTerminatedHTTPS = "TERMINATED_HTTPS"
 
 	healthCheckCidr = "100.125.0.0/16"
+
+	endpointAdded  = "endpointAdded"
+	endpointUpdate = "endpointUpdate"
 )
 
 type ELBProtocol string
@@ -111,7 +122,6 @@ var healthCheckCidrOptLock = &sync.Mutex{}
 type Basic struct {
 	cloudControllerManagerOpts *options.CloudControllerManagerOptions
 	cloudConfig                *config.CloudConfig
-	loadBalancerConfig         *config.LoadbalancerConfig //nolint: unused
 
 	loadbalancerOpts *config.LoadBalancerOptions
 	networkingOpts   *config.NetworkingOptions
@@ -126,6 +136,8 @@ type Basic struct {
 	restConfig    *rest.Config
 	kubeClient    *corev1.CoreV1Client
 	eventRecorder record.EventRecorder
+
+	mutexLock *mutexkv.MutexKV
 }
 
 func (b Basic) listPodsBySelector(ctx context.Context, namespace string, selectors map[string]string) (*v1.PodList, error) {
@@ -180,6 +192,10 @@ func (b Basic) getNodeSubnetID(node *v1.Node) (string, error) {
 }
 
 func (b Basic) allowHealthCheckRule(node *v1.Node) error {
+	if b.loadbalancerOpts.DisableCreateSecurityGroup {
+		klog.Infof("automatic creation of security groups has been disabled")
+		return nil
+	}
 	// Avoid adding security group rules in parallel.
 	healthCheckCidrOptLock.Lock()
 	defer func() {
@@ -272,6 +288,42 @@ func (b Basic) removeHealthCheckRules(node *v1.Node) error {
 	return nil
 }
 
+func (b Basic) updateService(service *v1.Service, lbStatus *v1.LoadBalancerStatus) {
+	if service.Spec.LoadBalancerClass == nil || *service.Spec.LoadBalancerClass != LoadBalancerClass {
+		return
+	}
+
+	if servicehelper.LoadBalancerStatusEqual(&service.Status.LoadBalancer, lbStatus) {
+		return
+	}
+	updated := service.DeepCopy()
+	updated.Status.LoadBalancer = *lbStatus
+
+	klog.V(2).Infof("Patching status for service %s/%s", updated.Namespace, updated.Name)
+	_, err := servicehelper.PatchService(b.kubeClient, service, updated)
+	if err != nil {
+		klog.Errorf("failed to patch status for service %s/%s", updated.Namespace, updated.Name)
+	}
+}
+
+func (b Basic) isSupportedSvc(svs *v1.Service) bool {
+	if svs.Spec.Type != v1.ServiceTypeLoadBalancer {
+		return false
+	}
+
+	if svs.Spec.LoadBalancerClass != nil && *svs.Spec.LoadBalancerClass != LoadBalancerClass {
+		klog.Infof("Ignoring service %s/%s using loadbalancer class %s, it is not supported by this controller",
+			svs.Namespace, svs.Name, *svs.Spec.LoadBalancerClass)
+		return false
+	}
+
+	if svs.Spec.LoadBalancerClass == nil && b.loadbalancerOpts.LoadBalancerClass != "" {
+		return false
+	}
+
+	return true
+}
+
 type CloudProvider struct {
 	Basic
 	providers map[LoadBalanceVersion]cloudprovider.LoadBalancer
@@ -322,7 +374,7 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(kubeClient.RESTClient()).Events("")})
-	recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "hws-cloudprovider"})
+	recorder := broadcaster.NewRecorder(scheme.Scheme, v1.EventSource{Component: "cloud-provider-huaweicloud"})
 
 	ccmOpts, err := options.NewCloudControllerManagerOptions()
 	if err != nil {
@@ -346,6 +398,7 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 		restConfig:    restConfig,
 		kubeClient:    kubeClient,
 		eventRecorder: recorder,
+		mutexLock:     mutexkv.NewMutexKV(),
 	}
 
 	hws := &CloudProvider{
@@ -380,6 +433,10 @@ func newKubeClient() (*rest.Config, *corev1.CoreV1Client, error) {
 }
 
 func (h *CloudProvider) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
+	if !h.isSupportedSvc(service) {
+		return nil, false, cloudprovider.ImplementedElsewhere
+	}
+
 	LBVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return nil, false, err
@@ -394,6 +451,10 @@ func (h *CloudProvider) GetLoadBalancer(ctx context.Context, clusterName string,
 }
 
 func (h *CloudProvider) GetLoadBalancerName(ctx context.Context, clusterName string, service *v1.Service) string {
+	if !h.isSupportedSvc(service) {
+		return ""
+	}
+
 	LBVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return ""
@@ -408,6 +469,13 @@ func (h *CloudProvider) GetLoadBalancerName(ctx context.Context, clusterName str
 }
 
 func (h *CloudProvider) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
+	if !h.isSupportedSvc(service) {
+		return nil, cloudprovider.ImplementedElsewhere
+	}
+	key := fmt.Sprintf("%s/%s", service.Namespace, service.Name)
+	h.mutexLock.Lock(key)
+	defer h.mutexLock.Unlock(key)
+
 	LBVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return nil, err
@@ -422,6 +490,13 @@ func (h *CloudProvider) EnsureLoadBalancer(ctx context.Context, clusterName stri
 }
 
 func (h *CloudProvider) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
+	if !h.isSupportedSvc(service) {
+		return cloudprovider.ImplementedElsewhere
+	}
+	key := fmt.Sprintf("%s/%s", service.Namespace, service.Name)
+	h.mutexLock.Lock(key)
+	defer h.mutexLock.Unlock(key)
+
 	LBVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return err
@@ -436,6 +511,13 @@ func (h *CloudProvider) UpdateLoadBalancer(ctx context.Context, clusterName stri
 }
 
 func (h *CloudProvider) EnsureLoadBalancerDeleted(ctx context.Context, clusterName string, service *v1.Service) error {
+	if !h.isSupportedSvc(service) {
+		return cloudprovider.ImplementedElsewhere
+	}
+	key := fmt.Sprintf("%s/%s", service.Namespace, service.Name)
+	h.mutexLock.Lock(key)
+	defer h.mutexLock.Unlock(key)
+
 	LBVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return err
@@ -456,7 +538,7 @@ func getLoadBalancerVersion(service *v1.Service) (LoadBalanceVersion, error) {
 	case "elasticity":
 		klog.Infof("Load balancer Version I for service %v", service.Name)
 		return VersionELB, nil
-	case "shared", "":
+	case "shared":
 		klog.Infof("Shared load balancer for service %v", service.Name)
 		return VersionShared, nil
 	case "dedicated":
@@ -557,11 +639,12 @@ func IsPodActive(p v1.Pod) bool {
 }
 
 type LoadBalancerServiceListener struct {
+	Basic
 	stopChannel chan struct{}
 	kubeClient  *corev1.CoreV1Client
-	mutexLock   *mutexkv.MutexKV
 
-	serviceCache map[string]*v1.Service
+	serviceCache        map[string]*v1.Service
+	invalidServiceCache *gocache.Cache
 }
 
 func (e *LoadBalancerServiceListener) stopListenerSlice() {
@@ -569,11 +652,12 @@ func (e *LoadBalancerServiceListener) stopListenerSlice() {
 	close(e.stopChannel)
 }
 
-func (e *LoadBalancerServiceListener) startEndpointListener(handle func(*v1.Service)) {
+var queue = make(chan v1.Service, 3)
+
+func (e *LoadBalancerServiceListener) startEndpointListener(handle func(*v1.Service, bool)) {
 	klog.Infof("starting EndpointListener")
 	for {
-		endpointsList, err := e.kubeClient.Endpoints(metav1.NamespaceAll).
-			List(context.TODO(), metav1.ListOptions{Limit: 1})
+		endpointsList, err := e.kubeClient.Endpoints(metav1.NamespaceAll).List(context.TODO(), metav1.ListOptions{Limit: 1})
 
 		if err != nil {
 			klog.Errorf("failed to query a list of Endpoints, try again later, error: %s", err)
@@ -601,16 +685,33 @@ func (e *LoadBalancerServiceListener) startEndpointListener(handle func(*v1.Serv
 			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
 		)
 
-		queue := make(chan v1.Service, 50)
 		_, err = endpointsInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj interface{}) {},
+			AddFunc: func(obj interface{}) {
+				newEndpoint := obj.(*v1.Endpoints)
+				if newEndpoint.Name == "kube-scheduler" || newEndpoint.Name == "kube-controller-manager" ||
+					newEndpoint.Name == "cloud-controller-manager" {
+					return
+				}
+				klog.V(6).Infof("New Endpoints added, namespace: %s, name: %s", newEndpoint.Namespace, newEndpoint.Name)
+				queue <- v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: newEndpoint.Namespace,
+						Name:      newEndpoint.Name,
+					},
+				}
+				go func() {
+					s := <-queue
+					klog.V(6).Infof("process endpoints: %s / %s", s.Namespace, s.Name)
+					e.dispatcher(s.Namespace, s.Name, endpointAdded, handle)
+				}()
+			},
 			UpdateFunc: func(oldObj, newObj interface{}) {
 				newEndpoint := newObj.(*v1.Endpoints)
 				if newEndpoint.Name == "kube-scheduler" || newEndpoint.Name == "kube-controller-manager" ||
 					newEndpoint.Name == "cloud-controller-manager" {
 					return
 				}
-				klog.V(4).Infof("Update Endpoints, namespace: %s, name: %s", newEndpoint.Namespace, newEndpoint.Name)
+				klog.V(6).Infof("Endpoint update, namespace: %s, name: %s", newEndpoint.Namespace, newEndpoint.Name)
 
 				queue <- v1.Service{
 					ObjectMeta: metav1.ObjectMeta{
@@ -620,8 +721,8 @@ func (e *LoadBalancerServiceListener) startEndpointListener(handle func(*v1.Serv
 				}
 				go func() {
 					s := <-queue
-					klog.V(4).Infof("process endpoints: %s / %s", s.Namespace, s.Name)
-					e.dispatcher(s.Namespace, s.Name, handle)
+					klog.V(6).Infof("process endpoints: %s / %s", s.Namespace, s.Name)
+					e.dispatcher(s.Namespace, s.Name, endpointUpdate, handle)
 				}()
 			},
 			DeleteFunc: func(obj interface{}) {},
@@ -631,23 +732,105 @@ func (e *LoadBalancerServiceListener) startEndpointListener(handle func(*v1.Serv
 			time.Sleep(5 * time.Second)
 			continue
 		}
-
 		go endpointsInformer.Run(e.stopChannel)
+
+		serviceInformer := cache.NewSharedIndexInformer(
+			&cache.ListWatch{
+				ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
+					if options.ResourceVersion == "" || options.ResourceVersion == "0" {
+						options.ResourceVersion = endpointsList.ResourceVersion
+					}
+					return e.kubeClient.Services(metav1.NamespaceAll).List(context.TODO(), options)
+				},
+				WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
+					if options.ResourceVersion == "" || options.ResourceVersion == "0" {
+						options.ResourceVersion = endpointsList.ResourceVersion
+					}
+					return e.kubeClient.Services(metav1.NamespaceAll).Watch(context.TODO(), options)
+				},
+			},
+			&v1.Service{},
+			0,
+			cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+		)
+		_, err = serviceInformer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {},
+			UpdateFunc: func(oldObj, newObj interface{}) {
+				svs, _ := newObj.(*v1.Service)
+				if svs.Spec.LoadBalancerClass == nil || !e.isSupportedSvc(svs) {
+					return
+				}
+
+				klog.Infof("Found service was updated, namespace: %s, name: %s", svs.Namespace, svs.Name)
+				queue <- v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: svs.Namespace,
+						Name:      svs.Name,
+					},
+				}
+				go func() {
+					s := <-queue
+					klog.V(4).Infof("process endpoints: %s / %s", s.Namespace, s.Name)
+					handle(svs, false)
+				}()
+			},
+			DeleteFunc: func(obj interface{}) {
+				svs, _ := obj.(*v1.Service)
+				if svs.Spec.LoadBalancerClass == nil || !e.isSupportedSvc(svs) {
+					return
+				}
+
+				klog.Infof("Found service was deleted, namespace: %s, name: %s", svs.Namespace, svs.Name)
+				queue <- v1.Service{
+					ObjectMeta: metav1.ObjectMeta{
+						Namespace: svs.Namespace,
+						Name:      svs.Name,
+					},
+				}
+				go func() {
+					s := <-queue
+					klog.V(4).Infof("process endpoints: %s / %s", s.Namespace, s.Name)
+					handle(svs, true)
+				}()
+			},
+		}, 5*time.Second)
+		if err != nil {
+			klog.Errorf("failed to start EventHandler, try again later, error: %s", err)
+			time.Sleep(5 * time.Second)
+			continue
+		}
+		go serviceInformer.Run(e.stopChannel)
+
 		break
 	}
 	klog.Infof("EndpointListener started")
 }
 
-func (e *LoadBalancerServiceListener) dispatcher(namespace, name string, handle func(*v1.Service)) {
+func (e *LoadBalancerServiceListener) dispatcher(namespace, name, eType string, handle func(*v1.Service, bool)) {
 	key := fmt.Sprintf("%s/%s", namespace, name)
-	e.mutexLock.Lock(key)
-	defer e.mutexLock.Unlock(key)
+	if _, ok := e.invalidServiceCache.Get(key); ok {
+		return
+	}
+
 	svc, err := e.kubeClient.Services(namespace).Get(context.TODO(), name, metav1.GetOptions{})
-	klog.Infof("Dispatcher service, namespace: %s, name: %s", namespace, name)
 	if err != nil {
 		klog.Errorf("failed to query service, error: %s", err)
+		if strings.Contains(err.Error(), "not found") {
+			e.invalidServiceCache.Set(key, "", gocache.DefaultExpiration)
+		}
+		return
 	}
-	handle(svc)
+
+	if svc.Spec.Type != v1.ServiceTypeLoadBalancer || !e.isSupportedSvc(svc) {
+		return
+	}
+
+	klog.Infof("Dispatcher service, namespace: %s, name: %s", namespace, name)
+
+	if eType == endpointAdded && (svc.Spec.LoadBalancerClass == nil || *svc.Spec.LoadBalancerClass != LoadBalancerClass) {
+		return
+	}
+	handle(svc, false)
 }
 
 func (e *LoadBalancerServiceListener) autoRemoveHealthCheckRule(handle func(node *v1.Node) error) {
@@ -719,9 +902,11 @@ func (e *LoadBalancerServiceListener) autoRemoveHealthCheckRule(handle func(node
 
 func (h *CloudProvider) listenerDeploy() error {
 	listener := LoadBalancerServiceListener{
-		kubeClient:   h.kubeClient,
-		mutexLock:    mutexkv.NewMutexKV(),
-		serviceCache: make(map[string]*v1.Service, 0),
+		Basic: h.Basic,
+
+		kubeClient:          h.kubeClient,
+		serviceCache:        make(map[string]*v1.Service, 0),
+		invalidServiceCache: gocache.New(5*time.Minute, 10*time.Minute),
 	}
 
 	clusterName := h.cloudControllerManagerOpts.KubeCloudShared.ClusterName
@@ -731,12 +916,30 @@ func (h *CloudProvider) listenerDeploy() error {
 	}
 
 	go leaderElection(id, h.restConfig, h.eventRecorder, func(ctx context.Context) {
-		go listener.autoRemoveHealthCheckRule(h.removeHealthCheckRules)
+		if !h.loadbalancerOpts.DisableCreateSecurityGroup {
+			go listener.autoRemoveHealthCheckRule(h.removeHealthCheckRules)
+		} else {
+			klog.Infof("automatic creation of security groups has been disabled")
+		}
 
-		listener.startEndpointListener(func(service *v1.Service) {
-			if service.Spec.Type != v1.ServiceTypeLoadBalancer {
+		listener.startEndpointListener(func(service *v1.Service, isDelete bool) {
+			klog.Infof("Got service %s/%s using loadbalancer class %s",
+				service.Namespace, service.Name, utils.ToString(service.Spec.LoadBalancerClass))
+
+			if !h.isSupportedSvc(service) {
 				return
 			}
+
+			if isDelete {
+				err := h.EnsureLoadBalancerDeleted(context.TODO(), clusterName, service)
+				if err != nil {
+					klog.Errorf("failed to delete loadBalancer, service: %s/%s, error: %s", service.Namespace, service.Name, err)
+					eventMsg := fmt.Sprintf("failed to clean listener for service: %s/%s, error: %s", service.Namespace, service.Name, err)
+					h.sendEvent("DeleteLoadBalancer", eventMsg, service)
+				}
+				return
+			}
+
 			nodeList, err := h.kubeClient.Nodes().List(context.TODO(), metav1.ListOptions{})
 			if err != nil {
 				klog.Errorf("failed to query node list: %s", err)
@@ -750,10 +953,29 @@ func (h *CloudProvider) listenerDeploy() error {
 			h.sendEvent("UpdateLoadBalancer", "Endpoints changed, start updating", service)
 
 			err = h.UpdateLoadBalancer(context.TODO(), clusterName, service, nodes)
-			if err != nil {
-				klog.Errorf("failed to synchronization endpoint, service: %s/%s, error: %s",
-					service.Namespace, service.Name, err)
+			if err == nil {
+				lbStatus, exists, err := h.GetLoadBalancer(context.TODO(), clusterName, service)
+				if err != nil || !exists {
+					klog.Errorf("failed to get loadBalancer, service: %s/%s, exists: %v, error: %s", service.Namespace, service.Name, exists, err)
+					return
+				}
+				h.updateService(service, lbStatus)
+				return
 			}
+
+			// An error occurred while updating.
+			if common.IsNotFound(err) || strings.Contains(err.Error(), "error, can not find a listener matching") {
+				lbStatus, err := h.EnsureLoadBalancer(context.TODO(), clusterName, service, nodes)
+				if err != nil {
+					klog.Errorf("failed to ensure loadBalancer, service: %s/%s, error: %s", service.Namespace, service.Name, err)
+					return
+				}
+				h.updateService(service, lbStatus)
+				return
+			}
+
+			klog.Errorf("failed to synchronization endpoint, service: %s/%s, error: %s",
+				service.Namespace, service.Name, err)
 		})
 	}, func() {
 		listener.stopListenerSlice()

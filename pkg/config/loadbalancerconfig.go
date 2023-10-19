@@ -65,6 +65,9 @@ type LoadBalancerOptions struct {
 
 	HealthCheckFlag   string            `json:"health-check-flag"`
 	HealthCheckOption HealthCheckOption `json:"health-check-option"`
+
+	DisableCreateSecurityGroup bool   `json:"disable-create-security-group"`
+	LoadBalancerClass          string `json:"loadbalancer-class"`
 }
 
 type HealthCheckOption struct {

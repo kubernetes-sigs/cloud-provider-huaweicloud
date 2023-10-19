@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	cloudprovider "k8s.io/cloud-provider"
 	"strings"
 
 	elbmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v3/model"
@@ -107,8 +108,11 @@ func (d *DedicatedLoadBalancer) GetLoadBalancerName(_ context.Context, clusterNa
 }
 
 func (d *DedicatedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
-	klog.Infof("EnsureLoadBalancer: called with service %s/%s, node: %d",
-		service.Namespace, service.Name, len(nodes))
+	if !d.isSupportedSvc(service) {
+		return nil, cloudprovider.ImplementedElsewhere
+	}
+
+	klog.Infof("EnsureLoadBalancer: called with service %s/%s, node: %d", service.Namespace, service.Name, len(nodes))
 
 	if err := ensureLoadBalancerValidation(service, nodes); err != nil {
 		return nil, err
@@ -491,7 +495,7 @@ func (d *DedicatedLoadBalancer) deletePool(pool *elbmodel.Pool) []error {
 }
 
 func (d *DedicatedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.LoadBalancer, service *v1.Service,
-	pool *elbmodel.Pool, port v1.ServicePort, nodes []*v1.Node) error {
+	pool *elbmodel.Pool, svcPort v1.ServicePort, nodes []*v1.Node) error {
 
 	members, err := d.dedicatedELBClient.ListMembers(&elbmodel.ListMembersRequest{PoolId: pool.Id})
 	if err != nil {
@@ -530,7 +534,7 @@ func (d *DedicatedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.LoadBa
 				pod.Namespace, pod.Spec.NodeName)
 		}
 
-		address, err := getNodeAddress(node)
+		address, portNum, err := getMemberIP(service, node, pod, svcPort)
 		if err != nil {
 			if common.IsNotFound(err) {
 				// Node failure, do not create member
@@ -541,18 +545,18 @@ func (d *DedicatedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.LoadBa
 			}
 		}
 
-		key := fmt.Sprintf("%s:%d", address, port.NodePort)
+		key := fmt.Sprintf("%s:%d", address, svcPort.NodePort)
 		if existsMember[key] {
 			klog.Infof("[addOrRemoveMembers] node already exists, skip adding, name: %s, address: %s, port: %d",
-				node.Name, address, port.NodePort)
-			members = d.popMember(members, address, port.NodePort)
+				node.Name, address, portNum)
+			members = d.popMember(members, address, portNum)
 			continue
 		}
 
 		klog.Infof("[addOrRemoveMembers] add node to pool, name: %s, address: %s, port: %d",
-			node.Name, address, port.NodePort)
+			node.Name, address, portNum)
 		// Add a member to the pool.
-		if err = d.addMember(loadbalancer, pool, port, node); err != nil {
+		if err = d.addMember(service, loadbalancer, pool, pod, svcPort, node); err != nil {
 			return err
 		}
 		existsMember[key] = true
@@ -571,10 +575,9 @@ func (d *DedicatedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.LoadBa
 	return nil
 }
 
-func (d *DedicatedLoadBalancer) addMember(loadbalancer *elbmodel.LoadBalancer, pool *elbmodel.Pool, port v1.ServicePort,
-	node *v1.Node) error {
+func (d *DedicatedLoadBalancer) addMember(service *v1.Service, loadbalancer *elbmodel.LoadBalancer, pool *elbmodel.Pool, pod v1.Pod, svcPort v1.ServicePort, node *v1.Node) error {
 	klog.Infof("Add a member(%s) to pool %s", node.Name, pool.Id)
-	address, err := getNodeAddress(node)
+	address, port, err := getMemberIP(service, node, pod, svcPort)
 	if err != nil {
 		return err
 	}
@@ -582,11 +585,15 @@ func (d *DedicatedLoadBalancer) addMember(loadbalancer *elbmodel.LoadBalancer, p
 	name := utils.CutString(fmt.Sprintf("member_%s_%s", pool.Name, node.Name), defaultMaxNameLength)
 	opt := &elbmodel.CreateMemberOption{
 		Name:         &name,
-		ProtocolPort: port.NodePort,
+		ProtocolPort: port,
 		Address:      address,
 	}
 	if !loadbalancer.IpTargetEnable {
-		opt.SubnetCidrId = &loadbalancer.VipSubnetCidrId
+		subnetID, err := d.getSubnetID(service, node)
+		if err != nil {
+			return err
+		}
+		opt.SubnetCidrId = &subnetID
 	}
 
 	if _, err = d.dedicatedELBClient.AddMember(pool.Id, opt); err != nil {
@@ -744,6 +751,10 @@ func (d *DedicatedLoadBalancer) createHealthMonitor(loadbalancerID, poolID, prot
 
 func (d *DedicatedLoadBalancer) UpdateLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) error {
 	klog.Infof("UpdateLoadBalancer: called with service %s/%s, node: %d", service.Namespace, service.Name, len(nodes))
+	if !d.isSupportedSvc(service) {
+		return cloudprovider.ImplementedElsewhere
+	}
+
 	// get exits or create a new ELB instance
 	loadbalancer, err := d.getLoadBalancerInstance(ctx, clusterName, service)
 	if err != nil {
@@ -875,7 +886,7 @@ func (d *DedicatedLoadBalancer) deleteELBInstance(loadBalancer *elbmodel.LoadBal
 
 	klog.Infof("deleting unbind EIP: %v", eipID)
 	if err := d.eipClient.Delete(eipID); err != nil {
-		klog.Errorf("failed to delete EIP: %s", loadBalancer.Eips[0].EipAddress)
+		klog.Errorf("failed to delete EIP: %s", eipID)
 	}
 
 	return nil
