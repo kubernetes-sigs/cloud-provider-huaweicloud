@@ -17,6 +17,10 @@ limitations under the License.
 package common
 
 import (
+	"k8s.io/klog/v2"
+	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/sdkerr"
@@ -52,4 +56,64 @@ func WaitForCompleted(condition wait.ConditionFunc) error {
 		Steps:    DefaultSteps,
 	}
 	return wait.ExponentialBackoff(backoff, condition)
+}
+
+type JobHandle func()
+type ExecutePool struct {
+	workerNum int
+	queueCh   chan JobHandle
+	stopCh    chan struct{}
+}
+
+func NewExecutePool(size int) *ExecutePool {
+	return &ExecutePool{
+		workerNum: size,
+		queueCh:   make(chan JobHandle, 2000),
+	}
+}
+
+func (w *ExecutePool) Start() {
+	// Make sure it is not started repeatedly.
+	if w.stopCh != nil {
+		w.stopCh <- struct{}{}
+		close(w.stopCh)
+	}
+	stopCh := make(chan struct{}, 1)
+	w.stopCh = stopCh
+
+	for i := 0; i < w.workerNum; i++ {
+		klog.Infof("start goroutine pool handler: %v/%v", i, w.workerNum)
+		go func() {
+			for {
+				select {
+				case handler, ok := <-w.queueCh:
+					if !ok {
+						klog.Errorf("goroutine pool exiting")
+						return
+					}
+					handler()
+				case <-stopCh:
+					klog.Info("goroutine pool stopping")
+					return
+				}
+			}
+		}()
+	}
+
+	go func() {
+		exit := make(chan os.Signal, 1)
+		signal.Notify(exit, os.Interrupt, syscall.SIGTERM)
+		<-exit
+		w.Stop()
+	}()
+}
+
+func (w *ExecutePool) Stop() {
+	w.stopCh <- struct{}{}
+	close(w.stopCh)
+	close(w.queueCh)
+}
+
+func (w *ExecutePool) Submit(work JobHandle) {
+	w.queueCh <- work
 }
