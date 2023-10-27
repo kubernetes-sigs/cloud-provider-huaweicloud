@@ -53,7 +53,7 @@ func (i *Instances) NodeAddresses(ctx context.Context, name types.NodeName) ([]v
 
 // NodeAddressesByProviderID returns the addresses of the specified instance.
 func (i *Instances) NodeAddressesByProviderID(_ context.Context, providerID string) ([]v1.NodeAddress, error) {
-	klog.Infof("NodeAddressesByProviderID is called witd provider ID %s", providerID)
+	klog.Infof("NodeAddressesByProviderID is called with provider ID %s", providerID)
 	instanceID, err := parseInstanceID(providerID)
 	if err != nil {
 		return nil, err
@@ -224,6 +224,8 @@ func (i *Instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 	}
 
 	return &cloudprovider.InstanceMetadata{
+		Region:        i.cloudConfig.AuthOpts.Region,
+		Zone:          instance.OSEXTAZavailabilityZone,
 		ProviderID:    providerID,
 		InstanceType:  instanceFlavor,
 		NodeAddresses: addresses,

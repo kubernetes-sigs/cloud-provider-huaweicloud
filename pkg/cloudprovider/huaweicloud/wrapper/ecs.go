@@ -26,7 +26,6 @@ import (
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/sdkerr"
 	ecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
-	"github.com/mitchellh/mapstructure"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	v1 "k8s.io/api/core/v1"
@@ -128,14 +127,14 @@ func (e *EcsClient) ListInterfaces(req *model.ListServerInterfacesRequest) ([]mo
 
 func (e *EcsClient) BuildAddresses(server *model.ServerDetail, interfaces []model.InterfaceAttachment,
 	networkingOpts *config.NetworkingOptions) ([]v1.NodeAddress, error) {
-	addrs := []v1.NodeAddress{}
+	nodeAddresses := make([]v1.NodeAddress, 0)
 
 	// parse private IP addresses first in an ordered manner
-	for _, iface := range interfaces {
-		for _, fixedIP := range *iface.FixedIps {
-			if *iface.PortState == "ACTIVE" {
+	for _, inter := range interfaces {
+		if *inter.PortState == "ACTIVE" {
+			for _, fixedIP := range *inter.FixedIps {
 				if net.ParseIP(*fixedIP.IpAddress).To4() != nil {
-					addToNodeAddresses(&addrs,
+					addToNodeAddresses(&nodeAddresses,
 						v1.NodeAddress{
 							Type:    v1.NodeInternalIP,
 							Address: *fixedIP.IpAddress,
@@ -148,7 +147,7 @@ func (e *EcsClient) BuildAddresses(server *model.ServerDetail, interfaces []mode
 
 	// process public IP addresses
 	if server.AccessIPv4 != "" {
-		addToNodeAddresses(&addrs,
+		addToNodeAddresses(&nodeAddresses,
 			v1.NodeAddress{
 				Type:    v1.NodeExternalIP,
 				Address: server.AccessIPv4,
@@ -156,67 +155,55 @@ func (e *EcsClient) BuildAddresses(server *model.ServerDetail, interfaces []mode
 		)
 	}
 
-	// process the rest
-	type Address struct {
-		IPType string `mapstructure:"OS-EXT-IPS:type"`
-		Addr   string
+	nicIDs := make([]string, 0)
+	for nicID := range server.Addresses {
+		nicIDs = append(nicIDs, nicID)
 	}
+	sort.Strings(nicIDs)
 
-	var addresses map[string][]Address
-	err := mapstructure.Decode(server.Addresses, &addresses)
-	if err != nil {
-		return nil, err
-	}
-
-	var networks []string
-	for k := range addresses {
-		networks = append(networks, k)
-	}
-	sort.Strings(networks)
-
-	for _, network := range networks {
-		for _, props := range addresses[network] {
+	for _, nicID := range nicIDs {
+		for _, serverAddr := range server.Addresses[nicID] {
 			var addressType v1.NodeAddressType
-			if props.IPType == "floating" {
+			if serverAddr.OSEXTIPStype != nil && serverAddr.OSEXTIPStype.Value() == "floating" {
 				addressType = v1.NodeExternalIP
-			} else if utils.IsStrSliceContains(networkingOpts.PublicNetworkName, network) {
+			} else if utils.IsStrSliceContains(networkingOpts.PublicNetworkName, nicID) {
 				addressType = v1.NodeExternalIP
 				// removing already added address to avoid listing it as both ExternalIP and InternalIP
 				// may happen due to listing "private" network as "public" in CCM's CloudConfig
-				removeFromNodeAddresses(&addrs,
+				removeFromNodeAddresses(&nodeAddresses,
 					v1.NodeAddress{
-						Address: props.Addr,
+						Address: serverAddr.Addr,
 					},
 				)
 			} else {
 				if len(networkingOpts.InternalNetworkName) == 0 ||
-					utils.IsStrSliceContains(networkingOpts.InternalNetworkName, network) {
+					utils.IsStrSliceContains(networkingOpts.InternalNetworkName, nicID) {
 					addressType = v1.NodeInternalIP
 				} else {
-					klog.V(4).Infof("[DEBUG] Node '%s' address '%s' "+
-						"ignored due to 'internal-network-name' option", server.Name, props.Addr)
+					klog.V(4).Infof("[DEBUG] Node '%s' address '%s' ignored due to 'internal-network-name' option",
+						server.Name, serverAddr.Addr)
 
-					removeFromNodeAddresses(&addrs,
+					removeFromNodeAddresses(&nodeAddresses,
 						v1.NodeAddress{
-							Address: props.Addr,
+							Address: serverAddr.Addr,
 						},
 					)
 					continue
 				}
 			}
 
-			if net.ParseIP(props.Addr).To4() != nil {
-				addToNodeAddresses(&addrs,
+			if net.ParseIP(serverAddr.Addr).To4() != nil {
+				addToNodeAddresses(&nodeAddresses,
 					v1.NodeAddress{
 						Type:    addressType,
-						Address: props.Addr,
+						Address: serverAddr.Addr,
 					},
 				)
 			}
 		}
 	}
-
-	return addrs, nil
+	klog.V(6).Infof("server: %s/%s, network addresses: %s", server.Name, server.Id, utils.ToString(nodeAddresses))
+	return nodeAddresses, nil
 }
 
 func (e *EcsClient) ListSecurityGroups(instanceID string) ([]model.NovaSecurityGroup, error) {
