@@ -571,6 +571,11 @@ func (h *CloudProvider) Initialize(clientBuilder cloudprovider.ControllerClientB
 
 // TCPLoadBalancer returns an implementation of TCPLoadBalancer for Huawei Web Services.
 func (h *CloudProvider) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
+	// Only services with LoadBalancerClass=huaweicloud.com/elb are processed.
+	if h.loadbalancerOpts.LoadBalancerClass != "" {
+		return nil, false
+	}
+
 	return h, true
 }
 
