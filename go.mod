@@ -5,7 +5,6 @@ go 1.19
 require (
 	github.com/fsnotify/fsnotify v1.6.0
 	github.com/huaweicloud/huaweicloud-sdk-go-v3 v0.1.16
-	github.com/mitchellh/mapstructure v1.4.1
 	github.com/onsi/ginkgo/v2 v2.6.1
 	github.com/onsi/gomega v1.24.1
 	github.com/patrickmn/go-cache v2.1.0+incompatible
