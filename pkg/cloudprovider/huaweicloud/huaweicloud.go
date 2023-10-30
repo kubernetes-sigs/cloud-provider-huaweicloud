@@ -47,14 +47,14 @@ import (
 	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
-	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/utils"
 
 	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 	vpcmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/vpc/v2/model"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
+	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/utils"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/utils/mutexkv"
 )
 
@@ -151,16 +151,20 @@ func (b Basic) sendEvent(reason, msg string, service *v1.Service) {
 }
 
 func (b Basic) getSubnetID(service *v1.Service, node *v1.Node) (string, error) {
-	subnetID := getStringFromSvsAnnotation(service, ElbSubnetID, b.cloudConfig.VpcOpts.SubnetID)
+	subnetID, err := b.getNodeSubnetID(node)
+	if err != nil {
+		klog.Warningf("unable to read subnet-id from the node, try reading from service or cloud-config, error: %s", err)
+	}
 	if subnetID != "" {
 		return subnetID, nil
 	}
 
-	subnetID, err := b.getNodeSubnetID(node)
-	if err != nil {
+	subnetID = getStringFromSvsAnnotation(service, ElbSubnetID, b.cloudConfig.VpcOpts.SubnetID)
+	if subnetID == "" {
 		return "", status.Errorf(codes.InvalidArgument, "missing subnet-id, "+
-			"can not to read subnet-id from the node also, error: %s", err)
+			"can not to read subnet-id from service or cloud-config")
 	}
+
 	return subnetID, nil
 }
 
@@ -180,9 +184,9 @@ func (b Basic) getNodeSubnetID(node *v1.Node) (string, error) {
 		return "", err
 	}
 
-	for _, intfs := range interfaces {
-		for _, fixedIP := range *intfs.FixedIps {
-			if *fixedIP.IpAddress == ipAddress {
+	for _, inter := range interfaces {
+		for _, fixedIP := range *inter.FixedIps {
+			if fixedIP.IpAddress != nil && *fixedIP.IpAddress == ipAddress {
 				return *fixedIP.SubnetId, nil
 			}
 		}

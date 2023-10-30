@@ -20,10 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
-	eipmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/eip/v2/model"
-	elbmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v2/model"
-	elbmodelv3 "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v3/model"
+	"strconv"
+
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	corev1 "k8s.io/api/core/v1"
@@ -33,7 +31,10 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
-	"strconv"
+
+	eipmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/eip/v2/model"
+	elbmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v2/model"
+	elbmodelv3 "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v3/model"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
@@ -155,9 +156,10 @@ func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName
 		return nil, err
 	}
 	if err != nil && common.IsNotFound(err) {
-		subnetID, e := l.getSubnetID(service, nodes[0])
-		if e != nil {
-			return nil, e
+		subnetID := getStringFromSvsAnnotation(service, ElbSubnetID, l.cloudConfig.VpcOpts.SubnetID)
+		if subnetID == "" {
+			return nil, status.Errorf(codes.InvalidArgument, "missing subnet-id, "+
+				"can not to read subnet-id from service or cloud-config")
 		}
 		loadbalancer, err = l.createLoadbalancer(clusterName, subnetID, service)
 	}
@@ -987,47 +989,6 @@ func unbindEIP(eipClient *wrapper.EIpClient, vipPortID, eipID string, keepEIP bo
 		return err
 	}
 	return nil
-}
-
-func (l *SharedLoadBalancer) getSubnetID(service *v1.Service, node *v1.Node) (string, error) {
-	subnetID := getStringFromSvsAnnotation(service, ElbSubnetID, l.cloudConfig.VpcOpts.SubnetID)
-	if subnetID != "" {
-		return subnetID, nil
-	}
-
-	subnetID, err := l.getNodeSubnetID(node)
-	if err != nil {
-		return "", status.Errorf(codes.InvalidArgument, "missing subnet-id, "+
-			"can not to read subnet-id from the node also, error: %s", err)
-	}
-	return subnetID, nil
-}
-
-func (l *SharedLoadBalancer) getNodeSubnetID(node *corev1.Node) (string, error) {
-	ipAddress, err := getNodeAddress(node)
-	if err != nil {
-		return "", err
-	}
-
-	instance, err := l.ecsClient.GetByNodeName(node.Name)
-	if err != nil {
-		return "", err
-	}
-
-	interfaces, err := l.ecsClient.ListInterfaces(&ecsmodel.ListServerInterfacesRequest{ServerId: instance.Id})
-	if err != nil {
-		return "", err
-	}
-
-	for _, ia := range interfaces {
-		for _, fixedIP := range *ia.FixedIps {
-			if *fixedIP.IpAddress == ipAddress {
-				return *fixedIP.SubnetId, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf("failed to get node subnet ID")
 }
 
 func getNodeAddress(node *corev1.Node) (string, error) {
