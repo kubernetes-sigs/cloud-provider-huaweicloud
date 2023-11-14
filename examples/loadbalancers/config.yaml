@@ -1,8 +1,3 @@
-kind: Namespace
-apiVersion: v1
-metadata:
-  name: huawei-cloud-provider
----
 apiVersion: v1
 kind: Secret
 metadata:
@@ -16,7 +11,7 @@ data:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  namespace: huawei-cloud-provider
+  namespace: kube-system
   name: loadbalancer-config
 data:
   loadBalancerOption: |-
