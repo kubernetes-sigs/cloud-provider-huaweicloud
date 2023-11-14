@@ -21,11 +21,12 @@ import (
 	"encoding/json"
 	"fmt"
 
-	elbmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v2/model"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/klog/v2"
+
+	elbmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v2/model"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/utils/metadata"
 )
@@ -104,10 +105,12 @@ func LoadElbConfigFromCM() (*LoadbalancerConfig, error) {
 		return defaultCfg, err
 	}
 
-	configMap, err := kubeClient.ConfigMaps(ProviderNamespace).
-		Get(context.TODO(), loadbalancerConfigMap, metav1.GetOptions{})
+	configMap, err := kubeClient.ConfigMaps(ProviderNamespace).Get(context.TODO(), loadbalancerConfigMap, metav1.GetOptions{})
 	if err != nil {
-		return defaultCfg, err
+		configMap, err = kubeClient.ConfigMaps("kube-system").Get(context.TODO(), loadbalancerConfigMap, metav1.GetOptions{})
+		if err != nil {
+			return defaultCfg, err
+		}
 	}
 
 	klog.Infof("get loadbalancer options: %v", configMap.Data)

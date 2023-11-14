@@ -632,7 +632,7 @@ func (h *CloudProvider) Master(ctx context.Context, clusterName string) (string,
 	return "", nil
 }
 
-//util functions
+// util functions
 
 func IsPodActive(p v1.Pod) bool {
 	if v1.PodSucceeded != p.Status.Phase &&
@@ -979,7 +979,7 @@ func leaderElection(id string, restConfig *rest.Config, recorder record.EventRec
 	retryPeriod := 30 * time.Second
 
 	configmapLock, err := resourcelock.NewFromKubeconfig(resourcelock.ConfigMapsLeasesResourceLock,
-		config.ProviderNamespace,
+		"kube-system",
 		leaseName,
 		resourcelock.ResourceLockConfig{
 			Identity:      fmt.Sprintf("%s_%s", id, string(uuid.NewUUID())),

@@ -63,7 +63,11 @@ This section contains network configuration information.
 ## Loadbalancer Configuration
 
 These arguments will be applied when the annotation in the service is empty.
-It needs to be stored in the `loadbalancer-config` ConfigMap under the `huawei-cloud-provider` namespace.
+It needs to be stored in the `loadbalancer-config` ConfigMap in `kube-system` namespace.
+
+> Since v0.26.4, the `huawei-cloud-provider` namespace is no longer used, and `kube-system` is used instead.
+> If you created the `loadbalancer-config` in the `huawei-cloud-provider` namespace, 
+> it will still work, but we recommend that you migrate it to `kube-system`.
 
 Here's an example:
 
@@ -71,7 +75,7 @@ Here's an example:
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  namespace: huawei-cloud-provider
+  namespace: kube-system
   name: loadbalancer-config
 data:
   loadBalancerOption: |-
