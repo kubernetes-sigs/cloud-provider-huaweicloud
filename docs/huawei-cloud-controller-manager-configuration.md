@@ -65,7 +65,7 @@ This section contains network configuration information.
 These arguments will be applied when the annotation in the service is empty.
 It needs to be stored in the `loadbalancer-config` ConfigMap in `kube-system` namespace.
 
-> Since v0.26.4, the `huawei-cloud-provider` namespace is no longer used, and `kube-system` is used instead.
+> Since `v0.26.4`, the `huawei-cloud-provider` namespace is no longer used, and `kube-system` is used instead.
 > If you created the `loadbalancer-config` in the `huawei-cloud-provider` namespace, 
 > it will still work, but we recommend that you migrate it to `kube-system`.
 
