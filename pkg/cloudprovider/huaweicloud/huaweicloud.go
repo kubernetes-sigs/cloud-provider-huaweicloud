@@ -168,6 +168,28 @@ func (b Basic) getSubnetID(service *v1.Service, node *v1.Node) (string, error) {
 	return subnetID, nil
 }
 
+func (b Basic) getNodeSubnetIDByHostIP(privateIP string) (string, error) {
+	instance, err := b.ecsClient.GetByNodeIP(privateIP)
+	if err != nil {
+		return "", err
+	}
+
+	interfaces, err := b.ecsClient.ListInterfaces(&ecsmodel.ListServerInterfacesRequest{ServerId: instance.Id})
+	if err != nil {
+		return "", err
+	}
+
+	for _, inter := range interfaces {
+		for _, fixedIP := range *inter.FixedIps {
+			if fixedIP.IpAddress != nil && *fixedIP.IpAddress == privateIP {
+				return *fixedIP.SubnetId, nil
+			}
+		}
+	}
+
+	return "", fmt.Errorf("failed to get node subnet ID with private IP: %s", privateIP)
+}
+
 func (b Basic) getNodeSubnetID(node *v1.Node) (string, error) {
 	ipAddress, err := getNodeAddress(node)
 	if err != nil {

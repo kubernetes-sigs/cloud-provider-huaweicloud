@@ -23,13 +23,14 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/sdkerr"
-	ecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/klog/v2"
+
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/sdkerr"
+	ecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/utils"
@@ -77,6 +78,36 @@ func (e *EcsClient) GetByNodeName(name string) (*model.ServerDetail, error) {
 	}
 
 	notFound := fmt.Errorf("not found any ECS, node: %s, PrivateIP: %s", name, privateIP)
+	if rsp.Servers == nil || len(*rsp.Servers) == 0 {
+		return nil, notFound
+	}
+
+	for _, sv := range *rsp.Servers {
+		for _, addresses := range sv.Addresses {
+			for _, addr := range addresses {
+				if addr.Addr == privateIP {
+					return &sv, nil
+				}
+			}
+		}
+	}
+
+	return nil, notFound
+}
+
+func (e *EcsClient) GetByNodeIP(privateIP string) (*model.ServerDetail, error) {
+	if privateIP == "" {
+		return nil, fmt.Errorf("privateIP can be empty")
+	}
+
+	rsp, err := e.List(&model.ListServersDetailsRequest{
+		IpEq: &privateIP,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	notFound := fmt.Errorf("not found any ECS, PrivateIP: %s", privateIP)
 	if rsp.Servers == nil || len(*rsp.Servers) == 0 {
 		return nil, notFound
 	}

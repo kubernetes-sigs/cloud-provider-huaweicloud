@@ -426,7 +426,7 @@ func (l *SharedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.Loadbalan
 				pod.Namespace, pod.Spec.NodeName)
 		}
 
-		//address, err := getNodeAddress(node)
+		// address, err := getNodeAddress(node)
 		address, portNum, err := getMemberIP(service, node, pod, svcPort)
 		if err != nil {
 			if common.IsNotFound(err) {
@@ -472,6 +472,10 @@ func getMemberIP(service *v1.Service, node *v1.Node, pod v1.Pod, svcPort v1.Serv
 	if service.Spec.AllocateLoadBalancerNodePorts != nil && *service.Spec.AllocateLoadBalancerNodePorts {
 		klog.V(6).Infof("add member using the Node's IP and port, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
 
+		if pod.Status.HostIP != "" {
+			return pod.Status.HostIP, svcPort.NodePort, nil
+		}
+
 		address, err := getNodeAddress(node)
 		if err != nil {
 			return "", 0, err
@@ -506,18 +510,20 @@ func (l *SharedLoadBalancer) addMember(service *v1.Service, elbID, poolID string
 		return err
 	}
 
-	subnetID, err := l.getSubnetID(service, node)
+	subnetID, err := l.getNodeSubnetIDByHostIP(address)
 	if err != nil {
 		return err
 	}
 
-	_, err = l.sharedELBClient.AddMember(poolID, &elbmodel.CreateMemberReq{
+	req := elbmodel.CreateMemberReq{
 		ProtocolPort: port,
 		SubnetId:     subnetID,
 		Address:      address,
-	})
+	}
+	_, err = l.sharedELBClient.AddMember(poolID, &req)
 	if err != nil {
-		return fmt.Errorf("error creating SharedLoadBalancer pool member for node: %s, %v", node.Name, err)
+		return fmt.Errorf("error creating SharedLoadBalancer pool member for node: %s, %v, options: %s",
+			node.Name, err, utils.ToString(req))
 	}
 
 	loadbalancer, err := l.sharedELBClient.WaitStatusActive(elbID)
