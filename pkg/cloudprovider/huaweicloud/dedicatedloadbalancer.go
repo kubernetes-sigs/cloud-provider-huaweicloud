@@ -20,16 +20,17 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	cloudprovider "k8s.io/cloud-provider"
 	"strings"
 
-	elbmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v3/model"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/errors"
+	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
+
+	elbmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/elb/v3/model"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
@@ -589,7 +590,7 @@ func (d *DedicatedLoadBalancer) addMember(service *v1.Service, loadbalancer *elb
 		Address:      address,
 	}
 	if !loadbalancer.IpTargetEnable {
-		subnetID, err := d.getSubnetID(service, node)
+		subnetID, err := d.getNodeSubnetIDByHostIP(address)
 		if err != nil {
 			return err
 		}
