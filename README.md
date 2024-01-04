@@ -24,7 +24,7 @@ Currently `huawei-cloud-controller-manager` implements:
 | v1.23              | v0.23.4                                        |
 | v1.24              | v0.24.4                                        |
 | v1.25              | v0.25.4                                        |
-| v1.26              | v0.26.5                                        |
+| v1.26              | v0.26.6                                        |
 
 ## Quick Start
 
