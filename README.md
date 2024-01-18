@@ -1,8 +1,7 @@
 # Kubernetes Cloud Provider for Huawei Cloud
 
-The Huawei Cloud Controller Manager provides the interface between a Kubernetes cluster and Huawei Cloud service APIs.
-This project allows a Kubernetes cluster to provision, monitor and remove Huawei Cloud resources necessary for
-operation of the cluster.
+The Huawei Cloud Controller Manager provides the interface between a Kubernetes cluster and Huawei Cloud service APIs. 
+This project allows a Kubernetes cluster to provision, monitor, and remove Huawei Cloud resources necessary for the operation of the cluster.
 
 See [Cloud Controller Manager Administration](https://kubernetes.io/docs/tasks/administer-cluster/running-cloud-controller/)
 for more about Kubernetes cloud controller manager.
