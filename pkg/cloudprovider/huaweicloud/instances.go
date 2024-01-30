@@ -82,7 +82,11 @@ func (i *Instances) NodeAddressesByProviderID(_ context.Context, providerID stri
 func (i *Instances) InstanceID(_ context.Context, name types.NodeName) (string, error) {
 	klog.Infof("InstanceID is called with name %s", name)
 	server, err := i.ecsClient.GetByNodeName(string(name))
+
 	if err != nil {
+		if common.IsNotFound(err) {
+			return "", nil
+		}
 		return "", err
 	}
 	return server.Id, nil
@@ -175,8 +179,16 @@ func (i *Instances) InstanceShutdownByProviderID(_ context.Context, providerID s
 
 // InstanceExists returns true if the instance for the given node exists according to the cloud provider.
 func (i *Instances) InstanceExists(ctx context.Context, node *v1.Node) (bool, error) {
-	klog.Infof("InstanceExists is called with node %s/%s", node.Namespace, node.Name)
-	return i.InstanceExistsByProviderID(ctx, node.Spec.ProviderID)
+	klog.Infof("InstanceExists is called with node %s", node.Name)
+	_, err := i.ecsClient.GetByNodeName(node.Name)
+
+	if err != nil {
+		if common.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
 }
 
 // InstanceShutdown returns true if the instance is shutdown according to the cloud provider.
