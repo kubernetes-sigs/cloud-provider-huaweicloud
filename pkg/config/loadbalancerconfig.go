@@ -69,6 +69,7 @@ type LoadBalancerOptions struct {
 
 	DisableCreateSecurityGroup bool   `json:"disable-create-security-group"`
 	LoadBalancerClass          string `json:"loadbalancer-class"`
+	BusinessName               string `json:"business-name"`
 }
 
 type HealthCheckOption struct {
