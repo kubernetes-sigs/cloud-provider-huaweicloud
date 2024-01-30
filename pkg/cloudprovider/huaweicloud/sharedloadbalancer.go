@@ -240,15 +240,46 @@ func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName
 
 func (l *SharedLoadBalancer) createOrAssociateEIP(loadbalancer *elbmodel.LoadbalancerResp, service *v1.Service) (string, error) {
 	var err error
+	specifiedEip := true
+	instance, err := l.sharedELBClient.Show(loadbalancer.Id)
+	if err != nil {
+		return "", status.Errorf(codes.Internal, "rollback：failed to query detail of ELB instance, error: %s", err)
+	}
+
 	eipID := getStringFromSvsAnnotation(service, ElbEipID, "")
 	if eipID == "" {
+		opts, err := parseEIPAutoCreateOptions(service)
+		if err != nil || opts == nil {
+			return "", err
+		}
+
+		if len(instance.PublicIPs) > 0 {
+			klog.Infof("the ELB has bound EIP: %s / %s, skip creating EIP", instance.PublicIPs[0].Address, instance.PublicIPs[0].ID)
+			return instance.PublicIPs[0].Address, nil
+		}
+
 		eipID, err = l.createEIP(service)
 		if err != nil {
 			return "", status.Errorf(codes.Internal, "rollback：failed to create EIP, delete ELB instance, error: %s", err)
 		}
+		specifiedEip = false
 	}
 	if eipID == "" {
 		return "", nil
+	}
+
+	if specifiedEip && len(instance.PublicIPs) > 0 {
+		if instance.PublicIPs[0].ID == eipID {
+			klog.Infof("the ELB has been bound to the specified EIP %s", eipID)
+			return instance.PublicIPs[0].Address, nil
+		}
+
+		// remove bound EIP
+		klog.Infof("remove the bound EIP %s and the specified will be used: %s", instance.PublicIPs[0].ID, eipID)
+		err = l.eipClient.Unbind(instance.PublicIPs[0].ID)
+		if err != nil {
+			return "", status.Errorf(codes.Internal, "rollback：failed to unbind EIP from ELB instance, error: %s", err)
+		}
 	}
 
 	eip, err := l.eipClient.Get(eipID)

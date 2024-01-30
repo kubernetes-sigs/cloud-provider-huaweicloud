@@ -27,6 +27,7 @@ import (
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
 
+	wpmodel "sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper/model"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
 )
@@ -36,6 +37,22 @@ type SharedLoadBalanceClient struct {
 }
 
 /** ELB Instances **/
+
+func (s *SharedLoadBalanceClient) Show(id string) (*wpmodel.Loadbalancer, error) {
+	var rsp *wpmodel.Loadbalancer
+
+	err := s.wrapper(func(c *elb.ElbClient) (interface{}, error) {
+		requestDef := wpmodel.GenReqDefForShowLoadbalancer()
+		resp, err := c.HcClient.Sync(&model.ShowLoadbalancerRequest{
+			LoadbalancerId: id,
+		}, requestDef)
+		if err != nil {
+			return nil, err
+		}
+		return resp.(*wpmodel.ShowLoadbalancerResponse), nil
+	}, "Loadbalancer", &rsp)
+	return rsp, err
+}
 
 func (s *SharedLoadBalanceClient) CreateInstance(req *model.CreateLoadbalancerReq) (*model.LoadbalancerResp, error) {
 	var rsp *model.LoadbalancerResp
