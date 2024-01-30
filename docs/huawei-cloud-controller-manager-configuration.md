@@ -1,4 +1,4 @@
-# Huawei Cloud Controller Manager Configurations
+_# Huawei Cloud Controller Manager Configurations
 
 There are 2 sets of configurations, as follows:
 
@@ -227,3 +227,10 @@ The following arguments are supported:
 
 * `disable-create-security-group` Optional. Disable automatic creation of security groups for ELB health checks.
   Valid values are `'true'` and `'false'`. The default is `'false'`.
+
+* `business-name` Optional. Business name or business identifier used to compose the name of the Huawei Cloud ELB instance.
+  To prevent the creation of ELB instances with the same name in Huawei Cloud when using the same tenant account in multiple K8s clusters,
+  which may ultimately cause CCM to malfunction. 
+  For example, `business-name: order-pass`, kubernetes loadbalancer service namespace/name: `default/order-service`,
+  then the name of the ELB instance is: `k8s_service_order-pass_default_order-service`.
+  > Changing this will create new ELB instances, the old ELB instances will not be deleted and no longer maintained.

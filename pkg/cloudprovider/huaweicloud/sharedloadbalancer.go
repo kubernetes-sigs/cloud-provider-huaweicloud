@@ -114,6 +114,9 @@ func (l *SharedLoadBalancer) getLoadBalancerInstance(ctx context.Context, cluste
 // *v1.Service parameter as read-only and not modify it.
 func (l *SharedLoadBalancer) GetLoadBalancerName(_ context.Context, clusterName string, service *v1.Service) string {
 	klog.Infof("GetLoadBalancerName: called with service %s/%s", service.Namespace, service.Name)
+	if l.loadbalancerOpts.BusinessName != "" {
+		clusterName = l.loadbalancerOpts.BusinessName
+	}
 	name := fmt.Sprintf("k8s_service_%s_%s_%s", clusterName, service.Namespace, service.Name)
 	return utils.CutString(name, defaultMaxNameLength)
 }
