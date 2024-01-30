@@ -461,7 +461,7 @@ func (l *SharedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.Loadbalan
 		}
 
 		// address, err := getNodeAddress(node)
-		address, portNum, err := getMemberIP(service, node, pod, svcPort)
+		address, portNum, err := l.getMemberIP(service, node, pod, svcPort)
 		if err != nil {
 			if common.IsNotFound(err) {
 				// Node failure, do not create member
@@ -502,15 +502,22 @@ func (l *SharedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.Loadbalan
 	return nil
 }
 
-func getMemberIP(service *v1.Service, node *v1.Node, pod v1.Pod, svcPort v1.ServicePort) (string, int32, error) {
+func (l *SharedLoadBalancer) getMemberIP(service *v1.Service, node *v1.Node, pod v1.Pod, svcPort v1.ServicePort) (string, int32, error) {
 	if service.Spec.AllocateLoadBalancerNodePorts != nil && *service.Spec.AllocateLoadBalancerNodePorts {
-		klog.V(6).Infof("add member using the Node's IP and port, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
+		klog.Infof("add member using the Node's IP and port, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
 
+		address := ""
 		if pod.Status.HostIP != "" {
-			return pod.Status.HostIP, svcPort.NodePort, nil
+			address = pod.Status.HostIP
+		} else {
+			addr, err := getNodeAddress(node)
+			if err != nil {
+				return "", 0, err
+			}
+			address = addr
 		}
 
-		address, err := getNodeAddress(node)
+		address, err := l.getPrimaryIP(address)
 		if err != nil {
 			return "", 0, err
 		}
@@ -518,7 +525,7 @@ func getMemberIP(service *v1.Service, node *v1.Node, pod v1.Pod, svcPort v1.Serv
 	}
 
 	if service.Spec.AllocateLoadBalancerNodePorts != nil && !*service.Spec.AllocateLoadBalancerNodePorts {
-		klog.V(6).Infof("add member using the Pod's IP and port, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
+		klog.Infof("add member using the Pod's IP and port, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
 		// get IP and port from Pod
 		if svcPort.TargetPort.Type == intstr.Int {
 			klog.V(6).Infof("targetPort is a number, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
@@ -539,7 +546,7 @@ func getMemberIP(service *v1.Service, node *v1.Node, pod v1.Pod, svcPort v1.Serv
 
 func (l *SharedLoadBalancer) addMember(service *v1.Service, elbID, poolID string, svcPort v1.ServicePort, pod v1.Pod, node *v1.Node) error {
 	klog.Infof("Add a member(%s) to pool %s", node.Name, poolID)
-	address, port, err := getMemberIP(service, node, pod, svcPort)
+	address, port, err := l.getMemberIP(service, node, pod, svcPort)
 	if err != nil {
 		return err
 	}

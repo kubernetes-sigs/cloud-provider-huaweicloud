@@ -64,7 +64,7 @@ func ToString(val any) string {
 func LookupHost(domain string) []string {
 	ns, err := net.LookupHost(domain)
 	if err != nil {
-		klog.Errorf("failed to looks up the given host using the local resolver: %s", err)
+		klog.Warningf("failed to looks up the given host using the local resolver: %s", err)
 		return nil
 	}
 

@@ -32,6 +32,7 @@ import (
 	ecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 
+	wpmodel "sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/model"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/utils"
 )
@@ -103,6 +104,45 @@ func (e *EcsClient) GetByNodeIP(privateIP string) (*model.ServerDetail, error) {
 	rsp, err := e.List(&model.ListServersDetailsRequest{
 		IpEq: &privateIP,
 	})
+	if err != nil {
+		return nil, err
+	}
+
+	notFound := fmt.Errorf("not found any ECS, PrivateIP: %s", privateIP)
+	if rsp.Servers == nil || len(*rsp.Servers) == 0 {
+		return nil, notFound
+	}
+
+	for _, sv := range *rsp.Servers {
+		for _, addresses := range sv.Addresses {
+			for _, addr := range addresses {
+				if addr.Addr == privateIP {
+					return &sv, nil
+				}
+			}
+		}
+	}
+
+	return nil, notFound
+}
+
+func (e *EcsClient) GetByNodeIPNew(privateIP string) (*wpmodel.ServerDetail, error) {
+	if privateIP == "" {
+		return nil, fmt.Errorf("privateIP can be empty")
+	}
+
+	var rsp *wpmodel.ListServersDetailsResponse
+	err := e.wrapper(func(c *ecs.EcsClient) (interface{}, error) {
+		requestDef := wpmodel.GenReqDefForListServersDetails()
+		resp, err := c.HcClient.Sync(&model.ListServersDetailsRequest{
+			IpEq: &privateIP,
+		}, requestDef)
+
+		if err != nil {
+			return nil, err
+		}
+		return resp.(*wpmodel.ListServersDetailsResponse), nil
+	}, &rsp)
 	if err != nil {
 		return nil, err
 	}

@@ -350,6 +350,26 @@ func (b Basic) isSupportedSvc(svs *v1.Service) bool {
 	return true
 }
 
+func (b Basic) getPrimaryIP(ip string) (string, error) {
+	if b.loadbalancerOpts.PrimaryNic != "force" {
+		return ip, nil
+	}
+
+	instance, err := b.ecsClient.GetByNodeIPNew(ip)
+	if err != nil {
+		return "", err
+	}
+	for _, arr := range instance.Addresses {
+		for _, v := range arr {
+			if v.Primary {
+				klog.Infof("obtain the ECS details through the private IP: %s, and find the primary network card IP: %s", ip, v.Addr)
+				return v.Addr, nil
+			}
+		}
+	}
+	return "", status.Errorf(codes.NotFound, "not found ECS primary network by private ip: %s", ip)
+}
+
 type CloudProvider struct {
 	Basic
 	providers map[LoadBalanceVersion]cloudprovider.LoadBalancer

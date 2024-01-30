@@ -26,6 +26,7 @@ import (
 	"google.golang.org/grpc/status"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/errors"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
@@ -538,7 +539,7 @@ func (d *DedicatedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.LoadBa
 				pod.Namespace, pod.Spec.NodeName)
 		}
 
-		address, portNum, err := getMemberIP(service, node, pod, svcPort)
+		address, portNum, err := d.getMemberIP(service, node, pod, svcPort)
 		if err != nil {
 			if common.IsNotFound(err) {
 				// Node failure, do not create member
@@ -581,7 +582,7 @@ func (d *DedicatedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.LoadBa
 
 func (d *DedicatedLoadBalancer) addMember(service *v1.Service, loadbalancer *elbmodel.LoadBalancer, pool *elbmodel.Pool, pod v1.Pod, svcPort v1.ServicePort, node *v1.Node) error {
 	klog.Infof("Add a member(%s) to pool %s", node.Name, pool.Id)
-	address, port, err := getMemberIP(service, node, pod, svcPort)
+	address, port, err := d.getMemberIP(service, node, pod, svcPort)
 	if err != nil {
 		return err
 	}
@@ -611,6 +612,48 @@ func (d *DedicatedLoadBalancer) addMember(service *v1.Service, loadbalancer *elb
 	}
 
 	return nil
+}
+
+func (d *DedicatedLoadBalancer) getMemberIP(service *v1.Service, node *v1.Node, pod v1.Pod, svcPort v1.ServicePort) (string, int32, error) {
+	if service.Spec.AllocateLoadBalancerNodePorts != nil && *service.Spec.AllocateLoadBalancerNodePorts {
+		klog.Infof("add member using the Node's IP and port, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
+
+		address := ""
+		if pod.Status.HostIP != "" {
+			address = pod.Status.HostIP
+		} else {
+			addr, err := getNodeAddress(node)
+			if err != nil {
+				return "", 0, err
+			}
+			address = addr
+		}
+
+		address, err := d.getPrimaryIP(address)
+		if err != nil {
+			return "", 0, err
+		}
+		return address, svcPort.NodePort, nil
+	}
+
+	if service.Spec.AllocateLoadBalancerNodePorts != nil && !*service.Spec.AllocateLoadBalancerNodePorts {
+		klog.Infof("add member using the Pod's IP and port, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
+		// get IP and port from Pod
+		if svcPort.TargetPort.Type == intstr.Int {
+			klog.V(6).Infof("targetPort is a number, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
+			return pod.Status.PodIP, svcPort.TargetPort.IntVal, nil
+		}
+
+		klog.V(6).Infof("targetPort is a name, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
+		for _, c := range pod.Spec.Containers {
+			for _, p := range c.Ports {
+				if p.Name == svcPort.TargetPort.StrVal && string(p.Protocol) == string(svcPort.Protocol) {
+					return pod.Status.PodIP, p.ContainerPort, nil
+				}
+			}
+		}
+	}
+	return "", 0, fmt.Errorf("not found member IP and port")
 }
 
 func (d *DedicatedLoadBalancer) deleteMember(elbID string, poolID string, member elbmodel.Member) error {
