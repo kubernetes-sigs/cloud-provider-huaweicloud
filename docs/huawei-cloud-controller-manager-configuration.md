@@ -233,4 +233,9 @@ The following arguments are supported:
   which may ultimately cause CCM to malfunction. 
   For example, `business-name: order-pass`, kubernetes loadbalancer service namespace/name: `default/order-service`,
   then the name of the ELB instance is: `k8s_service_order-pass_default_order-service`.
+
+  > Note:
   > Changing this will create new ELB instances, the old ELB instances will not be deleted and no longer maintained.
+
+* `primary-nic` Optional. If you want to use the node's primary network card as the back-end service of ELB,
+  please configure `force`, otherwise use HostIP of pod.
