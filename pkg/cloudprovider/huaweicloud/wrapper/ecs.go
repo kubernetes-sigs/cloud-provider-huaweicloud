@@ -287,6 +287,44 @@ func (e *EcsClient) ListSecurityGroups(instanceID string) ([]model.NovaSecurityG
 	return rst, err
 }
 
+func (e *EcsClient) AssociateSecurityGroup(instanceID, securityGroupID string) error {
+	return e.wrapper(func(c *ecs.EcsClient) (interface{}, error) {
+		return c.NovaAssociateSecurityGroup(&model.NovaAssociateSecurityGroupRequest{
+			ServerId: instanceID,
+			Body: &model.NovaAssociateSecurityGroupRequestBody{
+				AddSecurityGroup: &model.NovaAddSecurityGroupOption{
+					Name: securityGroupID,
+				},
+			},
+		})
+	})
+}
+
+func (e *EcsClient) DisassociateSecurityGroup(instanceID, securityGroupID string) error {
+	err := e.wrapper(func(c *ecs.EcsClient) (interface{}, error) {
+		return c.NovaDisassociateSecurityGroup(&model.NovaDisassociateSecurityGroupRequest{
+			ServerId: instanceID,
+			Body: &model.NovaDisassociateSecurityGroupRequestBody{
+				RemoveSecurityGroup: &model.NovaRemoveSecurityGroupOption{
+					Name: securityGroupID,
+				},
+			},
+		})
+	})
+
+	if err != nil {
+		notAssociated := "not associated with the instance"
+		notFound := "is not found for project"
+		if strings.Contains(err.Error(), notAssociated) || strings.Contains(err.Error(), notFound) {
+			klog.Errorf("failed to disassociate security group %v from instance %v: %v",
+				securityGroupID, instanceID, err)
+			return nil
+		}
+	}
+
+	return err
+}
+
 // addToNodeAddresses appends the NodeAddresses to the passed-by-pointer slice, only if they do not already exist.
 func addToNodeAddresses(addresses *[]v1.NodeAddress, addAddresses ...v1.NodeAddress) {
 	for _, add := range addAddresses {

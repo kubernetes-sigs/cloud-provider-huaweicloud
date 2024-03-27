@@ -10,3 +10,4 @@ auth-url=<optional, the cloud IAM domain name>
 [Vpc]
 id=<your vpc ID>
 subnet-id=<your IPV4 subnet ID>
+security-group-id=<optional, your security group ID>
