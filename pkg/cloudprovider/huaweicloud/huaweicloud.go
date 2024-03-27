@@ -25,6 +25,9 @@ import (
 	"sync"
 	"time"
 
+	ecs "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2"
+	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
+	vpcmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/vpc/v2/model"
 	gocache "github.com/patrickmn/go-cache"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -47,9 +50,6 @@ import (
 	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/klog/v2"
 	"k8s.io/utils/pointer"
-
-	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
-	vpcmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/vpc/v2/model"
 
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
@@ -452,6 +452,11 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 		providers: map[LoadBalanceVersion]cloudprovider.LoadBalancer{},
 	}
 	err = hws.listenerDeploy()
+	if err != nil {
+		return nil, err
+	}
+
+	err = hws.securityGroupListener()
 	if err != nil {
 		return nil, err
 	}
@@ -1011,6 +1016,33 @@ func (h *CloudProvider) listenerDeploy() error {
 		listener.stopListenerSlice()
 		listener.goroutinePool.Stop()
 	})
+	return nil
+}
+
+func (h *CloudProvider) securityGroupListener() error {
+	cloudConfigSecId := h.cloudConfig.VpcOpts.SecurityGroupID
+	if len(cloudConfigSecId) == 0 {
+		return nil
+	}
+
+	hc := h.ecsClient.AuthOpts.GetHcClient("ecs")
+	ecsApiClient := ecs.NewEcsClient(hc)
+
+	secListener := &SecurityGroupListener{
+		cloudProvider:    h,
+		ecsApiClient:     ecsApiClient,
+		cloudConfigSecId: cloudConfigSecId,
+	}
+
+	// listen add and delete event
+	go func() {
+		err := secListener.startSecurityGroupListener()
+		if err != nil {
+			klog.Errorf("failed to listen to security group: %v", err)
+			return
+		}
+	}()
+
 	return nil
 }
 
