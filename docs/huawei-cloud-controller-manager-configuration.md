@@ -25,6 +25,7 @@ auth-url=
 [Vpc]
 id=
 subnet-id=
+security-group-id=
 ```
 
 > After modification, CCM needs to be restarted to load the data.
@@ -37,7 +38,7 @@ This section provides Huawei Cloud IAM configuration and authentication informat
 
 * `region` Required. This is the Huawei Cloud region.
 
-  **Note**: The `region` must be the same as the ECSes of the Kubernetes cluster.
+  **Note**: The `region` must be the same as the ECS of the Kubernetes cluster.
 
 * `access-key` Required. The access key of the Huawei Cloud.
 
@@ -46,7 +47,7 @@ This section provides Huawei Cloud IAM configuration and authentication informat
 * `project-id` Optional. The Project ID of the Huawei Cloud. 
   See [Obtaining a Project ID](https://support.huaweicloud.com/intl/en-us/api-evs/evs_04_0046.html).
   
-  **Note**: The `project-id` must be the same as the ECSes of the Kubernetes cluster.
+  **Note**: The `project-id` must be the same as the ECS of the Kubernetes cluster.
 
 * `cloud` Optional. The endpoint of the cloud provider. Defaults to `myhuaweicloud.com`'`.
 
@@ -56,9 +57,12 @@ This section provides Huawei Cloud IAM configuration and authentication informat
 
 This section contains network configuration information.
 
-* `id` Optional. Specifies the VPC used by ECSes of the Kubernetes cluster.
+* `id` Optional. Specifies the VPC used by ECS of the Kubernetes cluster.
 
-* `subnet-id` Optional. Specifies the IPv4 subnet ID used by ECSes of the Kubernetes cluster.
+* `subnet-id` Optional. Specifies the IPv4 subnet ID used by ECS of the Kubernetes cluster.
+
+* `security-group-id` Optional. Add security group to the ECS in the cluster. The security group of the node will be
+  added or deleted accordingly when add node to the cluster or delete node from the cluster.
 
 ## Loadbalancer Configuration
 

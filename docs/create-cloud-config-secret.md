@@ -14,6 +14,7 @@ project-id=62fac0038c52b5eb0970dd9c1a0026a
 # The VPC where your cluster resides
 id=0b876fcb-6a0b-47a3-8067-80fe9245a3da
 subnet-id=d2aa75cc-e356-4dc3-abb0-87078923a168
+security-group-id=48288809-1234-5678-abcd-eb30b2d16cd4
 
 EOF
 
