@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
 	gocache "github.com/patrickmn/go-cache"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -35,6 +36,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
@@ -46,11 +48,6 @@ import (
 	"k8s.io/cloud-provider/options"
 	servicehelper "k8s.io/cloud-provider/service/helpers"
 	"k8s.io/klog/v2"
-	"k8s.io/utils/pointer"
-
-	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
-	vpcmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/vpc/v2/model"
-
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/cloudprovider/huaweicloud/wrapper"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/common"
 	"sigs.k8s.io/cloud-provider-huaweicloud/pkg/config"
@@ -112,6 +109,12 @@ const (
 
 	endpointAdded  = "endpointAdded"
 	endpointUpdate = "endpointUpdate"
+
+	ccmLeaseName              = "cloud-controller-manager"
+	endpointListenerLeaseName = "endpoint-slice-listener"
+	kubeSystemNamespace       = "kube-system"
+
+	uuidLength = 36
 )
 
 type ELBProtocol string
@@ -133,9 +136,10 @@ type Basic struct {
 	ecsClient          *wrapper.EcsClient
 	vpcClient          *wrapper.VpcClient
 
-	restConfig    *rest.Config
-	kubeClient    *corev1.CoreV1Client
-	eventRecorder record.EventRecorder
+	restConfig          *rest.Config
+	kubeClient          *corev1.CoreV1Client
+	kubeInterfaceClient kubernetes.Interface
+	eventRecorder       record.EventRecorder
 
 	mutexLock *mutexkv.MutexKV
 }
@@ -215,103 +219,6 @@ func (b Basic) getNodeSubnetID(node *v1.Node) (string, error) {
 	}
 
 	return "", fmt.Errorf("failed to get node subnet ID")
-}
-
-func (b Basic) allowHealthCheckRule(node *v1.Node) error {
-	if b.loadbalancerOpts.DisableCreateSecurityGroup {
-		klog.Infof("automatic creation of security groups has been disabled")
-		return nil
-	}
-	// Avoid adding security group rules in parallel.
-	healthCheckCidrOptLock.Lock()
-	defer func() {
-		healthCheckCidrOptLock.Unlock()
-	}()
-
-	instance, err := b.ecsClient.GetByNodeName(node.Name)
-	if err != nil {
-		return err
-	}
-
-	secGroups, err := b.ecsClient.ListSecurityGroups(instance.Id)
-	if err != nil {
-		return err
-	}
-	if len(secGroups) == 0 {
-		klog.Warningf("not found any security groups on %s", node.Name)
-		return nil
-	}
-
-	for _, sg := range secGroups {
-		rules, err := b.vpcClient.ListSecurityGroupRules(sg.Id)
-		if err != nil {
-			return fmt.Errorf("failed to list security group[%s] rules: %s", sg.Id, err)
-		}
-
-		for _, r := range rules {
-			if r.Direction == "ingress" && r.RemoteIpPrefix == healthCheckCidr &&
-				r.Ethertype == "IPv4" && r.PortRangeMin == 0 && r.PortRangeMax == 0 {
-				klog.Infof("the health check IP is already in the security group, no need to add rules")
-				return nil
-			}
-		}
-	}
-
-	desc := fmt.Sprintf("DO NOT EDIT. %s are internal IP addresses used by ELB to check the health of backend"+
-		" servers. Created by K8s CCM.", healthCheckCidr)
-
-	securityGroupID := secGroups[0].Id
-	_, err = b.vpcClient.CreateSecurityGroupRule(&vpcmodel.CreateSecurityGroupRuleOption{
-		SecurityGroupId: securityGroupID,
-		Description:     &desc,
-		Direction:       "ingress",
-		Ethertype:       pointer.String("IPv4"),
-		RemoteIpPrefix:  pointer.String(healthCheckCidr),
-	})
-
-	if err != nil {
-		return fmt.Errorf("failed to create security group[%s] rules: %s", securityGroupID, err)
-	}
-
-	return err
-}
-
-func (b Basic) removeHealthCheckRules(node *v1.Node) error {
-	instance, err := b.ecsClient.GetByNodeName(node.Name)
-	if err != nil {
-		return err
-	}
-
-	secGroups, err := b.ecsClient.ListSecurityGroups(instance.Id)
-	if err != nil {
-		return err
-	}
-	if len(secGroups) == 0 {
-		klog.Warningf("not found any security groups on %s", node.Name)
-		return nil
-	}
-
-	desc := fmt.Sprintf("DO NOT EDIT. %s are internal IP addresses used by ELB to check the health of backend"+
-		" servers. Created by K8s CCM.", healthCheckCidr)
-
-	for _, sg := range secGroups {
-		rules, err := b.vpcClient.ListSecurityGroupRules(sg.Id)
-		if err != nil {
-			return fmt.Errorf("failed to list security group[%s] rules: %s", sg.Id, err)
-		}
-
-		for _, r := range rules {
-			if r.Direction == "ingress" && r.RemoteIpPrefix == healthCheckCidr &&
-				r.Ethertype == "IPv4" && r.PortRangeMin == 0 && r.PortRangeMax == 0 && r.Description == desc {
-				err := b.vpcClient.DeleteSecurityGroupRule(r.Id)
-				if err != nil {
-					klog.Errorf("failed to delete security group[%s] rule[%s]", sg.Id, r.Id)
-				}
-			}
-		}
-	}
-
-	return nil
 }
 
 func (b Basic) updateService(service *v1.Service, lbStatus *v1.LoadBalancerStatus) {
@@ -417,6 +324,10 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 	if err != nil {
 		return nil, err
 	}
+	kubeInterfaceClient, err := newKubeInterfaceClient()
+	if err != nil {
+		return nil, err
+	}
 
 	broadcaster := record.NewBroadcaster()
 	broadcaster.StartRecordingToSink(&corev1.EventSinkImpl{Interface: corev1.New(kubeClient.RESTClient()).Events("")})
@@ -441,10 +352,11 @@ func NewHWSCloud(cfg io.Reader) (*CloudProvider, error) {
 		ecsClient:          &wrapper.EcsClient{AuthOpts: &cloudConfig.AuthOpts},
 		vpcClient:          &wrapper.VpcClient{AuthOpts: &cloudConfig.AuthOpts},
 
-		restConfig:    restConfig,
-		kubeClient:    kubeClient,
-		eventRecorder: recorder,
-		mutexLock:     mutexkv.NewMutexKV(),
+		restConfig:          restConfig,
+		kubeClient:          kubeClient,
+		kubeInterfaceClient: kubeInterfaceClient,
+		eventRecorder:       recorder,
+		mutexLock:           mutexkv.NewMutexKV(),
 	}
 
 	hws := &CloudProvider{
@@ -476,6 +388,20 @@ func newKubeClient() (*rest.Config, *corev1.CoreV1Client, error) {
 	}
 
 	return clusterCfg, kubeClient, nil
+}
+
+func newKubeInterfaceClient() (kubernetes.Interface, error) {
+	clusterCfg, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("initial cluster configuration failed with error: %v", err)
+	}
+
+	kubeClient, err := kubernetes.NewForConfig(clusterCfg)
+	if err != nil {
+		return nil, fmt.Errorf("create kubeClient failed with error: %v", err)
+	}
+
+	return kubeClient, nil
 }
 
 func (h *CloudProvider) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
@@ -699,6 +625,21 @@ type LoadBalancerServiceListener struct {
 	invalidServiceCache *gocache.Cache
 }
 
+type LeaderLock struct {
+	id          string
+	leaseName   string
+	cfgIdentity string
+
+	leaseDuration time.Duration
+	renewDeadline time.Duration
+	retryPeriod   time.Duration
+
+	restConfig *rest.Config
+	recorder   record.EventRecorder
+
+	configMapLock resourcelock.Interface
+}
+
 func (e *LoadBalancerServiceListener) stopListenerSlice() {
 	klog.Warningf("Stop listening to Endpoints")
 	e.stopChannel <- struct{}{}
@@ -861,73 +802,6 @@ func (e *LoadBalancerServiceListener) dispatcher(namespace, name, eType string, 
 	handle(svc, false)
 }
 
-func (e *LoadBalancerServiceListener) autoRemoveHealthCheckRule(handle func(node *v1.Node) error) {
-	informer := cache.NewSharedIndexInformer(
-		&cache.ListWatch{
-			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-				return e.kubeClient.Services(metav1.NamespaceAll).List(context.Background(), options)
-			},
-			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-				return e.kubeClient.Services(metav1.NamespaceAll).Watch(context.Background(), options)
-			},
-		},
-		&v1.Service{},
-		0,
-		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
-	)
-
-	_, err := informer.AddEventHandlerWithResyncPeriod(cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			service := obj.(*v1.Service)
-			if service.Spec.Type != v1.ServiceTypeLoadBalancer {
-				return
-			}
-
-			key := fmt.Sprintf("%s/%s", service.Namespace, service.Name)
-			e.serviceCache[key] = service
-			klog.V(6).Infof("new LoadBalancer service %s/%s added, cache size: %v",
-				service.Namespace, service.Name, len(e.serviceCache))
-		},
-		UpdateFunc: func(oldObj, newObj interface{}) {},
-		DeleteFunc: func(obj interface{}) {
-			service := obj.(*v1.Service)
-			if service.Spec.Type != v1.ServiceTypeLoadBalancer {
-				return
-			}
-			key := fmt.Sprintf("%s/%s", service.Namespace, service.Name)
-			delete(e.serviceCache, key)
-			klog.V(6).Infof("found LoadBalancer service %s/%s deleted, cache size: %v",
-				service.Namespace, service.Name, len(e.serviceCache))
-
-			if len(e.serviceCache) > 0 {
-				klog.V(6).Infof("found %v LoadBalancer service(s), "+
-					"skip clearing the security group rules for ELB health check", len(e.serviceCache))
-				return
-			}
-
-			nodes, err := e.kubeClient.Nodes().List(context.TODO(), metav1.ListOptions{
-				Limit: 1,
-			})
-			if err != nil {
-				klog.Errorf("failed to query a list of nodes in autoRemoveHealthCheckRule: %s", err)
-			}
-
-			if len(nodes.Items) <= 0 {
-				klog.Warningf("not found any nodes, skip clearing the security group rules for ELB health check")
-				return
-			}
-			klog.Infof("all LoadBalancer services has been deleted, start to clean health check rules")
-			n := nodes.Items[0]
-			handle(&n) //nolint:errcheck
-		},
-	}, 5*time.Second)
-	if err != nil {
-		klog.Errorf("failed to watch service: %s", err)
-	}
-
-	informer.Run(e.stopChannel)
-}
-
 func (h *CloudProvider) listenerDeploy() error {
 	listener := LoadBalancerServiceListener{
 		Basic:       h.Basic,
@@ -940,114 +814,170 @@ func (h *CloudProvider) listenerDeploy() error {
 	}
 
 	clusterName := h.cloudControllerManagerOpts.KubeCloudShared.ClusterName
-	id, err := os.Hostname()
-	if err != nil {
-		return fmt.Errorf("failed to elect leader in listener EndpointSlice : %s", err)
-	}
+	leaderLock := buildConfigMapLock(h.restConfig, h.eventRecorder)
 
-	go leaderElection(id, h.restConfig, h.eventRecorder, func(ctx context.Context) {
-		if !h.loadbalancerOpts.DisableCreateSecurityGroup {
-			go listener.autoRemoveHealthCheckRule(h.removeHealthCheckRules)
-		} else {
-			klog.Infof("automatic creation of security groups has been disabled")
+	go leaderElection(leaderLock, func(ctx context.Context) {
+		// check if listener is on the node which has lease
+		leader, _, err := leaderLock.configMapLock.Get(context.Background())
+		if err != nil {
+			klog.Errorf("failed to get config map lock:%v", err)
+		}
+		ccmLease, err := h.kubeInterfaceClient.CoordinationV1().Leases(kubeSystemNamespace).Get(context.Background(),
+			ccmLeaseName, metav1.GetOptions{})
+		ccmHolderIdentity := ccmLease.Spec.HolderIdentity
+		if err != nil {
+			klog.Errorf("failed to get cloud-controller-manager lease:%v", err)
 		}
 
-		listener.startEndpointListener(func(service *v1.Service, isDelete bool) {
-			klog.Infof("Got service %s/%s using loadbalancer class %s",
-				service.Namespace, service.Name, utils.ToString(service.Spec.LoadBalancerClass))
+		if checkHostName(*ccmHolderIdentity, leader.HolderIdentity) {
+			listener.startEndpointListener(func(service *v1.Service, isDelete bool) {
+				klog.Infof("Got service %s/%s using loadbalancer class %s",
+					service.Namespace, service.Name, utils.ToString(service.Spec.LoadBalancerClass))
 
-			if !h.isSupportedSvc(service) {
-				return
-			}
-
-			if isDelete {
-				err := h.EnsureLoadBalancerDeleted(context.TODO(), clusterName, service)
-				if err != nil {
-					klog.Errorf("failed to delete loadBalancer, service: %s/%s, error: %s", service.Namespace, service.Name, err)
-					eventMsg := fmt.Sprintf("failed to clean listener for service: %s/%s, error: %s", service.Namespace, service.Name, err)
-					h.sendEvent("DeleteLoadBalancer", eventMsg, service)
+				if !h.isSupportedSvc(service) {
+					return
 				}
-				return
-			}
 
-			nodeList, err := h.kubeClient.Nodes().List(context.TODO(), metav1.ListOptions{})
+				if isDelete {
+					err := h.EnsureLoadBalancerDeleted(context.TODO(), clusterName, service)
+					if err != nil {
+						klog.Errorf("failed to delete loadBalancer, service: %s/%s, error: %s", service.Namespace, service.Name, err)
+						eventMsg := fmt.Sprintf("failed to clean listener for service: %s/%s, error: %s", service.Namespace, service.Name, err)
+						h.sendEvent("DeleteLoadBalancer", eventMsg, service)
+					}
+					return
+				}
+
+				nodeList, err := h.kubeClient.Nodes().List(context.TODO(), metav1.ListOptions{})
+				if err != nil {
+					klog.Errorf("failed to query node list: %s", err)
+				}
+				nodes := make([]*v1.Node, 0, len(nodeList.Items))
+				for _, n := range nodeList.Items {
+					node := n
+					nodes = append(nodes, &node)
+				}
+
+				h.sendEvent("UpdateLoadBalancer", "Endpoints changed, start updating", service)
+
+				err = h.UpdateLoadBalancer(context.TODO(), clusterName, service, nodes)
+				if err == nil {
+					lbStatus, exists, err := h.GetLoadBalancer(context.TODO(), clusterName, service)
+					if err != nil || !exists {
+						klog.Errorf("failed to get loadBalancer, service: %s/%s, exists: %v, error: %s", service.Namespace, service.Name, exists, err)
+						return
+					}
+					h.updateService(service, lbStatus)
+					return
+				}
+
+				// An error occurred while updating.
+				if common.IsNotFound(err) || strings.Contains(err.Error(), "error, can not find a listener matching") {
+					lbStatus, err := h.EnsureLoadBalancer(context.TODO(), clusterName, service, nodes)
+					if err != nil {
+						klog.Errorf("failed to ensure loadBalancer, service: %s/%s, error: %s", service.Namespace, service.Name, err)
+						return
+					}
+					h.updateService(service, lbStatus)
+					return
+				}
+
+				klog.Errorf("failed to synchronization endpoint, service: %s/%s, error: %s",
+					service.Namespace, service.Name, err)
+
+			})
+		} else {
+			newLeader := &resourcelock.LeaderElectionRecord{
+				HolderIdentity:       *ccmHolderIdentity,
+				LeaseDurationSeconds: 60,
+				RenewTime:            metav1.NewTime(time.Now().Add(50 * time.Second)),
+			}
+			err = leaderLock.configMapLock.Update(context.TODO(), *newLeader)
 			if err != nil {
-				klog.Errorf("failed to query node list: %s", err)
+				klog.Errorf("failed to update leader:%v", err)
 			}
-			nodes := make([]*v1.Node, 0, len(nodeList.Items))
-			for _, n := range nodeList.Items {
-				node := n
-				nodes = append(nodes, &node)
-			}
-
-			h.sendEvent("UpdateLoadBalancer", "Endpoints changed, start updating", service)
-
-			err = h.UpdateLoadBalancer(context.TODO(), clusterName, service, nodes)
-			if err == nil {
-				lbStatus, exists, err := h.GetLoadBalancer(context.TODO(), clusterName, service)
-				if err != nil || !exists {
-					klog.Errorf("failed to get loadBalancer, service: %s/%s, exists: %v, error: %s", service.Namespace, service.Name, exists, err)
-					return
-				}
-				h.updateService(service, lbStatus)
-				return
-			}
-
-			// An error occurred while updating.
-			if common.IsNotFound(err) || strings.Contains(err.Error(), "error, can not find a listener matching") {
-				lbStatus, err := h.EnsureLoadBalancer(context.TODO(), clusterName, service, nodes)
-				if err != nil {
-					klog.Errorf("failed to ensure loadBalancer, service: %s/%s, error: %s", service.Namespace, service.Name, err)
-					return
-				}
-				h.updateService(service, lbStatus)
-				return
-			}
-
-			klog.Errorf("failed to synchronization endpoint, service: %s/%s, error: %s",
-				service.Namespace, service.Name, err)
-		})
+			listener.stopListenerSlice()
+			listener.goroutinePool.Stop()
+		}
 	}, func() {
 		listener.stopListenerSlice()
 		listener.goroutinePool.Stop()
 	})
+
 	return nil
 }
 
-func leaderElection(id string, restConfig *rest.Config, recorder record.EventRecorder, onSuccess func(context.Context), onStop func()) {
-	leaseName := "endpoint-slice-listener"
-	leaseDuration := 60 * time.Second
-	renewDeadline := 50 * time.Second
-	retryPeriod := 30 * time.Second
+func buildConfigMapLock(restConfig *rest.Config, recorder record.EventRecorder) *LeaderLock {
+	id, err := os.Hostname()
+	if err != nil {
+		klog.Errorf("failed to elect leader in listener EndpointSlice : %s", err)
+		return nil
+	}
 
+	leaderLock := &LeaderLock{
+		id:        id,
+		leaseName: endpointListenerLeaseName,
+
+		leaseDuration: 60 * time.Second,
+		renewDeadline: 50 * time.Second,
+		retryPeriod:   30 * time.Second,
+
+		restConfig: restConfig,
+		recorder:   recorder,
+	}
+
+	cfgIdentity := fmt.Sprintf("%s_%s", id, string(uuid.NewUUID()))
 	configmapLock, err := resourcelock.NewFromKubeconfig(resourcelock.ConfigMapsLeasesResourceLock,
 		"kube-system",
-		leaseName,
+		leaderLock.leaseName,
 		resourcelock.ResourceLockConfig{
-			Identity:      fmt.Sprintf("%s_%s", id, string(uuid.NewUUID())),
+			Identity:      cfgIdentity,
 			EventRecorder: recorder,
 		},
 		restConfig,
-		renewDeadline)
+		leaderLock.renewDeadline)
 	if err != nil {
 		klog.Fatalf("error creating lock: %v", err)
 	}
 
+	leaderLock.configMapLock = configmapLock
+
+	return leaderLock
+}
+
+func leaderElection(leaderLock *LeaderLock, onSuccess func(context.Context), onStop func()) {
 	leaderelection.RunOrDie(context.TODO(), leaderelection.LeaderElectionConfig{
-		Lock:          configmapLock,
-		LeaseDuration: leaseDuration,
-		RenewDeadline: renewDeadline,
-		RetryPeriod:   retryPeriod,
+		Lock:          leaderLock.configMapLock,
+		LeaseDuration: leaderLock.leaseDuration,
+		RenewDeadline: leaderLock.renewDeadline,
+		RetryPeriod:   leaderLock.retryPeriod,
 		Callbacks: leaderelection.LeaderCallbacks{
 			OnStartedLeading: func(ctx context.Context) {
-				klog.V(6).Infof("[Listener EndpointSlices] leader election got: %s", id)
+				klog.V(6).Infof("[Listener EndpointSlices] leader election got: %s", leaderLock.id)
 				onSuccess(ctx)
 			},
 			OnStoppedLeading: func() {
-				klog.Infof("[Listener EndpointSlices] leader election lost: %s", id)
+				klog.Infof("[Listener EndpointSlices] leader election lost: %s", leaderLock.id)
 				onStop()
 			},
 		},
-		Name: leaseName,
+		Name: leaderLock.leaseName,
 	})
+}
+
+func checkHostName(ccmHolderIdentity, epHolderIdentity string) bool {
+	l1, l2 := "", ""
+	if len(ccmHolderIdentity) > uuidLength+1 && len(epHolderIdentity) > uuidLength+1 {
+		l1 = ccmHolderIdentity[0 : len(ccmHolderIdentity)-uuidLength-1]
+		l2 = epHolderIdentity[0 : len(epHolderIdentity)-uuidLength-1]
+	} else {
+		klog.Errorf("the length of ccm holder identity or ep holder identity is illegal:the length (ccm,ep)=(%v,%v)",
+			len(ccmHolderIdentity), len(epHolderIdentity))
+		return false
+	}
+
+	if l1 == l2 {
+		return true
+	}
+	return false
 }

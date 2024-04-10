@@ -49,9 +49,9 @@ echo -e "\nDeploy huawei-cloud-controller-manager"
 
 REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 image_url=${REGISTRY}/huawei-cloud-controller-manager:${VERSION}
-cp -rf ${REPO_ROOT}/hack/deploy/huawei-cloud-controller-manager.yaml ${tmpPath}
+cp -rf ${REPO_ROOT}/hack/deploy/huawei-cloud-controller-manager-daemonset.yaml ${tmpPath}
 
-sed -i'' -e "s|{{image_url}}|${image_url}|g" "${tmpPath}"/huawei-cloud-controller-manager.yaml
+sed -i'' -e "s|{{image_url}}|${image_url}|g" "${tmpPath}"/huawei-cloud-controller-manager-daemonset.yaml
 
 kubectl apply -f "${tmpPath}/huawei-cloud-controller-manager.yaml"
 rm -rf "${tmpPath}/huawei-cloud-controller-manager.yaml"

@@ -40,7 +40,7 @@ kubectl apply -f  https://raw.githubusercontent.com/kubernetes-sigs/cloud-provid
 - Install the Huawei Cloud Provider Manager
 
 ```shell
-kubectl apply -f  https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-huaweicloud/master/manifests/huawei-cloud-controller-manager.yaml
+kubectl apply -f  https://raw.githubusercontent.com/kubernetes-sigs/cloud-provider-huaweicloud/master/manifests/huawei-cloud-controller-manager-daemonset.yaml
 ```
 
 - Check the running status

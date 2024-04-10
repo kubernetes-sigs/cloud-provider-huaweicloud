@@ -1,13 +1,11 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: DaemonSet
 metadata:
   name: huawei-cloud-controller-manager
   namespace: kube-system
   labels:
     k8s-app: huawei-cloud-controller-manager
 spec:
-  strategy:
-    type: RollingUpdate
   selector:
     matchLabels:
       k8s-app: huawei-cloud-controller-manager
@@ -16,16 +14,8 @@ spec:
       labels:
         k8s-app: huawei-cloud-controller-manager
     spec:
-      affinity:
-        nodeAffinity:
-          requiredDuringSchedulingIgnoredDuringExecution:
-            nodeSelectorTerms:
-              - matchExpressions:
-                - key: node-role.kubernetes.io/master
-                  operator: Exists
-              - matchExpressions:
-                - key: node-role.kubernetes.io/control-plane
-                  operator: Exists
+      nodeSelector:
+        kubernetes.io/os: linux
       securityContext:
         runAsUser: 1001
       tolerations:
@@ -39,7 +29,7 @@ spec:
       serviceAccountName: cloud-controller-manager
       containers:
         - name: huawei-cloud-controller-manager
-          image: swr.cn-north-4.myhuaweicloud.com/k8s-cloudprovider/huawei-cloud-controller-manager:v0.26.7
+          image: zippowang/huawei-cloud-controller-manager:v0.0.0.30
           args:
             - /bin/huawei-cloud-controller-manager
             - --v=5

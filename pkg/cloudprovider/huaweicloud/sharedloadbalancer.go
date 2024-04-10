@@ -338,13 +338,6 @@ func (l *SharedLoadBalancer) ensureHealthCheck(loadbalancerID string, pool *elbm
 	monitorID := pool.HealthmonitorId
 	klog.Infof("add or update or remove health check: %s : %#v", monitorID, healthCheckOpts)
 
-	if healthCheckOpts.Enable {
-		err := l.allowHealthCheckRule(node)
-		if err != nil {
-			return err
-		}
-	}
-
 	protocolStr := parseProtocol(service, port)
 	// create health monitor
 	if monitorID == "" && healthCheckOpts.Enable {
