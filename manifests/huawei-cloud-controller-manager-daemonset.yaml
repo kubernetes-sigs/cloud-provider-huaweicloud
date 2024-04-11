@@ -1,0 +1,79 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: huawei-cloud-controller-manager
+  namespace: kube-system
+  labels:
+    k8s-app: huawei-cloud-controller-manager
+spec:
+  selector:
+    matchLabels:
+      k8s-app: huawei-cloud-controller-manager
+  template:
+    metadata:
+      labels:
+        k8s-app: huawei-cloud-controller-manager
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      securityContext:
+        runAsUser: 1001
+      tolerations:
+        - key: node.cloudprovider.kubernetes.io/uninitialized
+          value: "true"
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/master
+          effect: NoSchedule
+        - key: node-role.kubernetes.io/control-plane
+          effect: NoSchedule
+      serviceAccountName: cloud-controller-manager
+      containers:
+        - name: huawei-cloud-controller-manager
+          image: swr.cn-north-4.myhuaweicloud.com/k8s-cloudprovider/huawei-cloud-controller-manager:v0.26.7
+          args:
+            - /bin/huawei-cloud-controller-manager
+            - --v=5
+            - --cloud-config=/etc/config/cloud-config
+            - --cloud-provider=huaweicloud
+            - --use-service-account-credentials=true
+            - --node-status-update-frequency=5s
+            - --node-monitor-period=5s
+            - --leader-elect-lease-duration=30s
+            - --leader-elect-renew-deadline=20s
+            - --leader-elect-retry-period=2s
+          volumeMounts:
+            - mountPath: /etc/kubernetes
+              name: k8s-certs
+              readOnly: true
+            - mountPath: /etc/ssl/certs
+              name: ca-certs
+              readOnly: true
+            - mountPath: /etc/config
+              name: cloud-config-volume
+              readOnly: true
+            - mountPath: /usr/libexec/kubernetes/kubelet-plugins/volume/exec
+              name: flexvolume-dir
+          resources:
+            requests:
+              cpu: 200m
+              memory: 100Mi
+            limits:
+              cpu: 2
+              memory: 2Gi
+      hostNetwork: true
+      volumes:
+        - hostPath:
+            path: /usr/libexec/kubernetes/kubelet-plugins/volume/exec
+            type: DirectoryOrCreate
+          name: flexvolume-dir
+        - hostPath:
+            path: /etc/kubernetes
+            type: DirectoryOrCreate
+          name: k8s-certs
+        - hostPath:
+            path: /etc/ssl/certs
+            type: DirectoryOrCreate
+          name: ca-certs
+        - name: cloud-config-volume
+          secret:
+            secretName: cloud-config
