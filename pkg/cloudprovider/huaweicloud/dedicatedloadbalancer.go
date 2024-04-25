@@ -720,13 +720,6 @@ func (d *DedicatedLoadBalancer) ensureHealthCheck(loadbalancerID string, pool *e
 	monitorID := pool.HealthmonitorId
 	klog.Infof("add or update or remove health check: %s : %#v", monitorID, healthCheckOpts)
 
-	if healthCheckOpts.Enable {
-		err := d.allowHealthCheckRule(node)
-		if err != nil {
-			return err
-		}
-	}
-
 	// create health monitor
 	if monitorID == "" && healthCheckOpts.Enable {
 		_, err := d.createHealthMonitor(loadbalancerID, pool.Id, pool.Protocol, healthCheckOpts)
