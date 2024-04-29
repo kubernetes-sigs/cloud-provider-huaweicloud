@@ -767,6 +767,14 @@ func (h *CloudProvider) listenerDeploy() error {
 		invalidServiceCache: gocache.New(5*time.Minute, 10*time.Minute),
 	}
 
+	secListener := &SecurityGroupListener{
+		kubeClient:      h.kubeClient,
+		ecsClient:       h.ecsClient,
+		securityGroupID: h.cloudConfig.VpcOpts.SecurityGroupID,
+
+		stopChannel: make(chan struct{}, 1),
+	}
+
 	clusterName := h.cloudControllerManagerOpts.KubeCloudShared.ClusterName
 	id, err := os.Hostname()
 	if err != nil {
@@ -774,6 +782,8 @@ func (h *CloudProvider) listenerDeploy() error {
 	}
 
 	go leaderElection(id, h.restConfig, h.eventRecorder, func(ctx context.Context) {
+		go secListener.startSecurityGroupListener()
+
 		listener.startEndpointListener(func(service *v1.Service, isDelete bool) {
 			klog.Infof("Got service %s/%s using loadbalancer class %s",
 				service.Namespace, service.Name, utils.ToString(service.Spec.LoadBalancerClass))
@@ -832,6 +842,7 @@ func (h *CloudProvider) listenerDeploy() error {
 	}, func() {
 		listener.goroutinePool.Stop()
 		listener.stopListenerSlice()
+		secListener.stopSecurityGroupListener()
 	})
 
 	return nil

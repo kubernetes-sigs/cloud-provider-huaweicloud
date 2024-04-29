@@ -40,8 +40,9 @@ type CloudConfig struct {
 }
 
 type VpcOptions struct {
-	ID       string `gcfg:"id"`
-	SubnetID string `gcfg:"subnet-id"`
+	ID              string `gcfg:"id"`
+	SubnetID        string `gcfg:"subnet-id"`
+	SecurityGroupID string `gcfg:"security-group-id"`
 }
 
 type AuthOptions struct {
