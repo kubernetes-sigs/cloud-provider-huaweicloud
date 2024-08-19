@@ -22,12 +22,22 @@ export REGISTRY_SERVER_ADDRESS=swr.ap-southeast-1.myhuaweicloud.com
 export REGISTRY=${REGISTRY_SERVER_ADDRESS}/cloud-native
 export VERSION=v$(echo $RANDOM | sha1sum |cut -c 1-5)
 
-echo -e "\nBuild images"
+echo -e "\n:::::: Check KUBECONFIG ::::::"
+echo "KUBECONFIG="$KUBECONFIG
+
+echo -e "\n:::::: Check cloud-config secre ::::::t"
+count=$(kubectl get -n kube-system secret | grep cloud-config | wc -l)
+if [[ "$count" -ne 1 ]]; then
+  echo ":::::: Please create the cloud-config secret."
+  exit 1
+fi
+
+echo -e "\n:::::: Build images ::::::"
 # todo: Maybe we need load the image to target cluster node.
 make image-huawei-cloud-controller-manager
 
 tmpPath=$(mktemp -d)
-is_containerd=`command -v containerd`
+is_containerd=$(command -v containerd)
 echo "is_containerd: ${is_containerd}"
 if [[ -x ${is_containerd} ]]; then
   docker save -o "${tmpPath}/huawei-cloud-controller-manager.tar" ${REGISTRY}/huawei-cloud-controller-manager:${VERSION}
@@ -35,17 +45,10 @@ if [[ -x ${is_containerd} ]]; then
   rm -rf ${tmpPath}/huawei-cloud-controller-manager.tar
 fi
 
-echo -e "\nCheck cloud-config secret"
-count=`kubectl get -n kube-system secret cloud-config | grep cloud-config | wc -l`
-if [[ "$count" -ne 1 ]]; then
-  echo "Please create the cloud-config secret."
-  exit 1
-fi
-
 # Remove the existing provider if it exists.
 kubectl delete -n kube-system deployment --ignore-not-found=true huawei-cloud-controller-manager
 
-echo -e "\nDeploy huawei-cloud-controller-manager"
+echo -e "\n:::::: Deploy huawei-cloud-controller-manager ::::::"
 
 REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 image_url=${REGISTRY}/huawei-cloud-controller-manager:${VERSION}
