@@ -78,8 +78,9 @@ func (e *EcsClient) GetByNodeName(name string) (*model.ServerDetail, error) {
 		return nil, err
 	}
 
-	notFound := fmt.Errorf("not found any ECS, node: %s, PrivateIP: %s", name, privateIP)
+	notFound := status.Errorf(codes.NotFound, "not found any ECS, node: %s, PrivateIP: %s", name, privateIP)
 	if rsp.Servers == nil || len(*rsp.Servers) == 0 {
+		klog.Errorf("not found any ECS, node: %s, PrivateIP: %s", name, privateIP)
 		return nil, notFound
 	}
 
