@@ -31,21 +31,21 @@ GOPATH=$(go env GOPATH | awk -F ':' '{print $1}')
 export PATH=$PATH:$GOPATH/bin
 
 # Pre run e2e for extra components
-echo -e "\nRun pre run e2e"
+echo -e "\n:::::: Run pre run e2e ::::::"
 "${REPO_ROOT}"/hack/pre-run-e2e.sh
 
 # Run e2e
-echo -e "\nRun e2e"
+echo -e "\n:::::: Run e2e ::::::"
 set +e
 ginkgo -v --race --trace --fail-fast -p --randomize-all ./test/e2e/
 TESTING_RESULT=$?
 
 # Collect logs
 kubectl logs deployment/huawei-cloud-controller-manager -n kube-system > ${ARTIFACTS_PATH}/huawei-cloud-controller-manager.log
-echo -e "\nCollected logs at ${ARTIFACTS_PATH}:"
+echo -e "\n:::::: Collected logs at ${ARTIFACTS_PATH}:"
 
 # Post run e2e for delete extra components
-echo -e "\nRun post run e2e"
+echo -e "\n:::::: Run post run e2e ::::::"
 "${REPO_ROOT}"/hack/post-run-e2e.sh
 
 exit $TESTING_RESULT
