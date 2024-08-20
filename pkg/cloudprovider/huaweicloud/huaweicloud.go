@@ -854,7 +854,7 @@ func leaderElection(id string, restConfig *rest.Config, recorder record.EventRec
 	renewDeadline := 50 * time.Second
 	retryPeriod := 30 * time.Second
 
-	configmapLock, err := resourcelock.NewFromKubeconfig(resourcelock.ConfigMapsLeasesResourceLock,
+	configmapLock, err := resourcelock.NewFromKubeconfig(resourcelock.LeasesResourceLock,
 		kubeSystemNamespace,
 		leaseName,
 		resourcelock.ResourceLockConfig{
