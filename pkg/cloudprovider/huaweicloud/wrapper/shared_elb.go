@@ -14,6 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+// nolint: revive
 package wrapper
 
 import (
@@ -189,6 +190,7 @@ func (s *SharedLoadBalanceClient) UpdateListener(id string, req *model.UpdateLis
 	})
 }
 
+// nolint: revive
 func (s *SharedLoadBalanceClient) DeleteListener(elbID string, listenerID string) error {
 	// Check pools bound to this listener
 	pools, err := s.ListPools(&model.ListPoolsRequest{LoadbalancerId: pointer.String(elbID)})
@@ -383,6 +385,7 @@ func (s *SharedLoadBalanceClient) DeleteMember(poolID, memberID string) error {
 	})
 }
 
+// nolint: revive
 func (s *SharedLoadBalanceClient) DeleteAllPoolMembers(poolID string) error {
 	members, err := s.ListMembers(&model.ListMembersRequest{PoolId: poolID})
 	if err != nil {

@@ -42,6 +42,8 @@ import (
 //	sliceFilter := []string{"a"}
 //	FilterBasicSlice(data, sliceFilter, rst2)       // rst2 = [&a, &a]
 //	FilterBasicSlice(data, sliceFilter, rst2, true) // rst2 = [&a]
+//
+// nolint:revive
 func FilterBasicSlice(target any, filter any, result any, args ...any) error {
 	rstRefVal := reflect.ValueOf(result)
 	if rstRefVal.Kind() != reflect.Pointer {
@@ -55,7 +57,7 @@ func FilterBasicSlice(target any, filter any, result any, args ...any) error {
 		return fmt.Errorf("FilterSlice arg: target must be a slice")
 	}
 
-	filterMapper := make(map[interface{}]bool)
+	filterMapper := make(map[any]bool)
 
 	filterVal := getReflectVal(filter)
 	for i := 0; i < filterVal.Len(); i++ {
@@ -114,6 +116,8 @@ func FilterBasicSlice(target any, filter any, result any, args ...any) error {
 //	sliceFilter := []string{"a", "b"}
 //	FilterSlice(data, sliceFilter, rst2)       // rst2 = ["a", "a", "b"]
 //	FilterSlice(data, sliceFilter, rst2, true) // rst2 = ["a", "b"]
+//
+// nolint: revive
 func FilterSlice(target any, filter any, result any, args ...any) error {
 	rstRefVal := reflect.ValueOf(result)
 	if rstRefVal.Kind() != reflect.Pointer {
@@ -131,7 +135,7 @@ func FilterSlice(target any, filter any, result any, args ...any) error {
 		return fmt.Errorf("FilterSlice arg: target must be a slice")
 	}
 
-	newFilter := filter.(map[string]interface{})
+	newFilter, _ := filter.(map[string]any)
 	if len(args) == 1 {
 		if ignoreZero, ok := args[0].(bool); ok && ignoreZero {
 			newFilter = removeZero(newFilter)

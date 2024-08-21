@@ -34,6 +34,8 @@ const (
 	DefaultInitDelay = 2 * time.Second
 	DefaultFactor    = 1.02
 	DefaultSteps     = 30
+	NotFound         = 404
+	MaxPoolSize      = 2000
 )
 
 func IsNotFound(err error) bool {
@@ -41,10 +43,10 @@ func IsNotFound(err error) bool {
 		return true
 	}
 	if e, ok := err.(sdkerr.ServiceResponseError); ok {
-		return e.StatusCode == 404
+		return e.StatusCode == NotFound
 	}
 	if e, ok := err.(*sdkerr.ServiceResponseError); ok {
-		return e.StatusCode == 404
+		return e.StatusCode == NotFound
 	}
 	return false
 }
@@ -69,10 +71,11 @@ type ExecutePool struct {
 func NewExecutePool(size int) *ExecutePool {
 	return &ExecutePool{
 		workerNum: size,
-		queueCh:   make(chan JobHandle, 2000),
+		queueCh:   make(chan JobHandle, MaxPoolSize),
 	}
 }
 
+// nolint: revive
 func (w *ExecutePool) Start() {
 	// Make sure it is not started repeatedly.
 	if w.stopCh != nil {

@@ -374,17 +374,17 @@ func newKubeClient() (*rest.Config, *corev1.CoreV1Client, error) {
 	return clusterCfg, kubeClient, nil
 }
 
-func (h *CloudProvider) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (status *v1.LoadBalancerStatus, exists bool, err error) {
+func (h *CloudProvider) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (*v1.LoadBalancerStatus, bool, error) {
 	if !h.isSupportedSvc(service) {
 		return nil, false, cloudprovider.ImplementedElsewhere
 	}
 
-	LBVersion, err := getLoadBalancerVersion(service)
+	lbVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return nil, false, err
 	}
 
-	provider, exist := h.providers[LBVersion]
+	provider, exist := h.providers[lbVersion]
 	if !exist {
 		return nil, false, nil
 	}
@@ -397,12 +397,12 @@ func (h *CloudProvider) GetLoadBalancerName(ctx context.Context, clusterName str
 		return ""
 	}
 
-	LBVersion, err := getLoadBalancerVersion(service)
+	lbVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return ""
 	}
 
-	provider, exist := h.providers[LBVersion]
+	provider, exist := h.providers[lbVersion]
 	if !exist {
 		return ""
 	}
@@ -410,6 +410,7 @@ func (h *CloudProvider) GetLoadBalancerName(ctx context.Context, clusterName str
 	return provider.GetLoadBalancerName(ctx, clusterName, service)
 }
 
+// nolint: revive
 func (h *CloudProvider) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
 	if !h.isSupportedSvc(service) {
 		return nil, cloudprovider.ImplementedElsewhere
@@ -418,12 +419,12 @@ func (h *CloudProvider) EnsureLoadBalancer(ctx context.Context, clusterName stri
 	h.mutexLock.Lock(key)
 	defer h.mutexLock.Unlock(key)
 
-	LBVersion, err := getLoadBalancerVersion(service)
+	lbVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return nil, err
 	}
 
-	provider, exist := h.providers[LBVersion]
+	provider, exist := h.providers[lbVersion]
 	if !exist {
 		return nil, nil
 	}
@@ -439,12 +440,12 @@ func (h *CloudProvider) UpdateLoadBalancer(ctx context.Context, clusterName stri
 	h.mutexLock.Lock(key)
 	defer h.mutexLock.Unlock(key)
 
-	LBVersion, err := getLoadBalancerVersion(service)
+	lbVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return err
 	}
 
-	provider, exist := h.providers[LBVersion]
+	provider, exist := h.providers[lbVersion]
 	if !exist {
 		return nil
 	}
@@ -460,12 +461,12 @@ func (h *CloudProvider) EnsureLoadBalancerDeleted(ctx context.Context, clusterNa
 	h.mutexLock.Lock(key)
 	defer h.mutexLock.Unlock(key)
 
-	LBVersion, err := getLoadBalancerVersion(service)
+	lbVersion, err := getLoadBalancerVersion(service)
 	if err != nil {
 		return err
 	}
 
-	provider, exist := h.providers[LBVersion]
+	provider, exist := h.providers[lbVersion]
 	if !exist {
 		return nil
 	}
@@ -497,18 +498,18 @@ func getLoadBalancerVersion(service *v1.Service) (LoadBalanceVersion, error) {
 // type Instances interface {}
 
 // ExternalID returns the cloud provider ID of the specified instance (deprecated).
-func (h *CloudProvider) ExternalID(ctx context.Context, instance types.NodeName) (string, error) {
+func (*CloudProvider) ExternalID(_ context.Context, _ types.NodeName) (string, error) {
 	return "", cloudprovider.NotImplemented
 }
 
 // HasClusterID returns true if the cluster has a clusterID
-func (h *CloudProvider) HasClusterID() bool {
+func (*CloudProvider) HasClusterID() bool {
 	return true
 }
 
 // Initialize provides the cloud with a kubernetes client builder and may spawn goroutines
 // to perform housekeeping activities within the cloud provider.
-func (h *CloudProvider) Initialize(clientBuilder cloudprovider.ControllerClientBuilder, stop <-chan struct{}) {
+func (*CloudProvider) Initialize(_ cloudprovider.ControllerClientBuilder, _ <-chan struct{}) {
 }
 
 // TCPLoadBalancer returns an implementation of TCPLoadBalancer for Huawei Web Services.
@@ -531,7 +532,7 @@ func (h *CloudProvider) Instances() (cloudprovider.Instances, bool) {
 }
 
 // Zones returns an implementation of Zones for Huawei Web Services.
-func (h *CloudProvider) Zones() (cloudprovider.Zones, bool) {
+func (*CloudProvider) Zones() (cloudprovider.Zones, bool) {
 	return nil, false
 }
 
@@ -541,12 +542,12 @@ func (h *CloudProvider) Clusters() (cloudprovider.Clusters, bool) {
 }
 
 // Routes returns an implementation of Routes for Huawei Web Services.
-func (h *CloudProvider) Routes() (cloudprovider.Routes, bool) {
+func (*CloudProvider) Routes() (cloudprovider.Routes, bool) {
 	return nil, false
 }
 
 // ProviderName returns the cloud provider ID.
-func (h *CloudProvider) ProviderName() string {
+func (*CloudProvider) ProviderName() string {
 	return ProviderName
 }
 
@@ -561,12 +562,12 @@ func (h *CloudProvider) InstancesV2() (cloudprovider.InstancesV2, bool) {
 }
 
 // ListClusters is an implementation of Clusters.ListClusters
-func (h *CloudProvider) ListClusters(ctx context.Context) ([]string, error) {
+func (*CloudProvider) ListClusters(_ context.Context) ([]string, error) {
 	return nil, nil
 }
 
 // Master is an implementation of Clusters.Master
-func (h *CloudProvider) Master(ctx context.Context, clusterName string) (string, error) {
+func (*CloudProvider) Master(_ context.Context, _ string) (string, error) {
 	return "", nil
 }
 
@@ -600,6 +601,7 @@ func (e *LoadBalancerServiceListener) stopListenerSlice() {
 	e.stopChannel <- struct{}{}
 }
 
+// nolint: revive
 func (e *LoadBalancerServiceListener) startEndpointListener(handle func(*v1.Service, bool)) {
 	klog.Infof("starting EndpointListener")
 	e.goroutinePool.Start()
@@ -756,6 +758,7 @@ func (e *LoadBalancerServiceListener) dispatcher(namespace, name, eType string, 
 	handle(svc, false)
 }
 
+// nolint: revive
 func (h *CloudProvider) listenerDeploy() error {
 	listener := LoadBalancerServiceListener{
 		Basic:       h.Basic,
@@ -781,7 +784,7 @@ func (h *CloudProvider) listenerDeploy() error {
 		return fmt.Errorf("failed to elect leader in listener EndpointSlice : %s", err)
 	}
 
-	go leaderElection(id, h.restConfig, h.eventRecorder, func(ctx context.Context) {
+	go leaderElection(id, h.restConfig, h.eventRecorder, func(_ context.Context) {
 		go secListener.startSecurityGroupListener()
 
 		listener.startEndpointListener(func(service *v1.Service, isDelete bool) {
@@ -854,7 +857,7 @@ func leaderElection(id string, restConfig *rest.Config, recorder record.EventRec
 	renewDeadline := 50 * time.Second
 	retryPeriod := 30 * time.Second
 
-	configmapLock, err := resourcelock.NewFromKubeconfig(resourcelock.ConfigMapsLeasesResourceLock,
+	configmapLock, err := resourcelock.NewFromKubeconfig(resourcelock.LeasesResourceLock,
 		kubeSystemNamespace,
 		leaseName,
 		resourcelock.ResourceLockConfig{

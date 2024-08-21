@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	ecsmodel "github.com/huaweicloud/huaweicloud-sdk-go-v3/services/ecs/v2/model"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/klog/v2"
@@ -132,13 +132,13 @@ func (i *Instances) InstanceTypeByProviderID(_ context.Context, providerID strin
 
 // AddSSHKeyToAllInstances adds an SSH public key as a legal identity for all instances
 // expected format for the key is standard ssh-keygen format: <protocol> <blob>
-func (i *Instances) AddSSHKeyToAllInstances(_ context.Context, _ string, _ []byte) error {
+func (*Instances) AddSSHKeyToAllInstances(_ context.Context, _ string, _ []byte) error {
 	return cloudprovider.NotImplemented
 }
 
 // CurrentNodeName returns the name of the node we are currently running on
 // On most clouds (e.g. GCE) this is the hostname, so we provide the hostname
-func (i *Instances) CurrentNodeName(_ context.Context, hostname string) (types.NodeName, error) {
+func (*Instances) CurrentNodeName(_ context.Context, hostname string) (types.NodeName, error) {
 	klog.Infof("CurrentNodeName is called, hostname: %s", hostname)
 	return types.NodeName(hostname), nil
 }
@@ -178,7 +178,7 @@ func (i *Instances) InstanceShutdownByProviderID(_ context.Context, providerID s
 }
 
 // InstanceExists returns true if the instance for the given node exists according to the cloud provider.
-func (i *Instances) InstanceExists(ctx context.Context, node *v1.Node) (bool, error) {
+func (i *Instances) InstanceExists(_ context.Context, node *v1.Node) (bool, error) {
 	klog.Infof("InstanceExists is called with node %s", node.Name)
 	_, err := i.ecsClient.GetByNodeName(node.Name)
 

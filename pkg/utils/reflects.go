@@ -22,7 +22,7 @@ import (
 	"strings"
 )
 
-func GetStructField(object interface{}, keys string) (reflect.Value, error) {
+func GetStructField(object any, keys string) (reflect.Value, error) {
 	value := reflect.ValueOf(object)
 	if value.Kind() == reflect.Slice || (value.Kind() == reflect.Pointer && value.Elem().Kind() == reflect.Slice) {
 		return reflect.Value{}, fmt.Errorf("GetStructField: arg: object must be a struct, not a slice")

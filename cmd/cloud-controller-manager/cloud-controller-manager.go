@@ -32,6 +32,7 @@ import (
 	cloudprovider "k8s.io/cloud-provider"
 	"k8s.io/cloud-provider/app"
 	"k8s.io/cloud-provider/app/config"
+	"k8s.io/cloud-provider/names"
 	"k8s.io/cloud-provider/options"
 	cliflag "k8s.io/component-base/cli/flag"
 	"k8s.io/component-base/logs"
@@ -44,7 +45,7 @@ import (
 )
 
 func main() {
-	rand.Seed(time.Now().UnixNano())
+	rand.Seed(time.Now().UnixNano()) //nolint:staticcheck
 
 	ccmOptions, err := options.NewCloudControllerManagerOptions()
 	if err != nil {
@@ -52,7 +53,8 @@ func main() {
 	}
 
 	fss := cliflag.NamedFlagSets{}
-	command := app.NewCloudControllerManagerCommand(ccmOptions, cloudInitializer, app.DefaultInitFuncConstructors, fss, wait.NeverStop)
+	aliases := names.CCMControllerAliases()
+	command := app.NewCloudControllerManagerCommand(ccmOptions, cloudInitializer, app.DefaultInitFuncConstructors, aliases, fss, wait.NeverStop)
 
 	// TODO: once we switch everything over to Cobra commands, we can go back to calling
 	// utilflag.InitFlags() (by removing its pflag.Parse() call). For now, we have to set the
@@ -66,13 +68,13 @@ func main() {
 	defer logs.FlushLogs()
 
 	if err := command.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		fmt.Fprintf(os.Stderr, "error: %v\n", err) // nolint: revive
 		os.Exit(1)
 	}
 }
 
-func cloudInitializer(config *config.CompletedConfig) cloudprovider.Interface {
-	cloudConfig := config.ComponentConfig.KubeCloudShared.CloudProvider
+func cloudInitializer(cfg *config.CompletedConfig) cloudprovider.Interface {
+	cloudConfig := cfg.ComponentConfig.KubeCloudShared.CloudProvider
 	logPrint("cloudConfig: ", cloudConfig)
 	// initialize cloud provider with the cloud provider name and config file provided
 	cloud, err := cloudprovider.InitCloudProvider(cloudConfig.Name, cloudConfig.CloudConfigFile)
@@ -84,10 +86,12 @@ func cloudInitializer(config *config.CompletedConfig) cloudprovider.Interface {
 	}
 
 	if !cloud.HasClusterID() {
-		if config.ComponentConfig.KubeCloudShared.AllowUntaggedCloud {
-			klog.Warning("detected a cluster without a ClusterID.  A ClusterID will be required in the future.  Please tag your cluster to avoid any future issues")
+		if cfg.ComponentConfig.KubeCloudShared.AllowUntaggedCloud {
+			klog.Warning("detected a cluster without a ClusterID.  A ClusterID will be required in the future. " +
+				"Please tag your cluster to avoid any future issues")
 		} else {
-			klog.Fatalf("no ClusterID found.  A ClusterID is required for the cloud provider to function properly.  This check can be bypassed by setting the allow-untagged-cloud option")
+			klog.Fatalf("no ClusterID found.  A ClusterID is required for the cloud provider to function properly. " +
+				"This check can be bypassed by setting the allow-untagged-cloud option")
 		}
 	}
 	return cloud
