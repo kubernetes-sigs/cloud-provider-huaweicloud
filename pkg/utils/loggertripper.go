@@ -112,7 +112,7 @@ func (lrt *LogRoundTripper) LogResponse(original io.ReadCloser, contentType stri
 
 // formatJSON will try to pretty-format a JSON body.
 // It will also mask known fields which contain sensitive information.
-func (lrt *LogRoundTripper) formatJSON(raw []byte) string {
+func (_ *LogRoundTripper) formatJSON(raw []byte) string {
 	var data map[string]interface{}
 
 	err := json.Unmarshal(raw, &data)
@@ -122,10 +122,10 @@ func (lrt *LogRoundTripper) formatJSON(raw []byte) string {
 	}
 
 	// Mask known password fields
-	if v, ok := data["auth"].(map[string]interface{}); ok {
-		if v, ok := v["identity"].(map[string]interface{}); ok {
-			if v, ok := v["password"].(map[string]interface{}); ok {
-				if v, ok := v["user"].(map[string]interface{}); ok {
+	if v, ok := data["auth"].(map[string]any); ok {
+		if v, ok := v["identity"].(map[string]any); ok {
+			if v, ok := v["password"].(map[string]any); ok {
+				if v, ok := v["user"].(map[string]any); ok {
 					v["password"] = "***"
 				}
 			}
@@ -133,7 +133,7 @@ func (lrt *LogRoundTripper) formatJSON(raw []byte) string {
 	}
 
 	// Ignore the catalog
-	if v, ok := data["token"].(map[string]interface{}); ok {
+	if v, ok := data["token"].(map[string]any); ok {
 		if _, ok := v["catalog"]; ok {
 			return ""
 		}

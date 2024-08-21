@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -24,6 +24,7 @@ type SecurityGroupListener struct {
 	stopChannel chan struct{}
 }
 
+// nolint: revive
 func (s *SecurityGroupListener) startSecurityGroupListener() {
 	if s.securityGroupID == "" {
 		klog.Infof(`"security-group-id" is empty, nodes are added or removed will not be associated or disassociated 
@@ -44,6 +45,7 @@ func (s *SecurityGroupListener) startSecurityGroupListener() {
 	}
 }
 
+// nolint: revive
 func (s *SecurityGroupListener) CreateSecurityGroupInformer() (cache.SharedIndexInformer, error) {
 	nodeList, err := s.kubeClient.Nodes().List(context.TODO(), metav1.ListOptions{})
 	if err != nil {
@@ -90,7 +92,7 @@ func (s *SecurityGroupListener) CreateSecurityGroupInformer() (cache.SharedIndex
 				klog.Errorf("failed to associate security group %s to ECS %s: %s", s.securityGroupID, ecsNode.Id, err)
 			}
 		},
-		UpdateFunc: func(oldObj, newObj interface{}) {},
+		UpdateFunc: func(_, _ interface{}) {},
 		DeleteFunc: func(obj interface{}) {
 			kubeNode, ok := obj.(*v1.Node)
 			if !ok {

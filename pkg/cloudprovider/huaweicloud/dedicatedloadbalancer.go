@@ -51,8 +51,8 @@ type DedicatedLoadBalancer struct {
 	Basic
 }
 
-func (d *DedicatedLoadBalancer) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (
-	*v1.LoadBalancerStatus, bool, error) {
+// nolint: revive
+func (d *DedicatedLoadBalancer) GetLoadBalancer(ctx context.Context, clusterName string, service *v1.Service) (*v1.LoadBalancerStatus, bool, error) {
 
 	klog.Infof("GetLoadBalancer: called with service %s/%s", service.Namespace, service.Name)
 	loadbalancer, err := d.getLoadBalancerInstance(ctx, clusterName, service)
@@ -67,7 +67,7 @@ func (d *DedicatedLoadBalancer) GetLoadBalancer(ctx context.Context, clusterName
 	return lbStatus, true, nil
 }
 
-func (d *DedicatedLoadBalancer) buildStatus(loadbalancer *elbmodel.LoadBalancer) *v1.LoadBalancerStatus {
+func (*DedicatedLoadBalancer) buildStatus(loadbalancer *elbmodel.LoadBalancer) *v1.LoadBalancerStatus {
 	ingressIP := loadbalancer.VipAddress
 	if len(loadbalancer.Eips) > 0 && loadbalancer.Eips[0].EipAddress != nil {
 		ingressIP = *loadbalancer.Eips[0].EipAddress
@@ -112,6 +112,7 @@ func (d *DedicatedLoadBalancer) GetLoadBalancerName(_ context.Context, clusterNa
 	return utils.CutString(name, defaultMaxNameLength)
 }
 
+// nolint: revive
 func (d *DedicatedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
 	if !d.isSupportedSvc(service) {
 		return nil, cloudprovider.ImplementedElsewhere
@@ -246,7 +247,7 @@ func (d *DedicatedLoadBalancer) createLoadbalancer(clusterName, subnetID string,
 	return loadbalancer, nil
 }
 
-func (d *DedicatedLoadBalancer) parsePublicIP(service *v1.Service) (*elbmodel.CreateLoadBalancerPublicIpOption, error) {
+func (*DedicatedLoadBalancer) parsePublicIP(service *v1.Service) (*elbmodel.CreateLoadBalancerPublicIpOption, error) {
 	eipOpt, err := parseEIPAutoCreateOptions(service)
 	if err != nil {
 		return nil, err
@@ -286,8 +287,7 @@ func (d *DedicatedLoadBalancer) parsePublicIP(service *v1.Service) (*elbmodel.Cr
 	return publicIP, nil
 }
 
-func (d *DedicatedLoadBalancer) filterListenerByPort(listeners []elbmodel.Listener, service *v1.Service,
-	port v1.ServicePort) *elbmodel.Listener {
+func (*DedicatedLoadBalancer) filterListenerByPort(listeners []elbmodel.Listener, service *v1.Service, port v1.ServicePort) *elbmodel.Listener {
 	protocol := parseProtocol(service, port)
 	for _, listener := range listeners {
 		if listener.Protocol == protocol && listener.ProtocolPort == port.Port {
@@ -298,8 +298,7 @@ func (d *DedicatedLoadBalancer) filterListenerByPort(listeners []elbmodel.Listen
 	return nil
 }
 
-func (d *DedicatedLoadBalancer) createListener(loadbalancerID string, service *v1.Service, port v1.ServicePort,
-) (*elbmodel.Listener, error) {
+func (d *DedicatedLoadBalancer) createListener(loadbalancerID string, service *v1.Service, port v1.ServicePort) (*elbmodel.Listener, error) {
 	xForwardFor := getBoolFromSvsAnnotation(service, ElbXForwardedHost, false)
 	name := utils.CutString(fmt.Sprintf("%s_%s_%v", service.Name, port.Protocol, port.Port), defaultMaxNameLength)
 
@@ -421,7 +420,7 @@ func (d *DedicatedLoadBalancer) deleteListeners(elbID string, listeners []elbmod
 	return nil
 }
 
-func (d *DedicatedLoadBalancer) popListener(listeners []elbmodel.Listener, id string) []elbmodel.Listener {
+func (*DedicatedLoadBalancer) popListener(listeners []elbmodel.Listener, id string) []elbmodel.Listener {
 	for i, listener := range listeners {
 		if listener.Id == id {
 			listeners[i] = listeners[len(listeners)-1]
@@ -499,6 +498,7 @@ func (d *DedicatedLoadBalancer) deletePool(pool *elbmodel.Pool) []error {
 	return errs
 }
 
+// nolint: revive
 func (d *DedicatedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.LoadBalancer, service *v1.Service,
 	pool *elbmodel.Pool, svcPort v1.ServicePort, nodes []*v1.Node) error {
 
@@ -545,9 +545,8 @@ func (d *DedicatedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.LoadBa
 				// Node failure, do not create member
 				klog.Warningf("Failed to create SharedLoadBalancer pool member for node %s: %v", node.Name, err)
 				continue
-			} else {
-				return fmt.Errorf("error getting address for node %s: %v", node.Name, err)
 			}
+			return fmt.Errorf("error getting address for node %s: %v", node.Name, err)
 		}
 
 		key := fmt.Sprintf("%s:%d", address, svcPort.NodePort)
@@ -580,6 +579,7 @@ func (d *DedicatedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.LoadBa
 	return nil
 }
 
+// nolint: revive
 func (d *DedicatedLoadBalancer) addMember(service *v1.Service, loadbalancer *elbmodel.LoadBalancer, pool *elbmodel.Pool, pod v1.Pod, svcPort v1.ServicePort, node *v1.Node) error {
 	klog.Infof("Add a member(%s) to pool %s", node.Name, pool.Id)
 	address, port, err := d.getMemberIP(service, node, pod, svcPort)
@@ -671,7 +671,7 @@ func (d *DedicatedLoadBalancer) deleteMember(elbID string, poolID string, member
 	return nil
 }
 
-func (d *DedicatedLoadBalancer) popMember(members []elbmodel.Member, addr string, port int32) []elbmodel.Member {
+func (*DedicatedLoadBalancer) popMember(members []elbmodel.Member, addr string, port int32) []elbmodel.Member {
 	for i, m := range members {
 		if m.Address == addr && m.ProtocolPort == port {
 			members[i] = members[len(members)-1]
@@ -715,7 +715,7 @@ func (d *DedicatedLoadBalancer) getSessionAffinity(service *v1.Service) *elbmode
 
 // ensureHealthCheck add or update or remove health check
 func (d *DedicatedLoadBalancer) ensureHealthCheck(loadbalancerID string, pool *elbmodel.Pool,
-	port v1.ServicePort, service *v1.Service, node *v1.Node) error {
+	port v1.ServicePort, service *v1.Service, _ *v1.Node) error {
 	healthCheckOpts := getHealthCheckOptionFromAnnotation(service, d.loadbalancerOpts)
 	monitorID := pool.HealthmonitorId
 	klog.Infof("add or update or remove health check: %s : %#v", monitorID, healthCheckOpts)
@@ -763,6 +763,7 @@ func (d *DedicatedLoadBalancer) updateHealthMonitor(id string, protocol v1.Proto
 	})
 }
 
+// nolint: revive
 func (d *DedicatedLoadBalancer) createHealthMonitor(loadbalancerID, poolID, protocol string, opts *config.HealthCheckOption) (*elbmodel.HealthMonitor, error) {
 	if protocol == ProtocolHTTPS || protocol == ProtocolTerminatedHTTPS {
 		protocol = ProtocolHTTP
@@ -885,11 +886,7 @@ func (d *DedicatedLoadBalancer) deleteListener(loadBalancer *elbmodel.LoadBalanc
 			listenersMatched = append(listenersMatched, *listener)
 		}
 	}
-
-	if err = d.deleteListeners(loadBalancer.Id, listenersMatched); err != nil {
-		return err
-	}
-	return nil
+	return d.deleteListeners(loadBalancer.Id, listenersMatched)
 }
 
 func (d *DedicatedLoadBalancer) deleteELBInstance(loadBalancer *elbmodel.LoadBalancer, service *v1.Service) error {

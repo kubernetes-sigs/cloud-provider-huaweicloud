@@ -40,7 +40,7 @@ const (
 
 	// Config drive is defined as an iso9660 or vfat (deprecated) drive
 	// with the "config-2" label.
-	//https://docs.openstack.org/nova/latest/user/config-drive.html
+	// https://docs.openstack.org/nova/latest/user/config-drive.html
 	configDriveLabel        = "config-2"
 	configDrivePathTemplate = "openstack/%s/meta_data.json"
 
@@ -94,6 +94,7 @@ func getConfigDrivePath(metadataVersion string) string {
 	return fmt.Sprintf(configDrivePathTemplate, metadataVersion)
 }
 
+// nolint: revive
 func getFromConfigDrive(metadataVersion string) (*Metadata, error) {
 	// Try to read instance UUID from config drive.
 	dev := "/dev/disk/by-label/" + configDriveLabel
@@ -150,7 +151,7 @@ func getFromConfigDrive(metadataVersion string) (*Metadata, error) {
 }
 
 func getBaseMounter() *mount.SafeFormatAndMount {
-	nMounter := mount.New("")
+	nMounter := mount.New("") // nolint: revive
 	nExec := exec.New()
 	return &mount.SafeFormatAndMount{
 		Interface: nMounter,
@@ -162,7 +163,7 @@ func getFromMetadataService(metadataVersion string) (*Metadata, error) {
 	// Try to get JSON from metadata server.
 	url := getMetadataURL(metadataVersion)
 	klog.V(4).Infof("Attempting to fetch metadata from %s", url)
-	resp, err := http.Get(url) //nolint: gosec
+	resp, err := http.Get(url) // nolint: gosec
 	if err != nil {
 		return nil, fmt.Errorf("error fetching %s: %v", url, err)
 	}
@@ -178,6 +179,7 @@ func getFromMetadataService(metadataVersion string) (*Metadata, error) {
 
 // Get retrieves metadata from either config drive or metadata service.
 // Search order depends on the order set in config file.
+// nolint: revive
 func Get(order string) (*Metadata, error) {
 	if metadataCache == nil {
 		var md *Metadata
@@ -192,7 +194,8 @@ func Get(order string) (*Metadata, error) {
 			case MetadataID:
 				md, err = getFromMetadataService(defaultMetadataVersion)
 			default:
-				err = fmt.Errorf("%s is not a valid metadata search order option. Supported options are %s and %s", id, ConfigDriveID, MetadataID)
+				err = fmt.Errorf("%s is not a valid metadata search order option. Supported options are %s and %s",
+					id, ConfigDriveID, MetadataID)
 			}
 
 			if err == nil {

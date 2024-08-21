@@ -24,8 +24,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
+	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	cloudprovider "k8s.io/cloud-provider"
@@ -48,9 +47,9 @@ const (
 )
 
 var (
-	allowedIPTypes = map[corev1.NodeAddressType]bool{
-		corev1.NodeInternalIP: true,
-		corev1.NodeExternalIP: true,
+	allowedIPTypes = map[v1.NodeAddressType]bool{
+		v1.NodeInternalIP: true,
+		v1.NodeExternalIP: true,
 	}
 )
 
@@ -83,13 +82,14 @@ func (l *SharedLoadBalancer) GetLoadBalancer(ctx context.Context, clusterName st
 		ingressIP = *ips[0].PublicIpAddress
 	}
 
-	return &corev1.LoadBalancerStatus{
-		Ingress: []corev1.LoadBalancerIngress{
+	return &v1.LoadBalancerStatus{
+		Ingress: []v1.LoadBalancerIngress{
 			{IP: ingressIP},
 		},
 	}, true, nil
 }
 
+// nolint: revive
 func (l *SharedLoadBalancer) getLoadBalancerInstance(ctx context.Context, clusterName string, service *v1.Service) (*elbmodel.LoadbalancerResp, error) {
 	if id := getStringFromSvsAnnotation(service, ElbID, ""); id != "" {
 		return l.sharedELBClient.GetInstance(id)
@@ -141,7 +141,7 @@ func ensureLoadBalancerValidation(service *v1.Service, nodes []*v1.Node) error {
 
 // EnsureLoadBalancer creates a new load balancer 'name', or updates the existing one. Returns the status of the balancer
 //
-//nolint:gocyclo
+// nolint: revive
 func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName string, service *v1.Service, nodes []*v1.Node) (*v1.LoadBalancerStatus, error) {
 	klog.Infof("EnsureLoadBalancer: called with service %s/%s, node: %d", service.Namespace, service.Name, len(nodes))
 	if !l.isSupportedSvc(service) {
@@ -225,8 +225,8 @@ func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName
 			ingressIP = publicIPAddr
 		}
 
-		return &corev1.LoadBalancerStatus{
-			Ingress: []corev1.LoadBalancerIngress{{IP: ingressIP}},
+		return &v1.LoadBalancerStatus{
+			Ingress: []v1.LoadBalancerIngress{{IP: ingressIP}},
 		}, nil
 	}
 
@@ -241,6 +241,7 @@ func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName
 	return nil, errors.NewAggregate(errs)
 }
 
+// nolint: revive
 func (l *SharedLoadBalancer) createOrAssociateEIP(loadbalancer *elbmodel.LoadbalancerResp, service *v1.Service) (string, error) {
 	var err error
 	specifiedEip := true
@@ -333,7 +334,7 @@ func (l *SharedLoadBalancer) createLoadbalancer(clusterName, subnetID string, se
 
 // ensureHealthCheck add or update or remove health check
 func (l *SharedLoadBalancer) ensureHealthCheck(loadbalancerID string, pool *elbmodel.PoolResp,
-	port v1.ServicePort, service *v1.Service, node *v1.Node) error {
+	port v1.ServicePort, service *v1.Service, _ *v1.Node) error {
 	healthCheckOpts := getHealthCheckOptionFromAnnotation(service, l.loadbalancerOpts)
 	monitorID := pool.HealthmonitorId
 	klog.Infof("add or update or remove health check: %s : %#v", monitorID, healthCheckOpts)
@@ -414,6 +415,7 @@ func (l *SharedLoadBalancer) createHealthMonitor(loadbalancerID, poolID, protoco
 	return monitor, nil
 }
 
+// nolint: revive
 func (l *SharedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.LoadbalancerResp, service *v1.Service, pool *elbmodel.PoolResp,
 	svcPort v1.ServicePort, nodes []*v1.Node) error {
 
@@ -870,7 +872,7 @@ func convertToListenerV2(listener *elbmodelv3.Listener) (*elbmodel.ListenerResp,
 	}, nil
 }
 
-func (l *SharedLoadBalancer) filterListenerByPort(listeners []elbmodel.ListenerResp, service *v1.Service, port v1.ServicePort) *elbmodel.ListenerResp {
+func (*SharedLoadBalancer) filterListenerByPort(listeners []elbmodel.ListenerResp, service *v1.Service, port v1.ServicePort) *elbmodel.ListenerResp {
 	protocol := parseProtocol(service, port)
 	for _, listener := range listeners {
 		if listener.Protocol.Value() == protocol && listener.ProtocolPort == port.Port {
@@ -973,11 +975,7 @@ func (l *SharedLoadBalancer) deleteListener(loadBalancer *elbmodel.LoadbalancerR
 			listenersMatched = append(listenersMatched, *listener)
 		}
 	}
-
-	if err = l.deleteListeners(loadBalancer.Id, listenersMatched); err != nil {
-		return err
-	}
-	return nil
+	return l.deleteListeners(loadBalancer.Id, listenersMatched)
 }
 
 func (l *SharedLoadBalancer) deleteELBInstance(loadBalancer *elbmodel.LoadbalancerResp, service *v1.Service) error {
@@ -998,12 +996,10 @@ func (l *SharedLoadBalancer) deleteELBInstance(loadBalancer *elbmodel.Loadbalanc
 	if err = unbindEIP(l.eipClient, loadBalancer.VipPortId, eipID, keepEip); err != nil {
 		return err
 	}
-	if err = l.sharedELBClient.DeleteInstance(loadBalancer.Id); err != nil {
-		return err
-	}
-	return nil
+	return l.sharedELBClient.DeleteInstance(loadBalancer.Id)
 }
 
+// nolint: revive
 func unbindEIP(eipClient *wrapper.EIpClient, vipPortID, eipID string, keepEIP bool) error {
 	if eipID == "" {
 		ips, err := eipClient.List(&eipmodel.ListPublicipsRequest{
@@ -1019,19 +1015,23 @@ func unbindEIP(eipClient *wrapper.EIpClient, vipPortID, eipID string, keepEIP bo
 		eipID = *ips[0].Id
 	}
 
-	if err := eipClient.Unbind(eipID); err != nil {
+	err := eipClient.Unbind(eipID)
+	if err != nil {
 		return err
 	}
+
 	if keepEIP {
 		return nil
 	}
-	if err := eipClient.Delete(eipID); err != nil {
+
+	err = eipClient.Delete(eipID)
+	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func getNodeAddress(node *corev1.Node) (string, error) {
+func getNodeAddress(node *v1.Node) (string, error) {
 	addresses := node.Status.Addresses
 	if len(addresses) == 0 {
 		return "", status.Errorf(codes.NotFound, "error, current node do not have addresses, nodeName: %s",
@@ -1137,7 +1137,7 @@ func parseProtocol(service *v1.Service, port v1.ServicePort) string {
 	return protocol
 }
 
-func getStringFromSvsAnnotation(service *corev1.Service, key string, defaultSetting string) string {
+func getStringFromSvsAnnotation(service *v1.Service, key string, defaultSetting string) string {
 	if annotationValue, ok := service.Annotations[key]; ok {
 		klog.V(4).Infof("Found annotation: %v = %v", key, annotationValue)
 		return annotationValue
@@ -1146,7 +1146,7 @@ func getStringFromSvsAnnotation(service *corev1.Service, key string, defaultSett
 	return defaultSetting
 }
 
-func getBoolFromSvsAnnotation(service *corev1.Service, key string, defaultVal bool) bool {
+func getBoolFromSvsAnnotation(service *v1.Service, key string, defaultVal bool) bool {
 	value, ok := service.Annotations[key]
 	if !ok {
 		return defaultVal
