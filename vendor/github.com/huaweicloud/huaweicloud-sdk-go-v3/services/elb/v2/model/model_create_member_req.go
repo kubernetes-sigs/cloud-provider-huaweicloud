@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// 创建后端云服务器的请求体
+// CreateMemberReq 创建后端云服务器的请求体
 type CreateMemberReq struct {
 
 	// 后端云服务器所在的项目ID。
@@ -15,7 +15,7 @@ type CreateMemberReq struct {
 	// 后端云服务器名称。
 	Name *string `json:"name,omitempty"`
 
-	// 后端云服务器的管理状态；该字段虽然支持创建、更新，但实际取值决定于后端云服务器对应的弹性云服务器是否存在。该字段虽然支持创建、更新，但实际取值决定于member对应的弹性云服务器是否存在。若存在，该值为true，否则，该值为false。
+	// 后端云服务器的管理状态；该字段虽然支持创建、更新，但实际取值决定于后端云服务器对应的弹性云服务器是否存在。若存在，该值为true，否则，该值为false。
 	AdminStateUp *bool `json:"admin_state_up,omitempty"`
 
 	// 后端端口和协议号

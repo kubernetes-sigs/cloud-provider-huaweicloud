@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// vpc对象
+// CreateVpcOption vpc对象
 type CreateVpcOption struct {
 
 	// 功能说明：虚拟私有云下可用子网的范围 取值范围： - 10.0.0.0/8 ~ 10.255.255.240/28 - 172.16.0.0/12 ~ 172.31.255.240/28 - 192.168.0.0/16 ~ 192.168.255.240/28 约束：必须是ipv4 cidr格式，例如:192.168.0.0/16
@@ -20,6 +20,9 @@ type CreateVpcOption struct {
 
 	// 功能说明：企业项目ID。创建虚拟私有云时，给虚拟私有云绑定企业项目ID。 取值范围：最大长度36字节，带“-”连字符的UUID格式，或者是字符串“0”。“0”表示默认企业项目。 默认值：\"0\"
 	EnterpriseProjectId *string `json:"enterprise_project_id,omitempty"`
+
+	// 功能说明：VPC资源标签。创建VPC时，给VPC添加资源标签。 取值范围：最大10个标签, key：标签名称; value：标签值。 格式：[key*value]，每一个标签的key和value之间用*连接
+	Tags *[]string `json:"tags,omitempty"`
 }
 
 func (o CreateVpcOption) String() string {

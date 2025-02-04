@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-// This is a auto create Response Object
+// BandwidthPkgResp This is a auto create Response Object
 type BandwidthPkgResp struct {
 
 	// - 功能说明：加油包ID - 取值范围：1-64，支持数字、字母、中文、_(下划线)、-（中划线）
@@ -25,7 +25,7 @@ type BandwidthPkgResp struct {
 	PkgSize int32 `json:"pkgSize"`
 
 	// - 功能说明：租户id
-	TenantId *string `json:"tenant_id,omitempty"`
+	TenantId string `json:"tenantId"`
 
 	// - 功能说明：加油包订单相关信息格式：非空时值为''orderId:productId''
 	BillingInfo string `json:"billingInfo"`

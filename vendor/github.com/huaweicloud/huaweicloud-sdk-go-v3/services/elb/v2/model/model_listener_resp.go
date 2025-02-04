@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// 监听器响应体
+// ListenerResp 监听器响应体
 type ListenerResp struct {
 
 	// 监听器ID
@@ -70,6 +70,12 @@ type ListenerResp struct {
 
 	// 监听器使用的安全策略，仅对TERMINATED_HTTPS协议类型的监听器有效，且默认值为tls-1-0。  取值包括：tls-1-0, tls-1-1, tls-1-2, tls-1-2-strict多种安全策略
 	TlsCiphersPolicy string `json:"tls_ciphers_policy"`
+
+	// 修改保护状态, 取值： - nonProtection: 不保护，默认值为nonProtection - consoleProtection: 控制台修改保护
+	ProtectionStatus *ListenerRespProtectionStatus `json:"protection_status,omitempty"`
+
+	// 设置保护的原因。 >仅当protection_status为consoleProtection时有效。
+	ProtectionReason *string `json:"protection_reason,omitempty"`
 }
 
 func (o ListenerResp) String() string {
@@ -119,13 +125,65 @@ func (c ListenerRespProtocol) MarshalJSON() ([]byte, error) {
 
 func (c *ListenerRespProtocol) UnmarshalJSON(b []byte) error {
 	myConverter := converter.StringConverterFactory("string")
-	if myConverter != nil {
-		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
-		if err == nil {
-			c.value = val.(string)
-			return nil
-		}
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
 		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
+	} else {
+		return errors.New("convert enum data to string error")
+	}
+}
+
+type ListenerRespProtectionStatus struct {
+	value string
+}
+
+type ListenerRespProtectionStatusEnum struct {
+	NON_PROTECTION     ListenerRespProtectionStatus
+	CONSOLE_PROTECTION ListenerRespProtectionStatus
+}
+
+func GetListenerRespProtectionStatusEnum() ListenerRespProtectionStatusEnum {
+	return ListenerRespProtectionStatusEnum{
+		NON_PROTECTION: ListenerRespProtectionStatus{
+			value: "nonProtection",
+		},
+		CONSOLE_PROTECTION: ListenerRespProtectionStatus{
+			value: "consoleProtection",
+		},
+	}
+}
+
+func (c ListenerRespProtectionStatus) Value() string {
+	return c.value
+}
+
+func (c ListenerRespProtectionStatus) MarshalJSON() ([]byte, error) {
+	return utils.Marshal(c.value)
+}
+
+func (c *ListenerRespProtectionStatus) UnmarshalJSON(b []byte) error {
+	myConverter := converter.StringConverterFactory("string")
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
+		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
 	} else {
 		return errors.New("convert enum data to string error")
 	}

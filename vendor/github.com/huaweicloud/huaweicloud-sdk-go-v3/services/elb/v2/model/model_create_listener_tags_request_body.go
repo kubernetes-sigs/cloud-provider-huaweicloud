@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// This is a auto create Body Object
+// CreateListenerTagsRequestBody This is a auto create Body Object
 type CreateListenerTagsRequestBody struct {
-	Tag *ResourceTag `json:"tag,omitempty"`
+	Tag *ResourceTag `json:"tag"`
 }
 
 func (o CreateListenerTagsRequestBody) String() string {

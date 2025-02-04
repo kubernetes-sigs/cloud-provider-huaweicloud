@@ -25,51 +25,73 @@ import (
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/config"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/exchange"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/httphandler"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/progress"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/request"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/response"
 	"io/ioutil"
 	"net/http"
 	"net/url"
+	"strconv"
+	"strings"
 	"time"
 )
 
 type DefaultHttpClient struct {
 	httpHandler  *httphandler.HttpHandler
 	httpConfig   *config.HttpConfig
-	transport    *http.Transport
+	roundTripper http.RoundTripper
 	goHttpClient *http.Client
 }
 
 func NewDefaultHttpClient(httpConfig *config.HttpConfig) *DefaultHttpClient {
-	transport := &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: httpConfig.IgnoreSSLVerification},
-	}
-
-	if httpConfig.DialContext != nil {
-		transport.DialContext = httpConfig.DialContext
-	}
-
-	if httpConfig.HttpProxy != nil {
-		proxyUrl := httpConfig.HttpProxy.GetProxyUrl()
-		proxy, err := url.Parse(proxyUrl)
-		if err == nil {
-			transport.Proxy = http.ProxyURL(proxy)
+	var roundTripper http.RoundTripper
+	if httpConfig.HttpTransport != nil {
+		roundTripper = httpConfig.HttpTransport
+	} else if httpConfig.RoundTripper != nil {
+		roundTripper = httpConfig.RoundTripper
+	} else {
+		defaultTrans := &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: httpConfig.IgnoreSSLVerification},
 		}
+
+		if httpConfig.DialContext != nil {
+			defaultTrans.DialContext = httpConfig.DialContext
+		}
+
+		if httpConfig.HttpProxy != nil {
+			proxyUrl := httpConfig.HttpProxy.GetProxyUrl()
+			proxy, err := url.Parse(proxyUrl)
+			if err == nil {
+				defaultTrans.Proxy = http.ProxyURL(proxy)
+			}
+		}
+
+		roundTripper = defaultTrans
 	}
 
 	client := &DefaultHttpClient{
-		transport:  transport,
-		httpConfig: httpConfig,
+		roundTripper: roundTripper,
+		httpConfig:   httpConfig,
 	}
 
 	client.goHttpClient = &http.Client{
-		Transport: client.transport,
+		Transport: client.roundTripper,
 		Timeout:   httpConfig.Timeout,
+	}
+
+	if !httpConfig.AllowRedirects {
+		client.goHttpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		}
 	}
 
 	client.httpHandler = httpConfig.HttpHandler
 
 	return client
+}
+
+func (client *DefaultHttpClient) GetHttpConfig() config.HttpConfig {
+	return *client.httpConfig
 }
 
 func (client *DefaultHttpClient) SyncInvokeHttp(request *request.DefaultHttpRequest) (*response.DefaultHttpResponse,
@@ -97,6 +119,8 @@ func (client *DefaultHttpClient) SyncInvokeHttpWithExchange(request *request.Def
 	if err != nil {
 		return nil, err
 	}
+
+	processProgressResponse(request, resp)
 	client.recordResponseInfo(exch, resp)
 
 	if lnErr := client.listenResponse(resp); lnErr != nil {
@@ -124,56 +148,64 @@ func (client *DefaultHttpClient) recordResponseInfo(exch *exchange.SdkExchange, 
 }
 
 func (client *DefaultHttpClient) listenRequest(req *http.Request) error {
-	if client.httpHandler != nil && client.httpHandler.RequestHandlers != nil && req != nil {
-		reqClone := req.Clone(req.Context())
+	if client.httpHandler == nil || client.httpHandler.RequestHandlers == nil || req == nil {
+		return nil
+	}
 
-		if req.Body != nil {
+	reqClone := req.Clone(req.Context())
+	if req.Body != nil {
+		if isStream(req.Header) {
+			reqClone.Body = ioutil.NopCloser(strings.NewReader("{stream: *****}"))
+		} else {
 			bodyBytes, err := ioutil.ReadAll(req.Body)
 			if err != nil {
 				return err
 			}
-
 			req.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
 			reqClone.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
-			defer reqClone.Body.Close()
 		}
-
-		client.httpHandler.RequestHandlers(*reqClone)
+		defer reqClone.Body.Close()
 	}
 
+	client.httpHandler.RequestHandlers(*reqClone)
 	return nil
 }
 
 func (client *DefaultHttpClient) listenResponse(resp *http.Response) error {
-	if client.httpHandler != nil && client.httpHandler.ResponseHandlers != nil && resp != nil {
-		respClone := http.Response{
-			Status:           resp.Status,
-			StatusCode:       resp.StatusCode,
-			Proto:            resp.Proto,
-			ProtoMajor:       resp.ProtoMajor,
-			ProtoMinor:       resp.ProtoMinor,
-			Header:           resp.Header,
-			ContentLength:    resp.ContentLength,
-			TransferEncoding: resp.TransferEncoding,
-			Close:            resp.Close,
-			Uncompressed:     resp.Uncompressed,
-			Trailer:          resp.Trailer,
-		}
+	if client.httpHandler == nil || client.httpHandler.ResponseHandlers == nil || resp == nil {
+		return nil
+	}
 
-		if resp.Body != nil {
+	respClone := http.Response{
+		Status:           resp.Status,
+		StatusCode:       resp.StatusCode,
+		Proto:            resp.Proto,
+		ProtoMajor:       resp.ProtoMajor,
+		ProtoMinor:       resp.ProtoMinor,
+		Header:           resp.Header,
+		ContentLength:    resp.ContentLength,
+		TransferEncoding: resp.TransferEncoding,
+		Close:            resp.Close,
+		Uncompressed:     resp.Uncompressed,
+		Trailer:          resp.Trailer,
+	}
+
+	if resp.Body != nil {
+		if isStream(resp.Header) {
+			respClone.Body = ioutil.NopCloser(strings.NewReader("{stream: *****}"))
+		} else {
 			bodyBytes, err := ioutil.ReadAll(resp.Body)
 			if err != nil {
 				return err
 			}
-
 			resp.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
 			respClone.Body = ioutil.NopCloser(bytes.NewBuffer(bodyBytes))
-			defer respClone.Body.Close()
 		}
 
-		client.httpHandler.ResponseHandlers(respClone)
+		defer respClone.Body.Close()
 	}
 
+	client.httpHandler.ResponseHandlers(respClone)
 	return nil
 }
 
@@ -189,8 +221,31 @@ func (client *DefaultHttpClient) monitorHttp(exch *exchange.SdkExchange, resp *h
 			RequestId:     exch.ApiReference.RequestId,
 			StatusCode:    exch.ApiReference.StatusCode,
 			ContentLength: exch.ApiReference.ContentLength,
+			Attributes:    exch.Attributes,
 		}
 
 		client.httpHandler.MonitorHandlers(metric)
 	}
+}
+
+func isStream(header http.Header) bool {
+	contentType := header.Get("Content-Type")
+	if contentType == "" {
+		return false
+	}
+	return strings.Contains(contentType, "octet-stream")
+}
+
+func processProgressResponse(request *request.DefaultHttpRequest, response *http.Response) {
+	if request.GetProgressListener() == nil || !isStream(response.Header) {
+		return
+	}
+	contentLength := int64(-1)
+	if value := response.Header.Get("Content-Length"); value != "" {
+		i, err := strconv.ParseInt(value, 10, 64)
+		if err == nil {
+			contentLength = i
+		}
+	}
+	response.Body = progress.NewTeeReader(response.Body, nil, contentLength, request.GetProgressListener(), request.GetProgressInterval())
 }

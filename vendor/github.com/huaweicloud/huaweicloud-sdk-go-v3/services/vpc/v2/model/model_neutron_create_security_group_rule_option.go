@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//
+// NeutronCreateSecurityGroupRuleOption
 type NeutronCreateSecurityGroupRuleOption struct {
 
 	// 功能说明：安全组规则描述 取值范围：0-255个字符
@@ -35,6 +35,9 @@ type NeutronCreateSecurityGroupRuleOption struct {
 
 	// 功能说明：目的端ip网段 取值范围：cidr格式，如10.10.0.0/16
 	RemoteIpPrefix *string `json:"remote_ip_prefix,omitempty"`
+
+	// 功能说明：远端地址组的ID
+	RemoteAddressGroupId *string `json:"remote_address_group_id,omitempty"`
 
 	// 所属安全组ID
 	SecurityGroupId string `json:"security_group_id"`
@@ -79,13 +82,18 @@ func (c NeutronCreateSecurityGroupRuleOptionDirection) MarshalJSON() ([]byte, er
 
 func (c *NeutronCreateSecurityGroupRuleOptionDirection) UnmarshalJSON(b []byte) error {
 	myConverter := converter.StringConverterFactory("string")
-	if myConverter != nil {
-		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
-		if err == nil {
-			c.value = val.(string)
-			return nil
-		}
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
 		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
 	} else {
 		return errors.New("convert enum data to string error")
 	}
@@ -121,13 +129,18 @@ func (c NeutronCreateSecurityGroupRuleOptionEthertype) MarshalJSON() ([]byte, er
 
 func (c *NeutronCreateSecurityGroupRuleOptionEthertype) UnmarshalJSON(b []byte) error {
 	myConverter := converter.StringConverterFactory("string")
-	if myConverter != nil {
-		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
-		if err == nil {
-			c.value = val.(string)
-			return nil
-		}
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
 		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
 	} else {
 		return errors.New("convert enum data to string error")
 	}

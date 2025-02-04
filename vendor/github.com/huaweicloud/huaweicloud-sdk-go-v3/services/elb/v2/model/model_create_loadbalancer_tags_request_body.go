@@ -6,9 +6,9 @@ import (
 	"strings"
 )
 
-// This is a auto create Body Object
+// CreateLoadbalancerTagsRequestBody This is a auto create Body Object
 type CreateLoadbalancerTagsRequestBody struct {
-	Tag *ResourceTag `json:"tag,omitempty"`
+	Tag *ResourceTag `json:"tag"`
 }
 
 func (o CreateLoadbalancerTagsRequestBody) String() string {
