@@ -1087,7 +1087,7 @@ func (l *SharedLoadBalancer) createEIP(service *v1.Service) (string, error) {
 	eip, err := l.eipClient.Create(&eipmodel.CreatePublicipRequestBody{
 		Bandwidth: &eipmodel.CreatePublicipBandwidthOption{
 			Name:       &name,
-			Id:         &opts.ShareID,
+			Id:         utils.StringToPtr(opts.ShareID),
 			Size:       &opts.BandwidthSize,
 			ShareType:  shareType,
 			ChargeMode: chargeModel,
