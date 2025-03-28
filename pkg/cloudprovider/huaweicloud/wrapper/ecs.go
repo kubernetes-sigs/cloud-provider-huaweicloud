@@ -58,7 +58,7 @@ func (e *EcsClient) GetByNodeName(name string) (*model.ServerDetail, error) {
 		privateIP = name
 	} else if ips := utils.LookupHost(name); len(ips) > 0 {
 		for _, ip := range ips {
-			if ip != "127.0.0.1" {
+			if ip != "127.0.0.1" && ip != "127.0.1.1" {
 				privateIP = ip
 				break
 			}
