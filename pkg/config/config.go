@@ -67,7 +67,7 @@ func (a *AuthOptions) GetHcClient(catalogName string) *core.HcHttpClient {
 	if strings.TrimSpace(a.Cloud) != "" {
 		cloud = strings.TrimSpace(a.Cloud)
 	}
-	r := region.NewRegion(catalogName, fmt.Sprintf("https://%s.%s.%s", catalogName, a.Region, cloud))
+	r := region.NewRegion(a.Region, fmt.Sprintf("https://%s.%s.%s", catalogName, a.Region, cloud))
 
 	client := core.NewHcHttpClientBuilder().
 		WithRegion(r).
