@@ -26,6 +26,7 @@ import (
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/config"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/impl"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/region"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/sdkerr"
 	"reflect"
 	"strings"
 )
@@ -34,14 +35,16 @@ type HcHttpClientBuilder struct {
 	CredentialsType        []string
 	derivedAuthServiceName string
 	credentials            auth.ICredential
-	endpoint               string
+	endpoints              []string
 	httpConfig             *config.HttpConfig
 	region                 *region.Region
+	errorHandler           sdkerr.ErrorHandler
 }
 
 func NewHcHttpClientBuilder() *HcHttpClientBuilder {
 	hcHttpClientBuilder := &HcHttpClientBuilder{
 		CredentialsType: []string{"basic.Credentials"},
+		errorHandler:    sdkerr.DefaultErrorHandler{},
 	}
 	return hcHttpClientBuilder
 }
@@ -56,8 +59,13 @@ func (builder *HcHttpClientBuilder) WithDerivedAuthServiceName(derivedAuthServic
 	return builder
 }
 
+// Deprecated: As of 0.1.27, because of the support of the multi-endpoint feature, use WithEndpoints instead
 func (builder *HcHttpClientBuilder) WithEndpoint(endpoint string) *HcHttpClientBuilder {
-	builder.endpoint = endpoint
+	return builder.WithEndpoints([]string{endpoint})
+}
+
+func (builder *HcHttpClientBuilder) WithEndpoints(endpoints []string) *HcHttpClientBuilder {
+	builder.endpoints = endpoints
 	return builder
 }
 
@@ -76,6 +84,12 @@ func (builder *HcHttpClientBuilder) WithCredential(iCredential auth.ICredential)
 	return builder
 }
 
+func (builder *HcHttpClientBuilder) WithErrorHandler(errorHandler sdkerr.ErrorHandler) *HcHttpClientBuilder {
+	builder.errorHandler = errorHandler
+	return builder
+}
+
+// Deprecated: This function may panic under certain circumstances. Use SafeBuild instead.
 func (builder *HcHttpClientBuilder) Build() *HcHttpClient {
 	if builder.httpConfig == nil {
 		builder.httpConfig = config.DefaultHttpConfig()
@@ -105,11 +119,11 @@ func (builder *HcHttpClientBuilder) Build() *HcHttpClient {
 		}
 	}
 	if !match {
-		panic(fmt.Sprintf("Need credential type is %s, actually is %s", builder.CredentialsType, givenCredentialsType))
+		panic(fmt.Errorf("need credential type is %s, actually is %s", builder.CredentialsType, givenCredentialsType))
 	}
 
 	if builder.region != nil {
-		builder.endpoint = builder.region.Endpoint
+		builder.endpoints = builder.region.Endpoints
 		builder.credentials.ProcessAuthParams(defaultHttpClient, builder.region.Id)
 
 		if credential, ok := builder.credentials.(auth.IDerivedCredential); ok {
@@ -117,10 +131,25 @@ func (builder *HcHttpClientBuilder) Build() *HcHttpClient {
 		}
 	}
 
-	if !strings.HasPrefix(builder.endpoint, "http") {
-		builder.endpoint = "https://" + builder.endpoint
+	for index, endpoint := range builder.endpoints {
+		if !strings.HasPrefix(endpoint, "http") {
+			builder.endpoints[index] = "https://" + endpoint
+		}
 	}
 
-	hcHttpClient := NewHcHttpClient(defaultHttpClient).WithEndpoint(builder.endpoint).WithCredential(builder.credentials)
+	hcHttpClient := NewHcHttpClient(defaultHttpClient).
+		WithEndpoints(builder.endpoints).
+		WithCredential(builder.credentials).
+		WithErrorHandler(builder.errorHandler)
 	return hcHttpClient
+}
+
+func (builder *HcHttpClientBuilder) SafeBuild() (client *HcHttpClient, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("%v", r)
+		}
+	}()
+	client = builder.Build()
+	return
 }

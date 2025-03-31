@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// 创建后端云服务器组的请求体
+// CreatePoolReq 创建后端云服务器组的请求体
 type CreatePoolReq struct {
 
 	// 后端云服务器组的后端协议。取值：UDP、TCP、HTTP。当指定istener_id创建后端云服务器组时，后端云服务器组的protocol和它关联的监听器的protocol有如下关系：监听器的protocol为TCP时，后端云服务器组的protocol必须为TCP。监听器的protocol为UDP时，后端云服务器组的protocol必须为UDP。监听器的protocol为HTTP或TERMINATED_HTTPS时，后端云服务器组的protocol必须为HTTP。
@@ -37,6 +37,12 @@ type CreatePoolReq struct {
 	AdminStateUp *bool `json:"admin_state_up,omitempty"`
 
 	SessionPersistence *SessionPersistence `json:"session_persistence,omitempty"`
+
+	// 修改保护状态, 取值： - nonProtection: 不保护，默认值为nonProtection - consoleProtection: 控制台修改保护
+	ProtectionStatus *CreatePoolReqProtectionStatus `json:"protection_status,omitempty"`
+
+	// 设置保护的原因 >仅当protection_status为consoleProtection时有效。
+	ProtectionReason *string `json:"protection_reason,omitempty"`
 }
 
 func (o CreatePoolReq) String() string {
@@ -82,13 +88,65 @@ func (c CreatePoolReqProtocol) MarshalJSON() ([]byte, error) {
 
 func (c *CreatePoolReqProtocol) UnmarshalJSON(b []byte) error {
 	myConverter := converter.StringConverterFactory("string")
-	if myConverter != nil {
-		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
-		if err == nil {
-			c.value = val.(string)
-			return nil
-		}
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
 		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
+	} else {
+		return errors.New("convert enum data to string error")
+	}
+}
+
+type CreatePoolReqProtectionStatus struct {
+	value string
+}
+
+type CreatePoolReqProtectionStatusEnum struct {
+	NON_PROTECTION     CreatePoolReqProtectionStatus
+	CONSOLE_PROTECTION CreatePoolReqProtectionStatus
+}
+
+func GetCreatePoolReqProtectionStatusEnum() CreatePoolReqProtectionStatusEnum {
+	return CreatePoolReqProtectionStatusEnum{
+		NON_PROTECTION: CreatePoolReqProtectionStatus{
+			value: "nonProtection",
+		},
+		CONSOLE_PROTECTION: CreatePoolReqProtectionStatus{
+			value: "consoleProtection",
+		},
+	}
+}
+
+func (c CreatePoolReqProtectionStatus) Value() string {
+	return c.value
+}
+
+func (c CreatePoolReqProtectionStatus) MarshalJSON() ([]byte, error) {
+	return utils.Marshal(c.value)
+}
+
+func (c *CreatePoolReqProtectionStatus) UnmarshalJSON(b []byte) error {
+	myConverter := converter.StringConverterFactory("string")
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
+		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
 	} else {
 		return errors.New("convert enum data to string error")
 	}

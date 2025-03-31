@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-// 带宽对象
+// BandwidthRespInsert 带宽对象
 type BandwidthRespInsert struct {
 
 	// 功能说明：带宽类型，共享带宽默认为share。  取值范围：share，bgp，telcom，sbgp等。  share：共享带宽  bgp：动态bgp  telcom ：联通  sbgp：静态bgp
@@ -44,6 +44,15 @@ type BandwidthRespInsert struct {
 
 	// 功能说明：带宽的状态  取值范围：  FREEZED：冻结  NORMAL：正常
 	Status *BandwidthRespInsertStatus `json:"status,omitempty"`
+
+	// 功能说明：是否开启企业级qos 取值范围：true/false
+	EnableBandwidthRules *bool `json:"enable_bandwidth_rules,omitempty"`
+
+	// 功能说明：带宽支持的最大分组规则数。
+	RuleQuota *int32 `json:"rule_quota,omitempty"`
+
+	// 功能说明：带宽规则对象
+	BandwidthRules *[]BandWidthRules `json:"bandwidth_rules,omitempty"`
 }
 
 func (o BandwidthRespInsert) String() string {
@@ -89,13 +98,18 @@ func (c BandwidthRespInsertChargeMode) MarshalJSON() ([]byte, error) {
 
 func (c *BandwidthRespInsertChargeMode) UnmarshalJSON(b []byte) error {
 	myConverter := converter.StringConverterFactory("string")
-	if myConverter != nil {
-		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
-		if err == nil {
-			c.value = val.(string)
-			return nil
-		}
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
 		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
 	} else {
 		return errors.New("convert enum data to string error")
 	}
@@ -131,13 +145,18 @@ func (c BandwidthRespInsertShareType) MarshalJSON() ([]byte, error) {
 
 func (c *BandwidthRespInsertShareType) UnmarshalJSON(b []byte) error {
 	myConverter := converter.StringConverterFactory("string")
-	if myConverter != nil {
-		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
-		if err == nil {
-			c.value = val.(string)
-			return nil
-		}
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
 		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
 	} else {
 		return errors.New("convert enum data to string error")
 	}
@@ -173,13 +192,18 @@ func (c BandwidthRespInsertStatus) MarshalJSON() ([]byte, error) {
 
 func (c *BandwidthRespInsertStatus) UnmarshalJSON(b []byte) error {
 	myConverter := converter.StringConverterFactory("string")
-	if myConverter != nil {
-		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
-		if err == nil {
-			c.value = val.(string)
-			return nil
-		}
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
 		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
 	} else {
 		return errors.New("convert enum data to string error")
 	}

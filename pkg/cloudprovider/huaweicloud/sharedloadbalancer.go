@@ -24,7 +24,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	cloudprovider "k8s.io/cloud-provider"
@@ -735,7 +735,7 @@ func (l *SharedLoadBalancer) createListener(loadbalancerID string, service *v1.S
 	xForwardFor := getBoolFromSvsAnnotation(service, ElbXForwardedHost, false)
 	createOpt := &elbmodelv3.CreateListenerOption{
 		LoadbalancerId: loadbalancerID,
-		ProtocolPort:   port.Port,
+		ProtocolPort:   &port.Port,
 		InsertHeaders:  &elbmodelv3.ListenerInsertHeaders{XForwardedHost: &xForwardFor},
 	}
 

@@ -6,7 +6,7 @@ import (
 	"strings"
 )
 
-//
+// ResourceTag
 type ResourceTag struct {
 
 	// 功能说明：标签键 约束：同一资源的key值不能重复。

@@ -6,11 +6,14 @@ import (
 	"strings"
 )
 
-// Request Object
+// ListAvailabilityZonesRequest Request Object
 type ListAvailabilityZonesRequest struct {
 
-	// AZ组。
+	// 参数解释：网络公共边界组。
 	PublicBorderGroup *string `json:"public_border_group,omitempty"`
+
+	// 参数解释：负载均衡器ID。
+	LoadbalancerId *string `json:"loadbalancer_id,omitempty"`
 }
 
 func (o ListAvailabilityZonesRequest) String() string {

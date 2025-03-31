@@ -6,10 +6,10 @@ import (
 	"strings"
 )
 
-//
+// MemberRef
 type MemberRef struct {
 
-	// 后端服务器ID。
+	// 参数解释：后端服务器ID。
 	Id string `json:"id"`
 }
 

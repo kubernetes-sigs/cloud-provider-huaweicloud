@@ -1,15 +1,14 @@
 package model
 
 import (
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
-
 	"errors"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/converter"
-
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/sdktime"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
 	"strings"
 )
 
-//
+// Vpc
 type Vpc struct {
 
 	// 功能说明：虚拟私有云ID 取值范围：带\"-\"的UUID
@@ -32,6 +31,15 @@ type Vpc struct {
 
 	// 功能说明：企业项目ID。 取值范围：最大长度36字节，带“-”连字符的UUID格式，或者是字符串“0”。“0”表示默认企业项目。
 	EnterpriseProjectId string `json:"enterprise_project_id"`
+
+	// 项目ID
+	TenantId string `json:"tenant_id"`
+
+	// 功能说明：资源创建UTC时间 格式：yyyy-MM-ddTHH:mm:ss
+	CreatedAt *sdktime.SdkTime `json:"created_at"`
+
+	// 功能说明：资源更新UTC时间 格式：yyyy-MM-ddTHH:mm:ss
+	UpdatedAt *sdktime.SdkTime `json:"updated_at"`
 }
 
 func (o Vpc) String() string {
@@ -77,13 +85,18 @@ func (c VpcStatus) MarshalJSON() ([]byte, error) {
 
 func (c *VpcStatus) UnmarshalJSON(b []byte) error {
 	myConverter := converter.StringConverterFactory("string")
-	if myConverter != nil {
-		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
-		if err == nil {
-			c.value = val.(string)
-			return nil
-		}
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
 		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
 	} else {
 		return errors.New("convert enum data to string error")
 	}

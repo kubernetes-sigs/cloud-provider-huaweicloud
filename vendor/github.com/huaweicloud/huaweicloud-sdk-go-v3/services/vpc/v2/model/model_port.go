@@ -9,7 +9,7 @@ import (
 	"strings"
 )
 
-//
+// Port
 type Port struct {
 
 	// 端口ID
@@ -76,6 +76,12 @@ type Port struct {
 
 	// 功能说明：port所属的可用分区
 	ZoneId string `json:"zone_id"`
+
+	// 功能说明：是否使能efi，使能则表示端口支持vRoCE能力，默认为false
+	EnableEfi bool `json:"enable_efi"`
+
+	// 功能说明：IPv6网卡绑定的共享带宽ID 约束：只有IPv6网卡绑定了共享带宽，才会显示此参数
+	Ipv6BandwidthId string `json:"ipv6_bandwidth_id"`
 }
 
 func (o Port) String() string {
@@ -125,13 +131,18 @@ func (c PortDeviceOwner) MarshalJSON() ([]byte, error) {
 
 func (c *PortDeviceOwner) UnmarshalJSON(b []byte) error {
 	myConverter := converter.StringConverterFactory("string")
-	if myConverter != nil {
-		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
-		if err == nil {
-			c.value = val.(string)
-			return nil
-		}
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
 		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
 	} else {
 		return errors.New("convert enum data to string error")
 	}
@@ -171,13 +182,18 @@ func (c PortStatus) MarshalJSON() ([]byte, error) {
 
 func (c *PortStatus) UnmarshalJSON(b []byte) error {
 	myConverter := converter.StringConverterFactory("string")
-	if myConverter != nil {
-		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
-		if err == nil {
-			c.value = val.(string)
-			return nil
-		}
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
 		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
 	} else {
 		return errors.New("convert enum data to string error")
 	}

@@ -24,7 +24,7 @@ import (
 
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-	"k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/util/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	cloudprovider "k8s.io/cloud-provider"
@@ -305,7 +305,7 @@ func (d *DedicatedLoadBalancer) createListener(loadbalancerID string, service *v
 	createOpt := &elbmodel.CreateListenerOption{
 		Name:           &name,
 		LoadbalancerId: loadbalancerID,
-		ProtocolPort:   port.Port,
+		ProtocolPort:   &port.Port,
 		InsertHeaders:  &elbmodel.ListenerInsertHeaders{XForwardedHost: &xForwardFor},
 	}
 
@@ -590,7 +590,7 @@ func (d *DedicatedLoadBalancer) addMember(service *v1.Service, loadbalancer *elb
 	name := utils.CutString(fmt.Sprintf("member_%s_%s", pool.Name, node.Name), defaultMaxNameLength)
 	opt := &elbmodel.CreateMemberOption{
 		Name:         &name,
-		ProtocolPort: port,
+		ProtocolPort: &port,
 		Address:      address,
 	}
 	if !loadbalancer.IpTargetEnable {

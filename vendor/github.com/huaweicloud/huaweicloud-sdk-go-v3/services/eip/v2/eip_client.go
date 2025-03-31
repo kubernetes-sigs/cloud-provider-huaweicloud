@@ -1,21 +1,21 @@
 package v2
 
 import (
-	http_client "github.com/huaweicloud/huaweicloud-sdk-go-v3/core"
+	httpclient "github.com/huaweicloud/huaweicloud-sdk-go-v3/core"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/invoker"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/services/eip/v2/model"
 )
 
 type EipClient struct {
-	HcClient *http_client.HcHttpClient
+	HcClient *httpclient.HcHttpClient
 }
 
-func NewEipClient(hcClient *http_client.HcHttpClient) *EipClient {
+func NewEipClient(hcClient *httpclient.HcHttpClient) *EipClient {
 	return &EipClient{HcClient: hcClient}
 }
 
-func EipClientBuilder() *http_client.HcHttpClientBuilder {
-	builder := http_client.NewHcHttpClientBuilder()
+func EipClientBuilder() *httpclient.HcHttpClientBuilder {
+	builder := httpclient.NewHcHttpClientBuilder()
 	return builder
 }
 
@@ -59,6 +59,27 @@ func (c *EipClient) BatchCreateSharedBandwidths(request *model.BatchCreateShared
 func (c *EipClient) BatchCreateSharedBandwidthsInvoker(request *model.BatchCreateSharedBandwidthsRequest) *BatchCreateSharedBandwidthsInvoker {
 	requestDef := GenReqDefForBatchCreateSharedBandwidths()
 	return &BatchCreateSharedBandwidthsInvoker{invoker.NewBaseInvoker(c.HcClient, request, requestDef)}
+}
+
+// BatchModifyBandwidth 批量更新带宽
+//
+// 批量更新带宽，共享带宽和包周期带宽该接口不适用。
+//
+// Please refer to HUAWEI cloud API Explorer for details.
+func (c *EipClient) BatchModifyBandwidth(request *model.BatchModifyBandwidthRequest) (*model.BatchModifyBandwidthResponse, error) {
+	requestDef := GenReqDefForBatchModifyBandwidth()
+
+	if resp, err := c.HcClient.Sync(request, requestDef); err != nil {
+		return nil, err
+	} else {
+		return resp.(*model.BatchModifyBandwidthResponse), nil
+	}
+}
+
+// BatchModifyBandwidthInvoker 批量更新带宽
+func (c *EipClient) BatchModifyBandwidthInvoker(request *model.BatchModifyBandwidthRequest) *BatchModifyBandwidthInvoker {
+	requestDef := GenReqDefForBatchModifyBandwidth()
+	return &BatchModifyBandwidthInvoker{invoker.NewBaseInvoker(c.HcClient, request, requestDef)}
 }
 
 // ChangeBandwidthToPeriod 按需转包API
@@ -463,7 +484,8 @@ func (c *EipClient) CreatePrePaidPublicipInvoker(request *model.CreatePrePaidPub
 // CreatePublicip 申请弹性公网IP
 //
 // 申请弹性公网IP，支持IPv4和IPv6。
-//  弹性公网IP（Elastic IP）提供独立的公网IP资源，包括公网IP地址与公网出口带宽服务。可以与弹性云服务器、裸金属服务器、虚拟IP、弹性负载均衡、NAT网关等资源灵活地绑定及解绑。拥有多种灵活的计费方式，可以满足各种业务场景的需要。
+//
+//	弹性公网IP（Elastic IP）提供独立的公网IP资源，包括公网IP地址与公网出口带宽服务。可以与弹性云服务器、裸金属服务器、虚拟IP、弹性负载均衡、NAT网关等资源灵活地绑定及解绑。拥有多种灵活的计费方式，可以满足各种业务场景的需要。
 //
 // Please refer to HUAWEI cloud API Explorer for details.
 func (c *EipClient) CreatePublicip(request *model.CreatePublicipRequest) (*model.CreatePublicipResponse, error) {
@@ -800,8 +822,9 @@ func (c *EipClient) NeutronShowFloatingIpInvoker(request *model.NeutronShowFloat
 // NeutronUpdateFloatingIp 更新浮动IP
 //
 // 更新浮动IP。
-//  更新时需在URL中给出浮动IP地址的ID。
-//  port_id 为空，则表示浮动IP从端口解绑。
+//
+//	更新时需在URL中给出浮动IP地址的ID。
+//	port_id 为空，则表示浮动IP从端口解绑。
 //
 // Please refer to HUAWEI cloud API Explorer for details.
 func (c *EipClient) NeutronUpdateFloatingIp(request *model.NeutronUpdateFloatingIpRequest) (*model.NeutronUpdateFloatingIpResponse, error) {

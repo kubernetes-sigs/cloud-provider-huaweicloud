@@ -1,15 +1,14 @@
 package model
 
 import (
-	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
-
 	"errors"
 	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/converter"
-
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/sdktime"
+	"github.com/huaweicloud/huaweicloud-sdk-go-v3/core/utils"
 	"strings"
 )
 
-//
+// Subnet
 type Subnet struct {
 
 	// 子网ID
@@ -71,6 +70,15 @@ type Subnet struct {
 
 	// 功能说明：子网作用域 取值范围：center-表示作用域为中心；{azId}表示作用域为具体的AZ
 	Scope *string `json:"scope,omitempty"`
+
+	// 项目ID
+	TenantId string `json:"tenant_id"`
+
+	// 功能说明：资源创建UTC时间 格式：yyyy-MM-ddTHH:mm:ss
+	CreatedAt *sdktime.SdkTime `json:"created_at"`
+
+	// 功能说明：资源更新UTC时间 格式：yyyy-MM-ddTHH:mm:ss
+	UpdatedAt *sdktime.SdkTime `json:"updated_at"`
 }
 
 func (o Subnet) String() string {
@@ -116,13 +124,18 @@ func (c SubnetStatus) MarshalJSON() ([]byte, error) {
 
 func (c *SubnetStatus) UnmarshalJSON(b []byte) error {
 	myConverter := converter.StringConverterFactory("string")
-	if myConverter != nil {
-		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
-		if err == nil {
-			c.value = val.(string)
-			return nil
-		}
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
 		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
 	} else {
 		return errors.New("convert enum data to string error")
 	}

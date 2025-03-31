@@ -78,7 +78,7 @@ type ServerDetail struct {
 	// 预留属性。
 	AccessIPv6 string `json:"accessIPv6"`
 
-	Fault *ecsmodel.ServerFault `json:"fault,omitempty"`
+	Fault *ecsmodel.Fault `json:"fault,omitempty"`
 
 	// 弹性云服务器进度。
 	Progress *int32 `json:"progress,omitempty"`

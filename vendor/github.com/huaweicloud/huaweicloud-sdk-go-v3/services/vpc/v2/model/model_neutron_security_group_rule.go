@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-//
+// NeutronSecurityGroupRule
 type NeutronSecurityGroupRule struct {
 
 	// 安全组规则描述
@@ -39,7 +39,7 @@ type NeutronSecurityGroupRule struct {
 	RemoteIpPrefix string `json:"remote_ip_prefix"`
 
 	// 功能说明：远端IP地址组ID 约束：和remote_ip_prefix，remote_group_id互斥
-	RemoteAddressGroupId *string `json:"remote_address_group_id,omitempty"`
+	RemoteAddressGroupId string `json:"remote_address_group_id"`
 
 	// 所属安全组ID
 	SecurityGroupId string `json:"security_group_id"`
@@ -96,13 +96,18 @@ func (c NeutronSecurityGroupRuleDirection) MarshalJSON() ([]byte, error) {
 
 func (c *NeutronSecurityGroupRuleDirection) UnmarshalJSON(b []byte) error {
 	myConverter := converter.StringConverterFactory("string")
-	if myConverter != nil {
-		val, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
-		if err == nil {
-			c.value = val.(string)
-			return nil
-		}
+	if myConverter == nil {
+		return errors.New("unsupported StringConverter type: string")
+	}
+
+	interf, err := myConverter.CovertStringToInterface(strings.Trim(string(b[:]), "\""))
+	if err != nil {
 		return err
+	}
+
+	if val, ok := interf.(string); ok {
+		c.value = val
+		return nil
 	} else {
 		return errors.New("convert enum data to string error")
 	}
