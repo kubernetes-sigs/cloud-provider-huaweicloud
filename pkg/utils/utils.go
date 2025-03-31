@@ -71,3 +71,10 @@ func LookupHost(domain string) []string {
 	klog.Infof("lookup host %s: %s", domain, strings.Join(ns, ", "))
 	return ns
 }
+
+func StringToPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
+}
