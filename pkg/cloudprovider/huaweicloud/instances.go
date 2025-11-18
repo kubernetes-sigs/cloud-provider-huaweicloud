@@ -208,7 +208,7 @@ func (i *Instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 		if err != nil {
 			return nil, err
 		}
-		providerID = id
+		providerID = fmt.Sprintf("%s://%s", ProviderName, id)
 	}
 	instanceID, err := parseInstanceID(providerID)
 	if err != nil {
