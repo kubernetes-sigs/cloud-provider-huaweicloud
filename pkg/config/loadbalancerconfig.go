@@ -124,16 +124,22 @@ func LoadELBConfig(data map[string]string) *LoadbalancerConfig {
 	cfg := NewDefaultELBConfig()
 
 	loadBalancerOptions := []byte(data["loadBalancerOption"])
-	if err := json.Unmarshal(loadBalancerOptions, &cfg.LoadBalancerOpts); err != nil {
-		klog.Errorf("error parsing loadbalancer config: %s", err)
+	if len(loadBalancerOptions) > 0 {
+		if err := json.Unmarshal(loadBalancerOptions, &cfg.LoadBalancerOpts); err != nil {
+			klog.Errorf("error parsing loadbalancer config: %s", err)
+		}
 	}
 	networkingOptions := []byte(data["networkingOption"])
-	if err := json.Unmarshal(networkingOptions, &cfg.NetworkingOpts); err != nil {
-		klog.Errorf("error parsing networkingOptions config: %s", err)
+	if len(networkingOptions) > 0 {
+		if err := json.Unmarshal(networkingOptions, &cfg.NetworkingOpts); err != nil {
+			klog.Errorf("error parsing networkingOptions config: %s", err)
+		}
 	}
 	metadataOptions := []byte(data["metadataOption"])
-	if err := json.Unmarshal(metadataOptions, &cfg.MetadataOpts); err != nil {
-		klog.Errorf("error parsing metadataOptions config: %s", err)
+	if len(metadataOptions) > 0 {
+		if err := json.Unmarshal(metadataOptions, &cfg.MetadataOpts); err != nil {
+			klog.Errorf("error parsing metadataOptions config: %s", err)
+		}
 	}
 	return cfg
 }

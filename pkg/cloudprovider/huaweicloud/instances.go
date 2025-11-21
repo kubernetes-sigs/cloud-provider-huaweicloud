@@ -35,7 +35,7 @@ const (
 	instanceShutoffStatus = "SHUTOFF"
 )
 
-var providerIDRegexp = regexp.MustCompile(`^` + ProviderName + `://([^/]+)$`)
+var providerIDRegexp = regexp.MustCompile(`^` + ProviderName + `:///([^/]+)$`)
 
 type Instances struct {
 	Basic
@@ -247,13 +247,13 @@ func (i *Instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 func parseInstanceID(providerID string) (string, error) {
 	klog.Infof("parseInstanceID is called with providerID %s", providerID)
 
-	if providerID != "" && !strings.Contains(providerID, "://") {
-		providerID = ProviderName + "://" + providerID
+	if providerID != "" && !strings.Contains(providerID, ":///") {
+		providerID = ProviderName + ":///" + providerID
 	}
 
 	matches := providerIDRegexp.FindStringSubmatch(providerID)
 	if len(matches) != 2 {
-		return "", fmt.Errorf("ProviderID \"%s\" didn't match expected format \"huaweicloud://InstanceID\"",
+		return "", fmt.Errorf("ProviderID \"%s\" didn't match expected format \"huaweicloud:///InstanceID\"",
 			providerID)
 	}
 	return matches[1], nil

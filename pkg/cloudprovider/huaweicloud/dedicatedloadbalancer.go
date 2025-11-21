@@ -484,7 +484,7 @@ func (d *DedicatedLoadBalancer) getPool(elbID, listenerID string) (*elbmodel.Poo
 func (d *DedicatedLoadBalancer) deletePool(pool *elbmodel.Pool) []error {
 	errs := make([]error, 0)
 	// delete all members of pool
-	if err := d.sharedELBClient.DeleteAllPoolMembers(pool.Id); err != nil {
+	if err := d.dedicatedELBClient.DeleteAllPoolMembers(pool.Id); err != nil {
 		errs = append(errs, err)
 	}
 	// delete the pool monitor if exists
@@ -502,7 +502,8 @@ func (d *DedicatedLoadBalancer) deletePool(pool *elbmodel.Pool) []error {
 func (d *DedicatedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.LoadBalancer, service *v1.Service,
 	pool *elbmodel.Pool, svcPort v1.ServicePort, nodes []*v1.Node) error {
 
-	members, err := d.dedicatedELBClient.ListMembers(&elbmodel.ListMembersRequest{PoolId: pool.Id})
+	var limit int32 = 100
+	members, err := d.dedicatedELBClient.ListMembers(&elbmodel.ListMembersRequest{PoolId: pool.Id, Limit: &limit})
 	if err != nil {
 		return err
 	}
@@ -543,13 +544,13 @@ func (d *DedicatedLoadBalancer) addOrRemoveMembers(loadbalancer *elbmodel.LoadBa
 		if err != nil {
 			if common.IsNotFound(err) {
 				// Node failure, do not create member
-				klog.Warningf("Failed to create SharedLoadBalancer pool member for node %s: %v", node.Name, err)
+				klog.Warningf("Failed to create DedicatedLoadBalancer pool member for node %s: %v", node.Name, err)
 				continue
 			}
 			return fmt.Errorf("error getting address for node %s: %v", node.Name, err)
 		}
 
-		key := fmt.Sprintf("%s:%d", address, svcPort.NodePort)
+		key := fmt.Sprintf("%s:%d", address, portNum)
 		if existsMember[key] {
 			klog.Infof("[addOrRemoveMembers] node already exists, skip adding, name: %s, address: %s, port: %d",
 				node.Name, address, portNum)
@@ -602,7 +603,7 @@ func (d *DedicatedLoadBalancer) addMember(service *v1.Service, loadbalancer *elb
 	}
 
 	if _, err = d.dedicatedELBClient.AddMember(pool.Id, opt); err != nil {
-		return fmt.Errorf("error creating SharedLoadBalancer pool member for node: %s, %v", node.Name, err)
+		return fmt.Errorf("error creating DedicatedLoadBalancer pool member for node: %s, %v", node.Name, err)
 	}
 
 	loadbalancer, err = d.dedicatedELBClient.WaitStatusActive(loadbalancer.Id)
@@ -779,7 +780,7 @@ func (d *DedicatedLoadBalancer) createHealthMonitor(loadbalancerID, poolID, prot
 		MaxRetries: opts.MaxRetries,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("error creating SharedLoadBalancer pool health monitor: %v", err)
+		return nil, fmt.Errorf("error creating DedicatedLoadBalancer pool health monitor: %v", err)
 	}
 
 	loadbalancer, err := d.dedicatedELBClient.WaitStatusActive(loadbalancerID)

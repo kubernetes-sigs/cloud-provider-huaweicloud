@@ -370,7 +370,8 @@ func (s *DedicatedLoadBalanceClient) DeleteMember(poolID, memberID string) error
 }
 
 func (s *DedicatedLoadBalanceClient) DeleteAllPoolMembers(poolID string) error {
-	members, err := s.ListMembers(&model.ListMembersRequest{PoolId: poolID})
+	var limit int32 = 100
+	members, err := s.ListMembers(&model.ListMembersRequest{PoolId: poolID, Limit: &limit})
 	if err != nil {
 		return nil
 	}
