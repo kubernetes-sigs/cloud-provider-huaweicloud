@@ -145,15 +145,15 @@ func (b Basic) sendEvent(reason, msg string, service *v1.Service) {
 }
 
 func (b Basic) getSubnetID(service *v1.Service, node *v1.Node) (string, error) {
-	subnetID, err := b.getNodeSubnetID(node)
-	if err != nil {
-		klog.Warningf("unable to read subnet-id from the node, try reading from service or cloud-config, error: %s", err)
-	}
+	subnetID := getStringFromSvsAnnotation(service, ElbSubnetID, b.cloudConfig.VpcOpts.SubnetID)
 	if subnetID != "" {
 		return subnetID, nil
 	}
 
-	subnetID = getStringFromSvsAnnotation(service, ElbSubnetID, b.cloudConfig.VpcOpts.SubnetID)
+	subnetID, err := b.getNodeSubnetID(node)
+	if err != nil {
+		klog.Warningf("unable to read subnet-id from the node, try reading from service or cloud-config, error: %s", err)
+	}
 	if subnetID == "" {
 		return "", status.Errorf(codes.InvalidArgument, "missing subnet-id, "+
 			"can not to read subnet-id from service or cloud-config")
