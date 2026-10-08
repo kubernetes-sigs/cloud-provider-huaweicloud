@@ -53,6 +53,8 @@ This section provides Huawei Cloud IAM configuration and authentication informat
 
 * `auth-url` Optional. The Identity authentication URL. Defaults to `https://iam.{cloud}:443/v3/`.
 
+* `insecure` Optional. Trust self-signed SSL certificates.
+
 * `instance-version` Optional. Selects the CCM instance management API: `v1` uses the legacy Instances interface, while `v2` uses the optimized InstancesV2 interface.
   Defaults to `v2`.
 

@@ -48,6 +48,7 @@ type VpcOptions struct {
 type AuthOptions struct {
 	Cloud     string `gcfg:"cloud"`
 	AuthURL   string `gcfg:"auth-url"`
+	Insecure  string `gcfg:"insecure"`
 	Region    string `gcfg:"region"`
 	AccessKey string `gcfg:"access-key"`
 	SecretKey string `gcfg:"secret-key"`
@@ -74,7 +75,7 @@ func (a *AuthOptions) GetHcClient(catalogName string) *core.HcHttpClient {
 	client := core.NewHcHttpClientBuilder().
 		WithRegion(r).
 		WithCredential(a.GetCredentials()).
-		WithHttpConfig(newHTTPConfig()).
+		WithHttpConfig(newHTTPConfig(a.Insecure)).
 		Build()
 
 	client.PreInvoke(map[string]string{
@@ -83,12 +84,15 @@ func (a *AuthOptions) GetHcClient(catalogName string) *core.HcHttpClient {
 	return client
 }
 
-func newHTTPConfig() *sdkconfig.HttpConfig {
+func newHTTPConfig(insecure string) *sdkconfig.HttpConfig {
 	lrt := utils.LogRoundTripper{}
 	var err error
 
 	defConfig := sdkconfig.DefaultHttpConfig()
 	defConfig.Retries = 3
+	if insecure == "true" {
+		defConfig.IgnoreSSLVerification = true
+	}
 
 	httpHandler := httphandler.NewHttpHandler()
 	defConfig.HttpHandler = httpHandler
