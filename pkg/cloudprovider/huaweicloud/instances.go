@@ -180,7 +180,7 @@ func (i *Instances) InstanceShutdownByProviderID(_ context.Context, providerID s
 // InstanceExists returns true if the instance for the given node exists according to the cloud provider.
 func (i *Instances) InstanceExists(_ context.Context, node *v1.Node) (bool, error) {
 	klog.Infof("InstanceExists is called with node %s", node.Name)
-	_, err := i.ecsClient.GetByNodeName(node.Name)
+	_, err := i.ecsClient.GetByNode(node)
 
 	if err != nil {
 		if common.IsNotFound(err) {
@@ -202,22 +202,28 @@ func (i *Instances) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, 
 func (i *Instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
 	klog.Infof("InstanceMetadata is called with node %s", node.Name)
 	providerID := node.Spec.ProviderID
+	var instance *ecsmodel.ServerDetail
+
 	if providerID == "" {
-		klog.V(4).Infof("node.Spec.ProviderID is empty, query ECS details by hostname: %s", node.Name)
-		id, err := i.InstanceID(ctx, types.NodeName(node.Name))
+		klog.V(4).Infof("node.Spec.ProviderID is empty, query ECS details: %s", node.Name)
+		var err error
+		instance, err = i.ecsClient.GetByNode(node)
 		if err != nil {
 			return nil, err
 		}
-		providerID = fmt.Sprintf("%s://%s", ProviderName, id)
-	}
-	instanceID, err := parseInstanceID(providerID)
-	if err != nil {
-		return nil, err
-	}
-
-	instance, err := i.ecsClient.Get(instanceID)
-	if err != nil {
-		return nil, err
+		providerID = fmt.Sprintf("%s:///%s", ProviderName, instance.Id)
+	} else {
+		instanceID, err := parseInstanceID(providerID)
+		if err != nil {
+			return nil, err
+		}
+		// Normalize providerID to the standard format "huaweicloud:///InstanceID"
+		// in case it was set as a bare instance ID by an external component.
+		providerID = fmt.Sprintf("%s:///%s", ProviderName, instanceID)
+		instance, err = i.ecsClient.Get(instanceID)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	instanceFlavor, err := getInstanceFlavor(instance)
@@ -225,7 +231,7 @@ func (i *Instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloud
 		return nil, err
 	}
 
-	interfaces, err := i.ecsClient.ListInterfaces(&ecsmodel.ListServerInterfacesRequest{ServerId: instanceID})
+	interfaces, err := i.ecsClient.ListInterfaces(&ecsmodel.ListServerInterfacesRequest{ServerId: instance.Id})
 	if err != nil {
 		return nil, err
 	}

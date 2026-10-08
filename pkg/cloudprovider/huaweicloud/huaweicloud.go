@@ -525,6 +525,10 @@ func (h *CloudProvider) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 
 // Instances returns an instances interface. Also returns true if the interface is supported, false otherwise.
 func (h *CloudProvider) Instances() (cloudprovider.Instances, bool) {
+	if !strings.Contains(h.cloudConfig.AuthOpts.InstanceVersion, "v1") {
+		return nil, false
+	}
+
 	instance := &Instances{
 		Basic: h.Basic,
 	}
@@ -555,11 +559,14 @@ func (*CloudProvider) ProviderName() string {
 // InstancesV2 is an implementation for instances and should only be implemented by external cloud providers.
 // Don't support this feature for now.
 func (h *CloudProvider) InstancesV2() (cloudprovider.InstancesV2, bool) {
-	instance := &Instances{
-		Basic: h.Basic,
+	if h.cloudConfig.AuthOpts.InstanceVersion == "" || strings.Contains(h.cloudConfig.AuthOpts.InstanceVersion, "v2") {
+		instance := &Instances{
+			Basic: h.Basic,
+		}
+		return instance, true
 	}
 
-	return instance, true
+	return nil, false
 }
 
 // ListClusters is an implementation of Clusters.ListClusters
