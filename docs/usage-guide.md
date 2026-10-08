@@ -198,6 +198,19 @@ will be used, otherwise use the set value.
   the default flavor is used.
   Only dedicated load balancer service (`kubernetes.io/elb.class: dedicated`) will use this annotation.
 
+* `kubernetes.io/elb.backend.subnet-id` Optional. Specifies the subnet ID of the backend server.
+  When this annotation is set, the backend member will be added to the pool using the specified subnet.
+  This is useful when the node has multiple network interfaces and you want to specify a particular subnet
+  for the backend member.
+  Only dedicated load balancer service (`kubernetes.io/elb.class: dedicated`) will use this annotation.
+
+* `kubernetes.io/elb.backend.ip-version` Optional. Specifies the IP version of the backend server when
+  using Pod IP as the backend (e.g. `ExternalTrafficPolicy=Local` or
+  `AllocateLoadBalancerNodePorts=false`).
+  The value can be `ipv4` (or `v4`) and `ipv6` (or `v6`).
+  If this annotation is not set, the default Pod IP is used.
+  Only dedicated load balancer service (`kubernetes.io/elb.class: dedicated`) will use this annotation.
+
 ## Creating a Service of LoadBalancer type
 
 Below are some examples of using shared ELB services.

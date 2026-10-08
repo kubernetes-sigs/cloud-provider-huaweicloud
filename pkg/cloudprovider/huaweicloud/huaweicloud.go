@@ -64,6 +64,8 @@ const (
 	ElbID    = "kubernetes.io/elb.id"
 
 	ElbSubnetID          = "kubernetes.io/elb.subnet-id"
+	ElbBackendSubnetID   = "kubernetes.io/elb.backend.subnet-id"
+	ElbBackendIpVersion  = "kubernetes.io/elb.backend.ip-version"
 	ElbEipID             = "kubernetes.io/elb.eip-id"
 	ELBKeepEip           = "kubernetes.io/elb.keep-eip"
 	AutoCreateEipOptions = "kubernetes.io/elb.eip-auto-create-option"
@@ -760,7 +762,7 @@ func (e *LoadBalancerServiceListener) dispatcher(namespace, name, eType string, 
 
 	klog.Infof("Dispatcher service, namespace: %s, name: %s", namespace, name)
 
-	if eType == endpointAdded && (svc.Spec.LoadBalancerClass == nil || *svc.Spec.LoadBalancerClass != LoadBalancerClass) {
+	if eType == endpointAdded && svc.Spec.LoadBalancerClass != nil && *svc.Spec.LoadBalancerClass != LoadBalancerClass {
 		return
 	}
 	handle(svc, false)

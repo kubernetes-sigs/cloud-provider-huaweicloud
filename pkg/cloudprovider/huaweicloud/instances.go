@@ -199,7 +199,7 @@ func (i *Instances) InstanceShutdown(ctx context.Context, node *v1.Node) (bool, 
 
 // InstanceMetadata returns the instance's metadata. The values returned in InstanceMetadata are
 // translated into specific fields in the Node object on registration.
-func (i *Instances) InstanceMetadata(ctx context.Context, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
+func (i *Instances) InstanceMetadata(_ context.Context, node *v1.Node) (*cloudprovider.InstanceMetadata, error) {
 	klog.Infof("InstanceMetadata is called with node %s", node.Name)
 	providerID := node.Spec.ProviderID
 	var instance *ecsmodel.ServerDetail
