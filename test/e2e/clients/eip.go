@@ -34,3 +34,35 @@ func DeleteEip(authOpts *config.AuthOptions, id string) {
 	err := eipClient.Delete(id)
 	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
 }
+
+func CreateSharedBandwidth(authOpts *config.AuthOptions) *model.BandwidthResp {
+	eipClient := wrapper.EIpClient{AuthOpts: authOpts}
+
+	name := fmt.Sprintf("e2e_shared_%s", rand.String(5))
+	size := int32(5)
+	resp, err := eipClient.CreateSharedBandwidth(&model.CreateSharedBandwidthRequest{
+		Body: &model.CreateSharedBandwidhRequestBody{
+			Bandwidth: &model.CreateSharedBandwidthOption{
+				Name: name,
+				Size: size,
+			},
+		},
+	})
+	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+	return resp
+}
+
+func DeleteSharedBandwidth(authOpts *config.AuthOptions, id string) {
+	eipClient := wrapper.EIpClient{AuthOpts: authOpts}
+	err := eipClient.DeleteSharedBandwidth(id)
+	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+}
+
+func FindEipIDByPortID(authOpts *config.AuthOptions, portID string) string {
+	eipClient := wrapper.EIpClient{AuthOpts: authOpts}
+	portIDs := []string{portID}
+	eips, err := eipClient.List(&model.ListPublicipsRequest{PortId: &portIDs})
+	gomega.Expect(err).ShouldNot(gomega.HaveOccurred())
+	gomega.Expect(eips).ShouldNot(gomega.BeEmpty())
+	return *eips[0].Id
+}

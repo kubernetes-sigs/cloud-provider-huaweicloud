@@ -306,6 +306,26 @@ func (s *DedicatedLoadBalanceClient) DeleteHealthMonitor(id string) error {
 
 /** Member **/
 
+func (s *DedicatedLoadBalanceClient) BatchAddMember(poolID string, members []model.BatchCreateMembersOption) (*[]model.BatchMember, error) {
+	var rst *[]model.BatchMember
+	err := s.wrapper(func(c *elb.ElbClient) (interface{}, error) {
+		return c.BatchCreateMembers(&model.BatchCreateMembersRequest{
+			PoolId: poolID,
+			Body: &model.BatchCreateMembersRequestBody{
+				Members: members,
+			},
+		})
+	}, "Members", &rst)
+
+	// Ignore existing members
+	if err != nil {
+		if ne, ok := err.(sdkerr.ServiceResponseError); ok && ne.ErrorCode == "409" {
+			return rst, nil
+		}
+	}
+	return rst, err
+}
+
 func (s *DedicatedLoadBalanceClient) AddMember(poolID string, req *model.CreateMemberOption) (*model.Member, error) {
 	var rst *model.Member
 	err := s.wrapper(func(c *elb.ElbClient) (interface{}, error) {
@@ -365,6 +385,24 @@ func (s *DedicatedLoadBalanceClient) DeleteMember(poolID, memberID string) error
 		return c.DeleteMember(&model.DeleteMemberRequest{
 			PoolId:   poolID,
 			MemberId: memberID,
+		})
+	})
+}
+
+func (s *DedicatedLoadBalanceClient) BatchDeleteMember(poolID string, ids []string) error {
+	members := make([]model.BatchDeleteMembersOption, 0)
+	for i := range ids {
+		id := ids[i]
+		members = append(members, model.BatchDeleteMembersOption{
+			Id: &id,
+		})
+	}
+	return s.wrapper(func(c *elb.ElbClient) (interface{}, error) {
+		return c.BatchDeleteMembers(&model.BatchDeleteMembersRequest{
+			PoolId: poolID,
+			Body: &model.BatchDeleteMembersRequestBody{
+				Members: members,
+			},
 		})
 	})
 }
