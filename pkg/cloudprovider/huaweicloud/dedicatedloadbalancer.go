@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"strings"
 
 	"google.golang.org/grpc/codes"
@@ -221,6 +222,10 @@ func (d *DedicatedLoadBalancer) createLoadbalancer(clusterName, subnetID string,
 		Description:          &desc,
 	}
 	enableCrossVpc := getBoolFromSvsAnnotation(service, ElbEnableCrossVpc, d.loadbalancerOpts.EnableCrossVpc)
+	// Auto-enable IpTargetEnable when ExternalTrafficPolicy=Local, so Pod IPs can be used as members.
+	if service.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeLocal {
+		enableCrossVpc = true
+	}
 	if enableCrossVpc {
 		createOpt.IpTargetEnable = &enableCrossVpc
 	}
@@ -446,9 +451,14 @@ func (d *DedicatedLoadBalancer) createPool(listener *elbmodel.Listener, service 
 			return nil, err
 		}
 		sessionPersistence = &elbmodel.CreatePoolSessionPersistenceOption{
-			CookieName:         persistence.CookieName,
 			Type:               *sessionPersistenceType,
 			PersistenceTimeout: persistence.PersistenceTimeout,
+		}
+		// CookieName is only valid when type is APP_COOKIE, otherwise the API will reject it.
+		// PersistenceTimeout is not effective when type is APP_COOKIE, so clear it.
+		if *sessionPersistenceType == elbmodel.GetCreatePoolSessionPersistenceOptionTypeEnum().APP_COOKIE {
+			sessionPersistence.CookieName = persistence.CookieName
+			sessionPersistence.PersistenceTimeout = nil
 		}
 	}
 
@@ -615,12 +625,16 @@ func (d *DedicatedLoadBalancer) addMember(service *v1.Service, loadbalancer *elb
 		ProtocolPort: port,
 		Address:      address,
 	}
-	if !loadbalancer.IpTargetEnable {
+	backendSubnetId := getStringFromSvsAnnotation(service, ElbBackendSubnetID, "")
+	if !loadbalancer.IpTargetEnable && backendSubnetId == "" {
 		subnetID, err := d.getNodeSubnetIDByHostIP(address)
 		if err != nil {
 			return err
 		}
 		opt.SubnetCidrId = &subnetID
+	}
+	if backendSubnetId != "" {
+		opt.SubnetCidrId = &backendSubnetId
 	}
 
 	if _, err = d.dedicatedELBClient.AddMember(pool.Id, opt); err != nil {
@@ -637,6 +651,13 @@ func (d *DedicatedLoadBalancer) addMember(service *v1.Service, loadbalancer *elb
 }
 
 func (d *DedicatedLoadBalancer) getMemberIP(service *v1.Service, node *v1.Node, pod v1.Pod, svcPort v1.ServicePort) (string, int32, error) {
+	// When ExternalTrafficPolicy=Local, use Pod IP directly to preserve client source IP.
+	if service.Spec.ExternalTrafficPolicy == v1.ServiceExternalTrafficPolicyTypeLocal {
+		klog.Infof("add member using the Pod's IP and port (ExternalTrafficPolicy=Local), service: %s/%s, port: %s ",
+			service.Namespace, service.Name, svcPort.Name)
+		return getEndpointFromPod(service, pod, svcPort)
+	}
+
 	if service.Spec.AllocateLoadBalancerNodePorts != nil && *service.Spec.AllocateLoadBalancerNodePorts {
 		klog.Infof("add member using the Node's IP and port, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
 
@@ -659,23 +680,71 @@ func (d *DedicatedLoadBalancer) getMemberIP(service *v1.Service, node *v1.Node, 
 	}
 
 	if service.Spec.AllocateLoadBalancerNodePorts != nil && !*service.Spec.AllocateLoadBalancerNodePorts {
-		klog.Infof("add member using the Pod's IP and port, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
-		// get IP and port from Pod
-		if svcPort.TargetPort.Type == intstr.Int {
-			klog.V(6).Infof("targetPort is a number, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
-			return pod.Status.PodIP, svcPort.TargetPort.IntVal, nil
-		}
+		return getEndpointFromPod(service, pod, svcPort)
+	}
+	return "", 0, fmt.Errorf("not found member IP and port")
+}
 
-		klog.V(6).Infof("targetPort is a name, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.Name)
-		for _, c := range pod.Spec.Containers {
-			for _, p := range c.Ports {
-				if p.Name == svcPort.TargetPort.StrVal && string(p.Protocol) == string(svcPort.Protocol) {
-					return pod.Status.PodIP, p.ContainerPort, nil
-				}
+func getEndpointFromPod(service *v1.Service, pod v1.Pod, svcPort v1.ServicePort) (string, int32, error) {
+	klog.Infof("add member using the Pod's IP and port, service: %s/%s, name: %s, port: %s ",
+		service.Namespace, service.Name, svcPort.Name, svcPort.TargetPort)
+
+	ipVersion := getStringFromSvsAnnotation(service, ElbBackendIpVersion, "")
+	podIp := getPodIPByVersion(pod, ipVersion)
+
+	// get IP and port from Pod
+	if svcPort.TargetPort.Type == intstr.Int {
+		klog.V(6).Infof("targetPort is a number, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.TargetPort)
+		return podIp, svcPort.TargetPort.IntVal, nil
+	}
+
+	klog.V(6).Infof("targetPort is a name, service: %s/%s, port: %s ", service.Namespace, service.Name, svcPort.TargetPort)
+	for _, c := range pod.Spec.Containers {
+		for _, p := range c.Ports {
+			if p.Name == svcPort.TargetPort.StrVal && string(p.Protocol) == string(svcPort.Protocol) {
+				return podIp, p.ContainerPort, nil
 			}
 		}
 	}
 	return "", 0, fmt.Errorf("not found member IP and port")
+}
+
+func getPodIPByVersion(pod v1.Pod, ipVersion string) string {
+	if ipVersion == "" {
+		return pod.Status.PodIP
+	}
+
+	var wantV4 bool
+	switch strings.ToLower(ipVersion) {
+	case "ipv4", "v4":
+		wantV4 = true
+	case "ipv6", "v6":
+		wantV4 = false
+	default:
+		return pod.Status.PodIP
+	}
+
+	for _, podIP := range pod.Status.PodIPs {
+		ip := net.ParseIP(podIP.IP)
+		if ip == nil {
+			continue
+		}
+		if wantV4 && ip.To4() != nil {
+			return podIP.IP
+		}
+		if !wantV4 && ip.To4() == nil {
+			return podIP.IP
+		}
+	}
+
+	if ip := net.ParseIP(pod.Status.PodIP); ip != nil {
+		isV4 := ip.To4() != nil
+		if isV4 == wantV4 {
+			return pod.Status.PodIP
+		}
+	}
+
+	return ""
 }
 
 func (d *DedicatedLoadBalancer) deleteMember(elbID string, poolID string, member elbmodel.Member) error {

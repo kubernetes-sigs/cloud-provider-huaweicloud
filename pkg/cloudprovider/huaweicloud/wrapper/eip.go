@@ -82,6 +82,21 @@ func (e *EIpClient) Delete(id string) error {
 	})
 }
 
+func (e *EIpClient) CreateSharedBandwidth(req *model.CreateSharedBandwidthRequest) (*model.BandwidthResp, error) {
+	var rst *model.BandwidthResp
+	err := e.wrapper(func(c *eip.EipClient) (interface{}, error) {
+		return c.CreateSharedBandwidth(req)
+	}, "Bandwidth", &rst)
+
+	return rst, err
+}
+
+func (e *EIpClient) DeleteSharedBandwidth(id string) error {
+	return e.wrapper(func(c *eip.EipClient) (interface{}, error) {
+		return c.DeleteSharedBandwidth(&model.DeleteSharedBandwidthRequest{BandwidthId: id})
+	})
+}
+
 func (e *EIpClient) wrapper(handler func(*eip.EipClient) (interface{}, error), args ...interface{}) error {
 	return commonWrapper(func() (interface{}, error) {
 		hc := e.AuthOpts.GetHcClient("vpc")
