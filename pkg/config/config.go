@@ -52,6 +52,8 @@ type AuthOptions struct {
 	AccessKey string `gcfg:"access-key"`
 	SecretKey string `gcfg:"secret-key"`
 	ProjectID string `gcfg:"project-id"`
+
+	InstanceVersion string `gcfg:"instance-version"`
 }
 
 func (a *AuthOptions) GetCredentials() *basic.Credentials {
