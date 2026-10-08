@@ -173,6 +173,11 @@ func (d *DedicatedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterN
 			return nil, err
 		}
 
+		// update pool lb_algorithm if annotation changed
+		if err = d.ensurePoolAlgorithm(pool, service); err != nil {
+			return nil, err
+		}
+
 		// add new members and remove the obsolete members.
 		if err = d.addOrRemoveMembers(loadbalancer, service, pool, port, nodes); err != nil {
 			return nil, err
@@ -460,6 +465,22 @@ func (d *DedicatedLoadBalancer) createPool(listener *elbmodel.Listener, service 
 		ListenerId:         &listener.Id,
 		SessionPersistence: sessionPersistence,
 	})
+}
+
+// ensurePoolAlgorithm updates the pool's lb_algorithm if it differs from the annotation.
+func (d *DedicatedLoadBalancer) ensurePoolAlgorithm(pool *elbmodel.Pool, service *v1.Service) error {
+	desiredAlgorithm := getStringFromSvsAnnotation(service, ElbAlgorithm, d.loadbalancerOpts.LBAlgorithm)
+	if desiredAlgorithm == "" {
+		return nil
+	}
+	if pool.LbAlgorithm == desiredAlgorithm {
+		return nil
+	}
+	klog.Infof("Updating pool %s lb_algorithm from %s to %s", pool.Id, pool.LbAlgorithm, desiredAlgorithm)
+	_, err := d.dedicatedELBClient.UpdatePool(pool.Id, &elbmodel.UpdatePoolOption{
+		LbAlgorithm: &desiredAlgorithm,
+	})
+	return err
 }
 
 func (d *DedicatedLoadBalancer) getPool(elbID, listenerID string) (*elbmodel.Pool, error) {

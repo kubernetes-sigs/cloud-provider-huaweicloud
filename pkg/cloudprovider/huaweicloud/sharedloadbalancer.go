@@ -199,6 +199,11 @@ func (l *SharedLoadBalancer) EnsureLoadBalancer(ctx context.Context, clusterName
 			return nil, err
 		}
 
+		// update pool lb_algorithm if annotation changed
+		if err = l.ensurePoolAlgorithm(pool, service); err != nil {
+			return nil, err
+		}
+
 		// add new members and remove the obsolete members.
 		if err = l.addOrRemoveMembers(loadbalancer, service, pool, port, nodes); err != nil {
 			return nil, err
@@ -646,6 +651,16 @@ func (l *SharedLoadBalancer) createPool(listener *elbmodel.ListenerResp, service
 	lbAlgorithm := getStringFromSvsAnnotation(service, ElbAlgorithm, l.loadbalancerOpts.LBAlgorithm)
 	persistence := l.getSessionAffinity(service)
 
+	// CookieName is only valid when type is APP_COOKIE, otherwise the API will reject it.
+	// PersistenceTimeout is not effective when type is APP_COOKIE, so clear it.
+	if persistence != nil {
+		if persistence.Type.Value() != "APP_COOKIE" {
+			persistence.CookieName = nil
+		} else {
+			persistence.PersistenceTimeout = nil
+		}
+	}
+
 	protocolStr := listener.Protocol.Value()
 	if protocolStr == ProtocolHTTPS || protocolStr == ProtocolTerminatedHTTPS {
 		protocolStr = ProtocolHTTP
@@ -663,6 +678,22 @@ func (l *SharedLoadBalancer) createPool(listener *elbmodel.ListenerResp, service
 		ListenerId:         &listener.Id,
 		SessionPersistence: persistence,
 	})
+}
+
+// ensurePoolAlgorithm updates the pool's lb_algorithm if it differs from the annotation.
+func (l *SharedLoadBalancer) ensurePoolAlgorithm(pool *elbmodel.PoolResp, service *v1.Service) error {
+	desiredAlgorithm := getStringFromSvsAnnotation(service, ElbAlgorithm, l.loadbalancerOpts.LBAlgorithm)
+	if desiredAlgorithm == "" {
+		return nil
+	}
+	if pool.LbAlgorithm.Value() == desiredAlgorithm {
+		return nil
+	}
+	klog.Infof("Updating pool %s lb_algorithm from %s to %s", pool.Id, pool.LbAlgorithm.Value(), desiredAlgorithm)
+	_, err := l.sharedELBClient.UpdatePool(pool.Id, &elbmodel.UpdatePoolReq{
+		LbAlgorithm: &desiredAlgorithm,
+	})
+	return err
 }
 
 func popMember(members []elbmodel.MemberResp, addr string, port int32) []elbmodel.MemberResp {
