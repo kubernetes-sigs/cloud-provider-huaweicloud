@@ -1,6 +1,8 @@
 # Usage Guide
 
-This page provides some examples and Service Annotations descriptions.
+> [English](./usage-guide.md) | [中文](./zh/usage-guide.md)
+
+This page provides Service Annotations descriptions.
 
 Before running the examples below,
 make sure you have installed the `huawei-cloud-controller-manager` in your Kubernetes cluster,
@@ -24,10 +26,6 @@ will be used, otherwise use the set value.
 
 * `kubernetes.io/elb.id` Optional. Specifies use of an existing ELB service.
   If empty, a new ELB service will be created automatically.
-
-* `kubernetes.io/elb.connection-limit` Optional. Specifies the maximum number of connections for the listener.
-  This option works with the Shared ELB service, the value ranges from `-1` to `2147483647`.
-  The default value is `-1`, indicating that there is no restriction on the maximum number of connections.
 
 * `kubernetes.io/elb.subnet-id` Optional. Specifies the IPv4 subnet ID where the load balancer works.
   If the value is empty, the `subnet-id` in `cloud-config` secret will be used.
@@ -53,18 +51,16 @@ will be used, otherwise use the set value.
 
     If this parameter is set to **WHOLE**, the `share_id` must be specified.
 
-  * `ip_type` Optional. Specifies the EIP type. The value can be `5_bgp` (dynamic BGP) or `5_sbgp` (static BGP).
-    It is required when `share_type` is `PER`.
+  * `ip_type` Optional (required when `share_type` is `PER`). Specifies the EIP type. The value can be `5_bgp` (dynamic BGP) or `5_sbgp` (static BGP).
 
     For the `ip_type` supported by each region, please
     see [Assigning an EIP](https://support.huaweicloud.com/intl/en-us/api-eip/eip_api_0001.html) "Table 4 Description of
     the publicIP field".
 
-  * `bandwidth_size` Optional. Specifies the bandwidth size. It is required when `share_type` is `PER`.
+  * `bandwidth_size` Optional (required when `share_type` is `PER`). Specifies the bandwidth size.
 
-  * `charge_mode` Optional. Specifies whether the bandwidth is billed by traffic or by bandwidth size.
-
-    It is required when `share_type` is `PER`. Defaults is `traffic`, valid values:
+  * `charge_mode` Optional (required when `share_type` is `PER`). Specifies whether the bandwidth is billed by traffic or by bandwidth size.
+    Defaults to `traffic`, valid values:
 
     **bandwidth**: billed by bandwidth size.
 
@@ -121,15 +117,12 @@ will be used, otherwise use the set value.
 * `kubernetes.io/elb.health-check-flag` Optional. Specifies whether to enable health check for a backend server group.
   Valid values are `on` and `off`, defaults to `on`.
 
-  > When health check is enabled, CCM will add a new inbound rule to one of the security groups of the backend service,
-  allowing traffic from `100.125.0.0/16`.
-  This rule will be removed when all LoadBalance services are removed.
-  >
-  > `100.125.0.0/16` are internal IP addresses used by ELB to check the health of backend servers.
+  > When health check is enabled, ensure that the node security group allows inbound traffic from `100.125.0.0/16`.
+  > CCM does not automatically add this rule. `100.125.0.0/16` are internal IP addresses used by ELB to check the health of backend servers.
 
 * `kubernetes.io/elb.health-check-option` Optional. Specifies the health check.
   This parameter is mandatory when the `health-check` is `on`.
-  This is a json string, such as `{"delay": 3, "timeout": 15, "max_retries": 3}`.
+  This is a json string, such as `{"delay": 5, "timeout": 3, "max_retries": 3}`.
   For details:
 
   * `delay` Required. Specifies the maximum time between health checks in the unit of second.
@@ -213,217 +206,10 @@ will be used, otherwise use the set value.
 
 ## Creating a Service of LoadBalancer type
 
-Below are some examples of using shared ELB services.
-First, we should create a deployment for the bellow examples.
+For complete executable examples ranging from basic to advanced ELB scenarios
+(auto-create shared/dedicated ELB, EIP binding, session affinity, health checks,
+TLS termination, cross-VPC backend, multi-port services, and more),
+see the [Usage Examples](./usage-examples.md).
 
-```shell
-cat <<EOF | kubectl apply -f -
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  namespace: default
-  name: deployment-ccm-test
-spec:
-  selector:
-    matchLabels:
-      app: nginx
-  replicas: 1
-  template:
-    metadata:
-      labels:
-        app: nginx
-    spec:
-      containers:
-        - name: nginx
-          image: nginx:1.23
-          ports:
-            - containerPort: 80
-EOF
-````
-
-### Example 1: Use an existing shared ELB service
-
-```shell
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Service
-metadata:
-  annotations:
-    kubernetes.io/elb.class: shared
-    kubernetes.io/elb.id: xx  # Please replace xx with your ELB instance ID.
-    kubernetes.io/elb.lb-algorithm: ROUND_ROBIN
-  labels:
-    app: nginx
-  name: loadbalancer-service-demo-01
-  namespace: default
-spec:
-  ports:
-    - port: 80
-      protocol: TCP
-      targetPort: 80
-  selector:
-    app: nginx
-  type: LoadBalancer
-EOF
-```
-
-Check the state the status of the LoadBalancer type Service until the `EXTERNAL-IP` status is no longer pending.
-
-```shell
-$ kubectl get service loadbalancer-service-demo-01
-NAME                          TYPE           CLUSTER-IP     EXTERNAL-IP     PORT(S)        AGE
-loadbalancer-service-demo-01  LoadBalancer   10.1.130.216   192.168.0.113   80:30993/TCP   3m10s
-```
-
-Once we can see that our service is active and has been assigned an external IP address,
-test our application via `curl` from any internet accessible machine.
-
-```shell
-$ curl 192.168.0.113
-<!DOCTYPE html>
-<html>
-<head>
-<title>Welcome to nginx!</title>
-...
-```
-
-### Example 2: Automatically create a new shared ELB service
-
-```shell
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Service
-metadata:
-  annotations:
-    kubernetes.io/elb.class: shared
-    kubernetes.io/elb.lb-algorithm: ROUND_ROBIN
-    kubernetes.io/elb.enable-transparent-client-ip: 'true'  # Preserve client IP to backend servers.
-  labels:
-    app: nginx
-  name: loadbalancer-service-demo-02
-  namespace: default
-spec:
-  ports:
-    - port: 80
-      protocol: TCP
-      targetPort: 80
-  selector:
-    app: nginx
-  type: LoadBalancer
-EOF
-```
-
-Check the state the status of the LoadBalancer type Service until the `EXTERNAL-IP` status is no longer pending.
-
-```shell
-$ kubectl get service loadbalancer-service-demo-02
-NAME                           TYPE           CLUSTER-IP     EXTERNAL-IP     PORT(S)        AGE
-loadbalancer-service-demo-02   LoadBalancer   10.1.130.216   192.168.0.80   80:30993/TCP   3m10s
-```
-
-Once we can see that our service is active and has been assigned an external IP address,
-test our application via `curl` from any internet accessible machine.
-
-```shell
-$ curl 192.168.0.80
-<!DOCTYPE html>
-<html>
-<head>
-<title>Welcome to nginx!</title>
-...
-```
-
-### Example 3: Automatically create a new shared ELB service and create an EIP
-
-```shell
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Service
-metadata:
-  annotations:
-    kubernetes.io/elb.class: shared
-    kubernetes.io/elb.lb-algorithm: ROUND_ROBIN
-    kubernetes.io/elb.keep-eip: "false"
-    kubernetes.io/elb.eip-auto-create-option: >-
-      {"ip_type": "5_bgp", "bandwidth_size": 5, "share_type": "PER"}
-  labels:
-    app: nginx
-  name: loadbalancer-service-demo-03
-  namespace: default
-spec:
-  ports:
-    - port: 80
-      protocol: TCP
-      targetPort: 80
-  selector:
-    app: nginx
-  type: LoadBalancer
-EOF
-```
-
-Check the state the status of the LoadBalancer type Service until the `EXTERNAL-IP` status is no longer pending.
-
-```shell
-$ kubectl get service loadbalancer-service-demo-03
-NAME                           TYPE           CLUSTER-IP     EXTERNAL-IP     PORT(S)        AGE
-loadbalancer-service-demo-03   LoadBalancer   10.1.35.151   159.138.37.76   80:30080/TCP   41s
-```
-
-Once we can see that our service is active and has been assigned an external IP address,
-test our application via `curl` from any internet accessible machine.
-
-```shell
-$ curl 159.138.37.76
-<!DOCTYPE html>
-<html>
-<head>
-<title>Welcome to nginx!</title>
-...
-```
-
-### Example 4: Enable session affinity for shared ELB service listeners
-
-```shell
-cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Service
-metadata:
-  annotations:
-    kubernetes.io/elb.class: shared
-    kubernetes.io/elb.lb-algorithm: ROUND_ROBIN
-    kubernetes.io/elb.session-affinity-flag: 'on'
-    kubernetes.io/elb.session-affinity-option: >-
-      {"type": "SOURCE_IP", "persistence_timeout": 15}
-  labels:
-    app: nginx
-  name: loadbalancer-service-demo-04
-  namespace: default
-spec:
-  ports:
-    - port: 80
-      protocol: TCP
-      targetPort: 80
-  selector:
-    app: nginx
-  type: LoadBalancer
-EOF
-```
-
-Check the state the status of the LoadBalancer type Service until the `EXTERNAL-IP` status is no longer pending.
-
-```shell
-$ kubectl get service loadbalancer-service-demo-04
-NAME                           TYPE           CLUSTER-IP     EXTERNAL-IP     PORT(S)        AGE
-loadbalancer-service-demo-04   LoadBalancer   10.1.130.216   192.168.0.113   80:30993/TCP   3m10s
-```
-
-Once we can see that our service is active and has been assigned an external IP address,
-test our application via `curl` from any internet accessible machine.
-
-```shell
-$ curl 192.168.0.113
-<!DOCTYPE html>
-<html>
-<head>
-<title>Welcome to nginx!</title>
-```
+For complete executable examples covering all the annotations described above
+and more scenarios, please refer to the [Usage Examples](./usage-examples.md).

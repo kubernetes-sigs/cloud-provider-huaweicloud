@@ -1,9 +1,9 @@
-# IAM policy of Huawei Cloud Kubernetes Cloud Provider
+# 华为云 Kubernetes Cloud Provider IAM 权限策略
 
-> [English](./iam-policy.md) | [中文](./zh/iam-policy.md)
+> [English](../iam-policy.md) | [中文](./iam-policy.md)
 
-The following policy content is the minimum permissions used by Kubernetes CCM on HUAWEI CLOUD.
-You can customize a policy and grant it to the account used by CCM.
+以下策略内容是 Kubernetes CCM 在华为云上使用的最小权限。
+你可以自定义策略并将其授予 CCM 使用的账号。
 
 ```json
 {
