@@ -12,10 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM alpine:3.7
+FROM --platform=$BUILDPLATFORM golang:1.22-alpine AS builder
+
+ARG TARGETOS
+ARG TARGETARCH
+
+WORKDIR /src
+COPY . .
+RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build \
+    -ldflags "-w -s" \
+    -o /out/huawei-cloud-controller-manager \
+    ./cmd/cloud-controller-manager/cloud-controller-manager.go
+
+FROM alpine:3.23.5
 
 RUN apk add --no-cache ca-certificates
 
-ADD huawei-cloud-controller-manager /bin/
+COPY --from=builder /out/huawei-cloud-controller-manager /bin/
 
-CMD ["/bin/huawei-cloud-controller-manager"]
+ENTRYPOINT ["/bin/huawei-cloud-controller-manager"]
