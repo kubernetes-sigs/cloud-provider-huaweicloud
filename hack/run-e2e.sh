@@ -25,19 +25,24 @@ REPO_ROOT=$(dirname "${BASH_SOURCE[0]}")/..
 ARTIFACTS_PATH=${ARTIFACTS_PATH:-"${REPO_ROOT}/e2e-logs"}
 mkdir -p "${ARTIFACTS_PATH}"
 
-# Install ginkgo
-GO111MODULE=on go install github.com/onsi/ginkgo/v2/ginkgo@v2.6.1
+# Install ginkgo CLI matching the version in go.mod
+GINKGO_VERSION=$(go list -m -f '{{.Version}}' github.com/onsi/ginkgo/v2 2>/dev/null | head -1)
+if [ -z "$GINKGO_VERSION" ]; then
+  GINKGO_VERSION="v2.9.4"
+fi
+echo "Installing ginkgo@${GINKGO_VERSION}..."
+GO111MODULE=on go install github.com/onsi/ginkgo/v2/ginkgo@${GINKGO_VERSION}
 GOPATH=$(go env GOPATH | awk -F ':' '{print $1}')
 export PATH=$PATH:$GOPATH/bin
 
-# Pre run e2e for extra components
+# Pre run e2e for extra components (build CCM image + deploy to cluster)
 echo -e "\n:::::: Run pre run e2e ::::::"
 "${REPO_ROOT}"/hack/pre-run-e2e.sh
 
 # Run e2e
 echo -e "\n:::::: Run e2e ::::::"
 set +e
-ginkgo -v --race --trace --fail-fast -p --randomize-all ./test/e2e/
+ginkgo -v --race --trace -p --randomize-all ./test/e2e/
 TESTING_RESULT=$?
 
 # Collect logs
