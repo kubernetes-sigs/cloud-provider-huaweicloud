@@ -24,7 +24,7 @@ REGISTRY_PASSWORD       ?=
 REGISTRY_SERVER_ADDRESS ?=
 REGISTRY                ?= $(REGISTRY_SERVER_ADDRESS)/k8s-cloudprovider
 
-IMAGE   := $(REGISTRY)/k8s-cloudprovider/huawei-cloud-controller-manager
+IMAGE   := $(REGISTRY)/huawei-cloud-controller-manager
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "latest")
 
 DOCKERFILE := cluster/images/cloud-controller-manager/Dockerfile
@@ -48,6 +48,7 @@ release: docker-login
 	docker buildx build \
 		--platform $(GOOS)/amd64,$(GOOS)/arm64 \
 		--provenance=false \
+		--output type=image,oci-mediatypes=false,push=true \
 		-t $(IMAGE):$(VERSION) \
 		-f $(DOCKERFILE) \
 		.
