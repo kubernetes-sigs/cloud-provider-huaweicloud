@@ -34,7 +34,7 @@ fi
 
 echo -e "\n:::::: Build images ::::::"
 # todo: Maybe we need load the image to target cluster node.
-make image-huawei-cloud-controller-manager
+make image-amd64
 
 tmpPath=$(mktemp -d)
 is_containerd=$(command -v containerd)
