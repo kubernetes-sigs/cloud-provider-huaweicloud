@@ -1,4 +1,6 @@
-_# Huawei Cloud Controller Manager Configurations
+# Huawei Cloud Controller Manager Configurations
+
+> [English](./huawei-cloud-controller-manager-configuration.md) | [中文](./zh/huawei-cloud-controller-manager-configuration.md)
 
 There are 2 sets of configurations, as follows:
 
@@ -9,7 +11,7 @@ There are 2 sets of configurations, as follows:
 ## Huawei Cloud Configuration
 
 The configuration is stored in `cloud-config`(namespace: `kube-system`) secret.
-See [create the cloud-config secret](./create-cloud-config-secret.md) to creating secret in Kubernetes cluster.
+See [Getting Started](./getting-started.md) for creating the secret in a Kubernetes cluster.
 
 The cloud-config structure is as follows:
 
@@ -53,7 +55,7 @@ This section provides Huawei Cloud IAM configuration and authentication informat
 
 * `auth-url` Optional. The Identity authentication URL. Defaults to `https://iam.{cloud}:443/v3/`.
 
-* `insecure` Optional. Trust self-signed SSL certificates.
+* `insecure` Optional. Trust self-signed SSL certificates. Set to the literal string `"true"` to enable (e.g., `insecure=true`). Any other value is treated as disabled.
 
 * `instance-version` Optional. Selects the CCM instance management API: `v1` uses the legacy Instances interface, while `v2` uses the optimized InstancesV2 interface.
   Defaults to `v2`.
@@ -75,9 +77,8 @@ This section contains network configuration information.
 These arguments will be applied when the annotation in the service is empty.
 It needs to be stored in the `loadbalancer-config` ConfigMap in `kube-system` namespace.
 
-> Since `v0.26.4`, the `huawei-cloud-provider` namespace is no longer used, and `kube-system` is used instead.
-> If you created the `loadbalancer-config` in the `huawei-cloud-provider` namespace, 
-> it will still work, but we recommend that you migrate it to `kube-system`.
+> The `kube-system` namespace is recommended. For backward compatibility, CCM will first check the `huawei-cloud-provider` namespace,
+> then fall back to `kube-system`. Migration to `kube-system` is recommended.
 
 Here's an example:
 
@@ -99,11 +100,11 @@ data:
        },
        "disable-create-security-group": false,
        "health-check-flag": "on",
-       "health-check-option": {
-         "delay": 5,
-         "timeout": 15,
-         "max_retries": 5
-       }
+        "health-check-option": {
+          "delay": 5,
+          "timeout": 3,
+          "max_retries": 3
+        }
     }
 ```
 
@@ -180,11 +181,8 @@ The following arguments are supported:
 * `health-check-flag` Specifies whether to enable health check for a backend server group.
   Valid values are `on` and `off`, defaults to `on`.
 
-  > When health check is enabled, CCM will add a new inbound rule to one of the security groups of the backend service,
-  allowing traffic from `100.125.0.0/16`.
-  This rule will be removed when all LoadBalance services are removed.
-  >
-  > `100.125.0.0/16` are internal IP addresses used by ELB to check the health of backend servers.
+  > When health check is enabled, ensure that the node security group allows inbound traffic from `100.125.0.0/16`.
+  > CCM does not automatically add this rule. `100.125.0.0/16` are internal IP addresses used by ELB to check the health of backend servers.
 
 * `health-check-option` Specifies the health check.
 
@@ -202,6 +200,10 @@ The following arguments are supported:
 
   * `timeout` Required. Specifies the health check timeout duration in the unit of second.
     The value ranges from `1` to `50`. Defaults to `3`.
+
+  * `protocol` Optional. Specifies the health check protocol. Reserved field; the protocol is automatically derived from the Service port protocol.
+
+  * `path` Optional. Specifies the health check path for HTTP/HTTPS checks. Reserved field; not currently used by CCM.
 
 * `enable-transparent-client-ip` Specifies whether to pass source IP addresses of the clients to backend servers.
   Valid values are `'true'` and `'false'`.
@@ -235,8 +237,7 @@ The following arguments are supported:
 * `l7-flavor-id` Optional. Specifies the ID of a flavor at Layer 7.
   Only dedicated load balancer service will use this annotation.
 
-* `disable-create-security-group` Optional. Disable automatic creation of security groups for ELB health checks.
-  Valid values are `'true'` and `'false'`. The default is `'false'`.
+* `disable-create-security-group` Optional. Currently not implemented by CCM. The security group rule for ELB health checks (`100.125.0.0/16`) must be configured manually.
 
 * `business-name` Optional. Business name or business identifier used to compose the name of the Huawei Cloud ELB instance.
   To prevent the creation of ELB instances with the same name in Huawei Cloud when using the same tenant account in multiple K8s clusters,
@@ -247,5 +248,9 @@ The following arguments are supported:
   > Note:
   > Changing this will create new ELB instances, the old ELB instances will not be deleted and no longer maintained.
 
-* `primary-nic` Optional. If you want to use the node's primary network card as the back-end service of ELB,
-  please configure `force`, otherwise use HostIP of pod.
+* `loadbalancer-class` Optional. When set, only Services with `spec.loadBalancerClass` equal to `huaweicloud.com/elb` will be processed by CCM.
+  This is useful for multi-cluster scenarios where multiple CCM instances share the same cluster.
+  If not set, CCM processes all `LoadBalancer` type Services.
+
+* `primary-nic` Optional. If set to `force`, CCM will use the node's primary network card IP as the ELB backend.
+  If not set (default), CCM uses the Pod's HostIP as the backend.
