@@ -22,12 +22,12 @@ jobs:
       - name: Install Go
         uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
         with:
-          go-version: '>=1.22'
+          go-version: '~1.22'
       - name: build images
         env:
           REGISTRY: ${{secrets.SWR_REGISTRY}}
-          REGISTRY_USER_NAME: ${{secrets.SWR_REGISTRY_USER_NAME}}
+          REGISTRY_USERNAME: ${{secrets.SWR_REGISTRY_USER_NAME}}
           REGISTRY_PASSWORD: ${{secrets.SWR_REGISTRY_PASSWORD}}
           REGISTRY_SERVER_ADDRESS: ${{secrets.SWR_REGISTRY_SERVER_ADDRESS}}
           VERSION: latest
-        run: make upload-images
+        run: make release

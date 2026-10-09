@@ -12,45 +12,79 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-GOOS ?= $(shell go env GOOS)
-SOURCES := $(shell find . -type f  -name '*.go')
+GOOS   ?= $(shell go env GOOS)
+GOARCH ?= $(shell go env GOARCH)
+
+SOURCES := $(shell find ./cmd ./pkg -type f -name '*.go')
 LDFLAGS := ""
 
 # Images management
-REGISTRY_USER_NAME?=""
-REGISTRY_PASSWORD?=""
-REGISTRY_SERVER_ADDRESS?=""
-REGISTRY?=${REGISTRY_SERVER_ADDRESS}/k8s-cloudprovider
+REGISTRY_USERNAME       ?=
+REGISTRY_PASSWORD       ?=
+REGISTRY_SERVER_ADDRESS ?=
+REGISTRY                ?= $(REGISTRY_SERVER_ADDRESS)/k8s-cloudprovider
 
-# Set you version by env or using latest tags from git
-VERSION?=$(shell git describe --tags)
+IMAGE   := $(REGISTRY)/k8s-cloudprovider/huawei-cloud-controller-manager
+VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "latest")
 
-all: huawei-cloud-controller-manager
+DOCKERFILE := cluster/images/cloud-controller-manager/Dockerfile
 
-huawei-cloud-controller-manager: $(SOURCES)
-	CGO_ENABLED=0 GOOS=$(GOOS) go build \
+.PHONY: build
+build: $(SOURCES)
+	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build \
 		-ldflags $(LDFLAGS) \
 		-o huawei-cloud-controller-manager \
 		cmd/cloud-controller-manager/cloud-controller-manager.go
 
-clean:
-	rm -rf huawei-cloud-controller-manager
+# NOTE: Huawei Cloud SWR Basic Edition does not support OCI format. Add
+# --provenance=false to force Docker native manifests, otherwise manifest push
+# will fail with a parse error.
 
+.PHONY: images
+images: docker-login image-amd64 image-arm64
+
+.PHONY: release
+release: docker-login
+	docker buildx build \
+		--platform $(GOOS)/amd64,$(GOOS)/arm64 \
+		--provenance=false \
+		-t $(IMAGE):$(VERSION) \
+		-f $(DOCKERFILE) \
+		.
+
+.PHONY: docker-login
+docker-login:
+	@echo ":: Login to $(REGISTRY_SERVER_ADDRESS) ::"
+	@if [ -n "$(REGISTRY_USERNAME)" ] && [ -n "$(REGISTRY_PASSWORD)" ]; then \
+		docker login -u "$(REGISTRY_USERNAME)" -p "$(REGISTRY_PASSWORD)" "$(REGISTRY_SERVER_ADDRESS)"; \
+	else \
+		echo "Skipping login: username or password missing"; \
+	fi
+
+.PHONY: image-amd64
+image-amd64: docker-login
+	docker buildx build \
+		--provenance=false \
+		--output type=image,oci-mediatypes=false,push=true \
+		--platform $(GOOS)/amd64 \
+		-f $(DOCKERFILE) \
+		-t $(IMAGE):$(VERSION)-amd64 \
+		.
+
+.PHONY: image-arm64
+image-arm64: docker-login
+	docker buildx build \
+		--provenance=false \
+		--output type=image,oci-mediatypes=false,push=true \
+		--platform $(GOOS)/arm64 \
+		-f $(DOCKERFILE) \
+		-t $(IMAGE):$(VERSION)-arm64 \
+		.
+
+.PHONY: verify
 verify:
 	hack/verify.sh
 
 .PHONY: test
 test:
 	go test ./pkg/...
-
-images: image-huawei-cloud-controller-manager
-
-image-huawei-cloud-controller-manager: huawei-cloud-controller-manager
-	cp huawei-cloud-controller-manager cluster/images/cloud-controller-manager && \
-	docker build -t $(REGISTRY)/huawei-cloud-controller-manager:$(VERSION) cluster/images/cloud-controller-manager && \
-	rm cluster/images/cloud-controller-manager/huawei-cloud-controller-manager
-
-upload-images: images
-	@echo "push images to $(REGISTRY)"
-	docker login -u ${REGISTRY_USER_NAME} -p ${REGISTRY_PASSWORD} ${REGISTRY_SERVER_ADDRESS}
-	docker push ${REGISTRY}/huawei-cloud-controller-manager:${VERSION}
