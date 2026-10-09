@@ -13,17 +13,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1 # v4.4.0
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
         with:
-          # fetch-depth:
-          # 0 indicates all history for all branches and tags.
-          # for `git describe --tags` in Makefile.
-          fetch-depth: 0
-      - name: Install Go
-        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a # v5.2.0
-        with:
-          go-version: '~1.22'
-      - name: build images
+          driver: docker-container
+      - name: Build and push images
         env:
           REGISTRY: ${{secrets.SWR_REGISTRY}}
           REGISTRY_USERNAME: ${{secrets.SWR_REGISTRY_USER_NAME}}
