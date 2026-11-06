@@ -32,7 +32,8 @@ import (
 )
 
 const (
-	instanceShutoffStatus = "SHUTOFF"
+	instanceShutoffStatus   = "SHUTOFF"
+	getNodeByProviderIDOnly = "providerID-only"
 )
 
 var providerIDRegexp = regexp.MustCompile(`^` + ProviderName + `:///([^/]+)$`)
@@ -90,6 +91,19 @@ func (i *Instances) InstanceID(_ context.Context, name types.NodeName) (string, 
 		return "", err
 	}
 	return server.Id, nil
+}
+
+func (i *Instances) GetInstanceByProviderId(providerId string) (*ecsmodel.ServerDetail, error) {
+	if providerId == "" {
+		return nil, fmt.Errorf("providerId is empty")
+	}
+
+	instanceID, err := parseInstanceID(providerId)
+	if err != nil {
+		return nil, err
+	}
+
+	return i.ecsClient.Get(instanceID)
 }
 
 // InstanceType returns the type of the specified instance.
@@ -180,15 +194,32 @@ func (i *Instances) InstanceShutdownByProviderID(_ context.Context, providerID s
 // InstanceExists returns true if the instance for the given node exists according to the cloud provider.
 func (i *Instances) InstanceExists(_ context.Context, node *v1.Node) (bool, error) {
 	klog.Infof("InstanceExists is called with node %s", node.Name)
-	_, err := i.ecsClient.GetByNode(node)
 
-	if err != nil {
+	if node.Spec.ProviderID != "" {
+		_, err := i.GetInstanceByProviderId(node.Spec.ProviderID)
+		if err == nil {
+			return true, nil
+		}
 		if common.IsNotFound(err) {
+			klog.Infof("instance %s is not found, the node %s does not exist", node.Spec.ProviderID, node.Name)
 			return false, nil
 		}
-		return false, err
+
+		klog.Warning("failed to check instance exists by provider id error: %s", err)
+		if i.cloudConfig.AuthOpts.NodeLookupMode == getNodeByProviderIDOnly {
+			return false, err
+		}
 	}
-	return true, nil
+
+	_, err := i.ecsClient.GetByNodeName(node.Name)
+	if err == nil {
+		return true, nil
+	}
+
+	if common.IsNotFound(err) {
+		return false, nil
+	}
+	return false, err
 }
 
 // InstanceShutdown returns true if the instance is shutdown according to the cloud provider.
@@ -204,28 +235,24 @@ func (i *Instances) InstanceMetadata(_ context.Context, node *v1.Node) (*cloudpr
 	providerID := node.Spec.ProviderID
 	var instance *ecsmodel.ServerDetail
 
-	if providerID == "" {
-		klog.V(4).Infof("node.Spec.ProviderID is empty, query ECS details: %s", node.Name)
-		var err error
-		instance, err = i.ecsClient.GetByNode(node)
-		if err != nil {
-			return nil, err
+	if providerID != "" {
+		inst, err := i.GetInstanceByProviderId(providerID)
+		if err == nil {
+			instance = inst
 		}
-		providerID = fmt.Sprintf("%s:///%s", ProviderName, instance.Id)
-	} else {
-		instanceID, err := parseInstanceID(providerID)
 		if err != nil {
-			return nil, err
-		}
-		// Normalize providerID to the standard format "huaweicloud:///InstanceID"
-		// in case it was set as a bare instance ID by an external component.
-		providerID = fmt.Sprintf("%s:///%s", ProviderName, instanceID)
-		instance, err = i.ecsClient.Get(instanceID)
-		if err != nil {
-			return nil, err
+			klog.Warning("failed to get instance detail by provider id error: %s", err)
 		}
 	}
+	if instance == nil {
+		inst, err := i.ecsClient.GetByNodeName(node.Name)
+		if err != nil {
+			return nil, err
+		}
+		instance = inst
+	}
 
+	providerID = fmt.Sprintf("%s:///%s", ProviderName, instance.Id)
 	instanceFlavor, err := getInstanceFlavor(instance)
 	if err != nil {
 		return nil, err
@@ -253,7 +280,7 @@ func (i *Instances) InstanceMetadata(_ context.Context, node *v1.Node) (*cloudpr
 func parseInstanceID(providerID string) (string, error) {
 	klog.Infof("parseInstanceID is called with providerID %s", providerID)
 
-	if providerID != "" && !strings.Contains(providerID, ":///") {
+	if providerID != "" && !strings.Contains(providerID, "://") {
 		providerID = ProviderName + ":///" + providerID
 	}
 

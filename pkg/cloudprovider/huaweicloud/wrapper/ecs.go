@@ -40,6 +40,10 @@ import (
 
 var OKCodes = []int{200, 201, 204}
 
+const (
+	InstanceDeleted = "DELETED"
+)
+
 type EcsClient struct {
 	AuthOpts *config.AuthOptions
 }
@@ -49,47 +53,18 @@ func (e *EcsClient) Get(id string) (*model.ServerDetail, error) {
 	err := e.wrapper(func(c *ecs.EcsClient) (interface{}, error) {
 		return c.ShowServer(&model.ShowServerRequest{ServerId: id})
 	}, "Server", &rst)
+	if err != nil {
+		return nil, err
+	}
+	if rst == nil {
+		return nil, fmt.Errorf("empty ecs detail for instance %s", id)
+	}
+
+	if rst.Status == InstanceDeleted {
+		return nil, status.Errorf(codes.NotFound, "instance %s has been deleted", id)
+	}
+
 	return rst, err
-}
-
-func (e *EcsClient) GetByNode(node *v1.Node) (*model.ServerDetail, error) {
-	var privateIP string
-	var hostname string
-
-	for _, addr := range node.Status.Addresses {
-		switch addr.Type {
-		case v1.NodeInternalIP:
-			if privateIP == "" {
-				privateIP = addr.Address
-			}
-		case v1.NodeHostName:
-			hostname = addr.Address
-		}
-	}
-
-	if hostname == "" {
-		hostname = node.Labels[v1.LabelHostname]
-	}
-
-	klog.V(6).Infof("GetByNode: node=%s, hostname=%s, privateIP=%s", node.Name, hostname, privateIP)
-
-	if privateIP != "" {
-		klog.V(6).Infof("querying ECS detail by private IP: %s, node: %s", privateIP, node.Name)
-		server, err := e.GetByNodeIP(privateIP)
-		if err == nil {
-			return server, nil
-		}
-		klog.Warningf("failed to get ECS by private IP %s: %v, falling back to hostname", privateIP, err)
-	} else {
-		klog.Warningf("node %s has no InternalIP, falling back to hostname", node.Name)
-	}
-
-	if hostname != "" {
-		klog.V(6).Infof("querying ECS detail by hostname: %s, node: %s", hostname, node.Name)
-		return e.GetByNodeName(hostname)
-	}
-
-	return nil, fmt.Errorf("cannot find ECS for node %s: no private IP or hostname available", node.Name)
 }
 
 func (e *EcsClient) GetByNodeName(name string) (*model.ServerDetail, error) {
