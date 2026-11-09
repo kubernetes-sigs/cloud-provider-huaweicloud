@@ -55,6 +55,7 @@ type AuthOptions struct {
 	ProjectID string `gcfg:"project-id"`
 
 	InstanceVersion string `gcfg:"instance-version"`
+	NodeLookupMode  string `gcfg:"node-lookup-mode"`
 }
 
 func (a *AuthOptions) GetCredentials() *basic.Credentials {

@@ -60,6 +60,10 @@ security-group-id=
 * `instance-version` 可选。选择 CCM 实例管理 API：`v1` 使用旧版 Instances 接口，`v2` 使用优化后的 InstancesV2 接口。
   默认为 `v2`。
 
+* `node-lookup-mode` 可选。 在 node controller 中，查询节点实例时的模式，默认值为 `providerID-first`。
+  - `providerID-first`：先使用 `node.spec.providerID` 查询实例，如未查询到，则继续使用 `node.name` 查询。
+  - `providerID-only`： 只根据 `node.spec.providerID` 查询实例。
+
 ### Vpc
 
 此部分包含网络配置信息。

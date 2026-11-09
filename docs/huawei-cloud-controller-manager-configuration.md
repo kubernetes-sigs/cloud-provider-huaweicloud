@@ -60,6 +60,10 @@ This section provides Huawei Cloud IAM configuration and authentication informat
 * `instance-version` Optional. Selects the CCM instance management API: `v1` uses the legacy Instances interface, while `v2` uses the optimized InstancesV2 interface.
   Defaults to `v2`.
 
+* `node-lookup-mode` Optional. The mode used by the node controller when querying node instances. The default value is `providerID-first`.
+  - `providerID-first`: The controller first queries the instance using `node.spec.providerID`. If the instance is not found, it proceeds to query using `node.name`.
+  - `providerID-only`: The controller queries the instance solely based on `node.spec.providerID`.
+
 ### Vpc
 
 This section contains network configuration information.
